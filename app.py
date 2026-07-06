@@ -216,7 +216,9 @@ def create_app(config_object=None):
         ref = request.referrer
         if ref:
             p = urlparse(ref)
-            if p.netloc and p.netloc != request.host:   # 跨站 referrer → 丢弃
+            same_origin_abs = p.scheme and p.netloc and p.netloc == request.host
+            clean_relative = not p.scheme and not p.netloc
+            if not (same_origin_abs or clean_relative):   # 任何外来 scheme/host → 丢弃
                 ref = None
         return redirect(ref or url_for('questions_page'))
 

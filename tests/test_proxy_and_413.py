@@ -2,6 +2,8 @@
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -47,15 +49,24 @@ def test_413_page_redirects_with_flash(app_factory):
     assert r.status_code in (302, 303)
 
 
-def test_413_page_drops_cross_site_referrer(app_factory):
+@pytest.mark.parametrize('bad_ref', [
+    'https://evil.example.com/phish',  # 跨站绝对 URL
+    '//evil.com/x',                    # scheme-relative:netloc=evil.com
+    'https:/evil.com',                 # 单斜杠:有 scheme、netloc 为空,Location 折叠成 //evil.com
+    'javascript:alert(1)',             # 危险 scheme
+])
+def test_413_page_drops_cross_site_referrer(app_factory, bad_ref):
     # 开放重定向回归:413 先于 CSRF/鉴权触发,匿名跨站超大 POST 若把
-    # 客户端可控 Referer 反射进 Location 即可 302 到外站。跨站 referrer 须被丢弃。
+    # 客户端可控 Referer 反射进 Location 即可 302 到外站。任何外来 scheme/host 须被丢弃,
+    # 回落到本站 /questions。
     application = app_factory(MAX_CONTENT_LENGTH=1024)
     client = application.test_client()
     r = client.post('/login', data={'x': 'y' * 4096},
-                    headers={'Referer': 'https://evil.example.com/phish'})
+                    headers={'Referer': bad_ref})
     assert r.status_code in (302, 303)
-    assert 'evil.example.com' not in r.headers['Location']
+    location = r.headers['Location']
+    assert 'evil.com' not in location and 'evil.example.com' not in location
+    assert location == '/questions'
 
 
 def test_413_page_keeps_same_origin_referrer(app_factory):
