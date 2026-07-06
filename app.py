@@ -19,9 +19,11 @@ from ratelimit import LoginThrottle
 login_throttle = LoginThrottle(max_attempts=5, window=300, lockout=900)
 
 
-def create_app():
+def create_app(config_object=None):
     app = Flask(__name__)
-    app.config.from_object(config.Config)
+    app.config.from_object(config_object or config.get_config())
+    if app.config.get('ENV_NAME') == 'production' and not app.config.get('SECRET_KEY'):
+        raise RuntimeError('生产环境必须通过环境变量 SECRET_KEY 注入会话密钥,拒绝启动')
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['GENERATED_PDF_FOLDER'], exist_ok=True)
@@ -194,7 +196,8 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    # 端口可用环境变量覆盖(默认 5000),被占用时可 PORT=5001 python app.py
+    # 仅开发使用;生产入口为 gunicorn 'app:app'(见 deploy/)
     host = os.environ.get('HOST', '127.0.0.1')
     port = int(os.environ.get('PORT', 5000))
-    app.run(host=host, port=port, debug=True)
+    debug = os.environ.get('FLASK_DEBUG') == '1'
+    app.run(host=host, port=port, debug=debug)
