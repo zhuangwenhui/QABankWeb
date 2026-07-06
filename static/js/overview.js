@@ -213,27 +213,41 @@
       createModal.show();
     });
 
-    document.getElementById('btnSubmitCreateUser').addEventListener('click', async () => {
+    document.getElementById('btnSubmitCreateUser').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
       const username = document.getElementById('newUsername').value.trim();
       const role = document.getElementById('newUserRole').value;
       if (!username) { showToast('请输入用户名', 'warning'); return; }
+      btn.disabled = true;
       try {
         const resp = await apiFetch('/api/overview/users', { method: 'POST', body: { username, role } });
+        // 串行化两个 Modal:先等创建 Modal 完全隐藏(hidden.bs.modal)再展示初始密码,
+        // 避免 hide 动画未完就 show 另一个导致 body 的 modal-open/padding 滚动锁残留卡死。
+        const createEl = document.getElementById('createUserModal');
+        createEl.addEventListener('hidden.bs.modal',
+          () => showInitialPassword(resp.data.initial_password), { once: true });
         createModal.hide();
         showToast(resp.message || '创建成功', 'success');
-        showInitialPassword(resp.data.initial_password);
         loadUsers();
       } catch (err) {
         showToast(err.message, 'danger');
+      } finally {
+        btn.disabled = false;
       }
     });
 
     document.getElementById('btnCopyInitialPw').addEventListener('click', () => {
       const input = document.getElementById('initialPwValue');
       input.select();
-      navigator.clipboard.writeText(input.value).then(
-        () => showToast('已复制到剪贴板', 'success'),
-        () => showToast('复制失败,请手动选择复制', 'warning'));
+      // HTTP(非安全上下文)下 navigator.clipboard 可能整个 undefined,
+      // 直接调 writeText 会同步抛 TypeError,.then(ok,err) 捕获不到,故先判空。
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value).then(
+          () => showToast('已复制到剪贴板', 'success'),
+          () => showToast('复制失败,请手动 Ctrl+C', 'warning'));
+      } else {
+        showToast('当前环境不支持自动复制,文本已选中,请手动 Ctrl+C', 'warning');
+      }
     });
 
     tbody.addEventListener('click', async (e) => {
@@ -246,6 +260,9 @@
           const resp = await apiFetch(`/api/overview/users/${id}/reset_password`, { method: 'POST', body: {} });
           showInitialPassword(resp.data.initial_password);
         } else if (action === 'toggle') {
+          // 停用是破坏性操作(用户将无法登录),需二次确认;启用无需确认。
+          const isDisable = btn.textContent.trim().includes('停用');
+          if (isDisable && !confirm(`确认停用用户「${name}」?该用户将无法登录。`)) return;
           const resp = await apiFetch(`/api/overview/users/${id}/toggle_active`, { method: 'POST', body: {} });
           showToast(resp.message, 'success');
         }
