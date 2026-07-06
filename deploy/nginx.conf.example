@@ -40,6 +40,14 @@ server {
         include /etc/nginx/proxy_params;
     }
 
+    # PDF 生成同步阻塞最坏 ~120s(两遍编译),超时须高于 gunicorn --timeout,防 504 掐断
+    location = /api/error_book/generate_pdf {
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/proxy_params;
+        proxy_read_timeout 140s;
+        proxy_send_timeout 140s;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8000;
         include /etc/nginx/proxy_params;

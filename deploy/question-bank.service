@@ -9,7 +9,7 @@ Group=deploy
 WorkingDirectory=/srv/question-bank
 EnvironmentFile=/etc/question-bank.env
 ExecStart=/srv/question-bank/.venv/bin/gunicorn -w 2 -k gthread --threads 4 \
-    --timeout 90 --graceful-timeout 30 \
+    --timeout 130 --graceful-timeout 30 \
     --error-logfile - \
     -b 127.0.0.1:8000 app:app
 # 注:不开 --access-logfile——应用自带的 request JSON 日志(含 request_id/user_id/duration_ms)
