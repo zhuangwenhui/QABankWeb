@@ -217,8 +217,11 @@ def create_app(config_object=None):
         if ref:
             p = urlparse(ref)
             same_origin_abs = p.scheme and p.netloc and p.netloc == request.host
-            clean_relative = not p.scheme and not p.netloc
-            if not (same_origin_abs or clean_relative):   # 任何外来 scheme/host → 丢弃
+            clean_relative = (not p.scheme and not p.netloc
+                              and ref.startswith('/')
+                              and not ref.startswith('//')      # 挡 //evil、////evil 家族
+                              and not ref.startswith('/\\'))    # 挡 /\evil(双保险)
+            if not (same_origin_abs or clean_relative):
                 ref = None
         return redirect(ref or url_for('questions_page'))
 

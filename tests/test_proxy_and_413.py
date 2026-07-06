@@ -54,6 +54,10 @@ def test_413_page_redirects_with_flash(app_factory):
     '//evil.com/x',                    # scheme-relative:netloc=evil.com
     'https:/evil.com',                 # 单斜杠:有 scheme、netloc 为空,Location 折叠成 //evil.com
     'javascript:alert(1)',             # 危险 scheme
+    '///evil.com',                     # 三斜杠:urlparse netloc 空 → 折叠成 //evil.com
+    '////evil.com',                    # 四斜杠空 authority 绕过:同上家族
+    '/////evil.com',                   # 五斜杠:同上家族
+    '/\\evil.com',                     # 反斜杠变体(浏览器规范化为 //)
 ])
 def test_413_page_drops_cross_site_referrer(app_factory, bad_ref):
     # 开放重定向回归:413 先于 CSRF/鉴权触发,匿名跨站超大 POST 若把
@@ -69,11 +73,16 @@ def test_413_page_drops_cross_site_referrer(app_factory, bad_ref):
     assert location == '/questions'
 
 
-def test_413_page_keeps_same_origin_referrer(app_factory):
-    # 同源 referrer 应保留:回到用户来时的本站页面。
+@pytest.mark.parametrize('good_ref', [
+    'http://localhost/error_book',   # 同源绝对(request.host == localhost)
+    '/error_book',                   # 干净相对路径
+    '/questions?page=2',             # 带 query 的相对路径
+])
+def test_413_page_keeps_same_origin_referrer(app_factory, good_ref):
+    # 合法 referrer 应保留:回到用户来时的本站页面(同源绝对或安全相对)。
     application = app_factory(MAX_CONTENT_LENGTH=1024)
     client = application.test_client()
     r = client.post('/login', data={'x': 'y' * 4096},
-                    headers={'Referer': 'http://localhost/error_book'})
+                    headers={'Referer': good_ref})
     assert r.status_code in (302, 303)
-    assert r.headers['Location'] == 'http://localhost/error_book'
+    assert r.headers['Location'] == good_ref
