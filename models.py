@@ -151,12 +151,14 @@ from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _Engine
 
 
+# 注意:全局 Engine 监听,Alembic 迁移连接同样生效;迁移期需关外键,见 migrations/env.py
 @_sa_event.listens_for(_Engine, 'connect')
 def _sqlite_pragmas(dbapi_connection, connection_record):
     """每个 SQLite 连接建立时启用外键约束、WAL 与忙等待。
 
     - foreign_keys:SQLite 默认 OFF,不开则 ForeignKey/级联形同虚设
-    - journal_mode=WAL:读写不互斥,多用户并发的基础(内存库返回 memory,无害)
+    - journal_mode=WAL:读写不互斥,多用户并发的基础(内存库返回 memory,无害);
+      WAL 为库级持久设置,此处每连接重复执行为幂等确认
     - busy_timeout:写锁冲突时等待 5s 而非立刻 database is locked
     """
     if type(dbapi_connection).__module__.startswith('sqlite3'):

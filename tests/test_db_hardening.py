@@ -33,3 +33,4 @@ def test_busy_timeout_and_wal(app_factory, tmp_path):
 def test_foreign_keys_pragma_on(app):
     with app.app_context():
         assert db.session.execute(db.text('PRAGMA foreign_keys')).scalar() == 1
+        assert db.session.execute(db.text('PRAGMA synchronous')).scalar() == 1
