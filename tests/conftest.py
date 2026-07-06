@@ -57,12 +57,10 @@ def client(app):
 
 @pytest.fixture(autouse=True)
 def _reset_throttle():
-    """login_throttle 是模块级全局,逐测试清零防串扰。"""
-    for key in ('ip:127.0.0.1', 'user:admin', 'user:student', 'user:alice'):
-        login_throttle.reset(key)
+    """login_throttle 是模块级全局,逐测试全量清零防串扰(任意用户名/IP)。"""
+    login_throttle.reset_all()
     yield
-    for key in ('ip:127.0.0.1', 'user:admin', 'user:student', 'user:alice'):
-        login_throttle.reset(key)
+    login_throttle.reset_all()
 
 
 def get_csrf(client):
@@ -82,7 +80,10 @@ def plant_captcha(client, answer):
 
 @pytest.fixture()
 def login(client):
-    """login('admin', 'AdminPass123456') → 完成含验证码的登录,返回响应。"""
+    """login('admin', 'AdminPass123456') → 完成含验证码的登录,返回响应。
+
+    内部固定种入并提交正确验证码 'TEST';要测验证码错误路径请绕过本夹具自行 POST。
+    """
     def _login(username, password):
         token = get_csrf(client)
         plant_captcha(client, 'TEST')
