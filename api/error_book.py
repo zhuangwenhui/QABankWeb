@@ -136,8 +136,11 @@ def _cleanup_generated():
             if name.startswith('.') or name in known:
                 continue
             path = os.path.join(folder, name)
-            if os.path.isfile(path) and os.path.getmtime(path) < cutoff_ts:
-                os.remove(path)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) < cutoff_ts:
+                    os.remove(path)
+            except OSError:
+                continue
     except Exception:
         db.session.rollback()
         current_app.logger.exception('清理生成物失败(不影响本次请求)')
