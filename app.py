@@ -7,6 +7,7 @@ import os
 import secrets
 from urllib.parse import urlparse
 
+import click
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
 from flask_migrate import Migrate
@@ -321,6 +322,27 @@ def create_app(config_object=None):
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='服务器内部错误', code='SERVER_ERROR'), 500
         return render_template('error.html'), 500
+
+    # ------------------------------------------------------------------ CLI
+
+    @app.cli.command('create-admin')
+    @click.argument('username')
+    def create_admin(username):
+        """创建管理员账号:密码读 ADMIN_INITIAL_PASSWORD 环境变量,否则交互输入。"""
+        import getpass
+        if User.query.filter_by(username=username).first():
+            click.echo(f'用户 {username} 已存在,未做修改')
+            return
+        password = os.environ.get('ADMIN_INITIAL_PASSWORD') or getpass.getpass(
+            f'为 {username} 设置初始密码(≥{config.MIN_PASSWORD_LEN} 位): ')
+        if len(password) < config.MIN_PASSWORD_LEN:
+            click.echo(f'密码长度不得少于 {config.MIN_PASSWORD_LEN} 位')
+            raise SystemExit(1)
+        user = User(username=username, role='admin', must_change_password=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        click.echo(f'管理员 {username} 创建成功(首次登录需改密)')
 
     return app
 
