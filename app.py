@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from flask import (Flask, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
 from flask_migrate import Migrate
+from flask_talisman import Talisman
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -51,6 +52,28 @@ def create_app(config_object=None):
     if app.config.get('USE_PROXYFIX'):
         # 仅生产启用:信任前置 Nginx 的 X-Forwarded-For/Proto 各一跳
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+    csp = {
+        'default-src': "'self'",
+        'script-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+        # 样式放宽 unsafe-inline:模板 style 属性与 MathJax/Bootstrap 动态样式所需(spec §3.2)
+        'style-src': ["'self'", "'unsafe-inline'",
+                      'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+        'font-src': ["'self'", 'data:', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+        'img-src': ["'self'", 'data:'],
+        'connect-src': "'self'",
+    }
+    Talisman(
+        app,
+        content_security_policy=csp,
+        content_security_policy_nonce_in=['script-src'],
+        frame_options='SAMEORIGIN',
+        referrer_policy='strict-origin-when-cross-origin',
+        force_https=app.config.get('TALISMAN_FORCE_HTTPS', False),
+        strict_transport_security=app.config.get('TALISMAN_FORCE_HTTPS', False),
+        session_cookie_secure=app.config.get('SESSION_COOKIE_SECURE', False),
+        session_cookie_http_only=True,
+    )
 
     # ------------------------------------------------------------------ hooks
 

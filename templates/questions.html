@@ -374,7 +374,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
   window.PAGE_CONFIG = {
     subjects: {{ SUBJECTS | tojson }},
     difficulties: {{ DIFFICULTIES | tojson }},

@@ -136,7 +136,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   window.PAGE_CONFIG = {
     isAdmin: {{ 'true' if current_user.is_admin else 'false' }},
     userId: {{ current_user.id }}
