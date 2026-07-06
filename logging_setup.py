@@ -7,6 +7,7 @@ import logging
 import logging.config
 import time
 import uuid
+from datetime import datetime, timezone
 
 from flask import g, has_request_context, request
 
@@ -18,7 +19,7 @@ _EXTRA_FIELDS = ('request_id', 'user_id', 'ip', 'event', 'target', 'detail',
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         entry = {
-            'ts': self.formatTime(record, '%Y-%m-%dT%H:%M:%S%z'),
+            'ts': datetime.fromtimestamp(record.created, timezone.utc).isoformat(timespec='milliseconds'),
             'level': record.levelname,
             'logger': record.name,
             'message': record.getMessage(),
