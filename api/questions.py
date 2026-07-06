@@ -15,6 +15,7 @@ from sqlalchemy import or_
 
 import config
 from auth import login_required
+from logging_setup import audit
 from models import Question, ViewLog, db
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
@@ -354,6 +355,7 @@ def delete_question(qid):
         current_app.logger.exception('删除题目失败 id=%s', qid)
         return _fail('删除题目失败,请稍后重试', code='SERVER_ERROR', status=500)
 
+    audit('question_delete', target=qid)
     _remove_image_files(images)
     return _ok(message='删除成功')
 
@@ -386,6 +388,7 @@ def batch_delete():
         current_app.logger.exception('批量删除题目失败')
         return _fail('批量删除失败,请稍后重试', code='SERVER_ERROR', status=500)
 
+    audit('question_batch_delete', target=','.join(map(str, ids[:50])), detail=f'count={len(questions)}')
     _remove_image_files(images)
     return _ok({'deleted': len(questions)}, message=f'已删除 {len(questions)} 道题目')
 

@@ -9,10 +9,12 @@ import secrets
 from flask import (Flask, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
 from flask_migrate import Migrate
+from werkzeug.exceptions import HTTPException
 
 import captcha
 import config
 from auth import admin_required, csrf_protect, login_required
+from logging_setup import audit, request_extra, setup_logging
 from models import User, db
 from ratelimit import LoginThrottle
 
@@ -41,6 +43,8 @@ def create_app(config_object=None):
     app.register_blueprint(error_book_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(overview_bp)
+
+    setup_logging(app)  # 须先于 load_user_and_csrf 注册,保证 g.request_id 先于其他 hook 就绪
 
     # ------------------------------------------------------------------ hooks
 
@@ -97,12 +101,14 @@ def create_app(config_object=None):
                 locked = login_throttle.locked_for(user_key)
             if locked:
                 mins = (locked + 59) // 60
+                audit('login_locked', target=username)
                 flash(f'尝试过于频繁,已临时锁定,请约 {mins} 分钟后再试。', 'danger')
                 return render_template('login.html'), 429
 
             # 2) 验证码校验(先于密码,挡住脚本爬取/暴力破解)
             if not captcha.verify(captcha_input):
                 login_throttle.record_failure(ip_key)
+                audit('login_failed', target=username, detail='captcha')
                 flash('验证码错误或已过期,请重新输入。', 'danger')
                 return render_template('login.html')
 
@@ -115,6 +121,7 @@ def create_app(config_object=None):
                 session.clear()  # 防会话固定:登录成功换新会话状态
                 session['user_id'] = user.id
                 session.permanent = True
+                audit('login_success', target=username)
                 flash(f'欢迎回来,{user.username}!', 'success')
                 next_url = request.args.get('next')
                 if next_url and next_url.startswith('/') and not next_url.startswith('//'):
@@ -125,6 +132,7 @@ def create_app(config_object=None):
             login_throttle.record_failure(ip_key)
             locked_now = login_throttle.record_failure(user_key) if user_key else 0
             remaining = login_throttle.remaining_attempts(ip_key)
+            audit('login_failed', target=username, detail='password')
             if locked_now:
                 flash('失败次数过多,账号已临时锁定 15 分钟。', 'danger')
             elif remaining <= 2:
@@ -159,6 +167,21 @@ def create_app(config_object=None):
     def overview_page():
         return render_template('overview.html')
 
+    # ------------------------------------------------------------------ 健康检查
+
+    @app.route('/healthz')
+    def healthz():
+        try:
+            db.session.execute(db.text('SELECT 1'))
+        except Exception:
+            return jsonify(status='degraded'), 503
+        return jsonify(status='ok')
+
+    @app.route('/readyz')
+    def readyz():
+        # 就绪与存活同判据(单进程 + SQLite,无独立依赖需区分)
+        return healthz()
+
     # ------------------------------------------------------------------ 文件服务
 
     @app.route('/uploads/<path:filename>')
@@ -187,7 +210,16 @@ def create_app(config_object=None):
     def server_error(e):
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='服务器内部错误', code='SERVER_ERROR'), 500
-        return '服务器内部错误', 500
+        return render_template('error.html'), 500
+
+    @app.errorhandler(Exception)
+    def unhandled_exception(e):
+        if isinstance(e, HTTPException):
+            return e  # 404/413 等交由既有处理器,不吞
+        app.logger.exception('未捕获异常', extra=request_extra())  # 带 request_id 便于关联(spec §3.3)
+        if request.path.startswith('/api/'):
+            return jsonify(success=False, error='服务器内部错误', code='SERVER_ERROR'), 500
+        return render_template('error.html'), 500
 
     return app
 

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}出错了 - 题库系统{% endblock %}
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 60vh;">
+  <i class="fa-solid fa-triangle-exclamation fa-3x text-warning mb-3"></i>
+  <h4>服务器内部错误</h4>
+  <p class="text-muted">请稍后重试;若持续出现,请通过意见反馈告知我们。</p>
+  <a class="btn btn-primary" href="{{ url_for('questions_page') }}">返回题目管理</a>
+</div>
+{% endblock %}
