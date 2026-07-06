@@ -93,6 +93,14 @@ def create_app(config_object=None):
                 return jsonify(success=False, error='账号已被停用', code='UNAUTHORIZED'), 401
             flash('该账号已被停用,请联系管理员。', 'danger')
             return redirect(url_for('login'))
+        _ALLOWED_WHEN_MUST_CHANGE = {'change_password', 'logout', 'static',
+                                     'captcha_image', 'healthz', 'readyz'}
+        if (g.user is not None and g.user.must_change_password
+                and request.endpoint not in _ALLOWED_WHEN_MUST_CHANGE):
+            if request.path.startswith('/api/'):
+                return jsonify(success=False, error='请先修改初始密码',
+                               code='MUST_CHANGE_PASSWORD'), 403
+            return redirect(url_for('change_password'))
         return csrf_protect()
 
     @app.context_processor
@@ -191,6 +199,30 @@ def create_app(config_object=None):
         session.pop('user_id', None)
         flash('已退出登录', 'info')
         return redirect(url_for('login'))
+
+    @app.route('/change_password', methods=['GET', 'POST'])
+    @login_required
+    def change_password():
+        if request.method == 'POST':
+            old = request.form.get('old_password', '')
+            new = request.form.get('new_password', '')
+            confirm = request.form.get('confirm_password', '')
+            if not g.user.check_password(old):
+                flash('旧密码不正确', 'danger')
+            elif len(new) < config.MIN_PASSWORD_LEN:
+                flash(f'新密码长度不得少于 {config.MIN_PASSWORD_LEN} 位', 'danger')
+            elif new != confirm:
+                flash('两次输入不一致', 'danger')
+            elif new == old:
+                flash('新密码不能与旧密码相同', 'danger')
+            else:
+                g.user.set_password(new)
+                g.user.must_change_password = False
+                db.session.commit()
+                audit('password_changed', target=g.user.username)
+                flash('密码修改成功', 'success')
+                return redirect(url_for('questions_page'))
+        return render_template('change_password.html')
 
     @app.route('/questions')
     @login_required
