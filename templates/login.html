@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}登录 - 题库系统{% endblock %}
+
+{% block content %}
+<div class="login-wrapper d-flex align-items-center justify-content-center">
+  <div class="card login-card shadow">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="fa-solid fa-book-open fa-3x text-primary mb-2"></i>
+        <h3 class="mb-0">题库系统</h3>
+        <p class="text-muted small mb-0">大学院入学考试备考 · 理工科题库</p>
+      </div>
+      <form method="post" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="mb-3">
+          <label class="form-label" for="loginUsername">用户名</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-user"></i></span>
+            <input type="text" id="loginUsername" class="form-control" name="username" required autofocus>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="loginPassword">密码</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-lock"></i></span>
+            <input type="password" id="loginPassword" class="form-control" name="password" required>
+          </div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="loginCaptcha">验证码</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-shield-halved"></i></span>
+            <input type="text" id="loginCaptcha" class="form-control" name="captcha"
+                   maxlength="6" autocomplete="off" autocapitalize="characters"
+                   inputmode="text" required placeholder="请输入右侧字符">
+            <img id="captchaImg" src="{{ url_for('captcha_image') }}" alt="验证码"
+                 title="看不清?点击刷新" width="150" height="50"
+                 style="cursor:pointer;border:1px solid #ced4da;border-radius:0 6px 6px 0;">
+          </div>
+          <div class="form-text">看不清可点击图片刷新;不区分大小写。</div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="fa-solid fa-right-to-bracket me-1"></i>登录
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 点击验证码图片刷新(加时间戳绕过缓存),并清空已输入内容
+  (function () {
+    var img = document.getElementById('captchaImg');
+    var input = document.getElementById('loginCaptcha');
+    if (!img) return;
+    img.addEventListener('click', function () {
+      var base = "{{ url_for('captcha_image') }}";
+      img.src = base + '?t=' + Date.now();
+      if (input) { input.value = ''; input.focus(); }
+    });
+  })();
+</script>
+{% endblock %}

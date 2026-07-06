@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+
+{% block title %}错题本 - 题库系统{% endblock %}
+
+{% block head %}
+<style>
+  /* 错题本页面级样式 */
+  .stat-subject-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .subject-dist-item {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #e7f1ff; color: #0a58ca; border: 1px solid transparent;
+    border-radius: 14px; padding: 4px 12px; font-size: .85rem; cursor: pointer;
+  }
+  .subject-dist-item:hover { border-color: #0d6efd; }
+  .subject-dist-item .dist-count { font-weight: 700; }
+  .notes-box {
+    background: #fffbe9; border: 1px dashed #e3ce8a; border-radius: 6px;
+    padding: 8px 12px; font-size: .9rem;
+  }
+  .notes-empty { color: #adb5bd; font-style: italic; }
+  .entry-meta { font-size: .82rem; color: #6c757d; }
+  #entryList .latex-content { max-height: 220px; overflow-y: auto; }
+  .pdf-result-area a { word-break: break-all; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-container">
+  <div class="breadcrumb-custom">
+    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
+    <span class="breadcrumb-separator">/</span>
+    <span>错题本</span>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="fa-solid fa-bookmark me-2 text-warning"></i>我的错题本</h4>
+  <button type="button" class="btn btn-primary" id="btnOpenPdfModal">
+    <i class="fa-solid fa-file-pdf me-1"></i>生成 PDF 试卷
+  </button>
+</div>
+
+<!-- 顶部统计:总数 + 按科目分布 -->
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="stat-card h-100">
+      <div class="stat-value" id="statTotal">-</div>
+      <div class="stat-label">错题总数</div>
+    </div>
+  </div>
+  <div class="col-md-9">
+    <div class="stat-card h-100 text-start">
+      <div class="stat-label mb-2"><i class="fa-solid fa-chart-pie me-1"></i>按科目分布(点击可筛选)</div>
+      <div class="stat-subject-list" id="statBySubject">
+        <span class="text-muted small">加载中...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1" for="filterSubject">课程</label>
+        <select id="filterSubject" class="form-select form-select-sm">
+          <option value="">全部课程</option>
+          {% for s in SUBJECTS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1" for="filterChapter">章节</label>
+        <select id="filterChapter" class="form-select form-select-sm">
+          <option value="">全部章节</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1" for="filterDifficulty">难度</label>
+        <select id="filterDifficulty" class="form-select form-select-sm">
+          <option value="">全部难度</option>
+          {% for d in DIFFICULTIES %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1" for="filterSource">来源</label>
+        <input type="text" id="filterSource" class="form-control form-control-sm" placeholder="来源关键字">
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small mb-1" for="filterSearch">关键词</label>
+        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="题目/解答/来源/章节">
+      </div>
+      <div class="col-12 col-md-1 d-grid">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnResetFilters" title="重置筛选">
+          <i class="fa-solid fa-rotate-left"></i> 重置
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 批量工具栏(有选中时显示) -->
+<div class="batch-toolbar" id="batchToolbar" style="display: none;">
+  <span><i class="fa-solid fa-check-double me-1"></i>已选 <strong id="selectedCount">0</strong> 题</span>
+  <button type="button" class="btn btn-sm btn-outline-danger" id="btnBatchRemove">
+    <i class="fa-solid fa-trash-can me-1"></i>批量移出
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">
+    <i class="fa-solid fa-xmark me-1"></i>取消选择
+  </button>
+</div>
+
+<!-- 列表工具行 -->
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <div class="form-check mb-0">
+    <input class="form-check-input" type="checkbox" id="checkAll">
+    <label class="form-check-label small" for="checkAll">全选本页</label>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="small text-muted" id="listSummary"></span>
+    <select id="perPageSelect" class="form-select form-select-sm" style="width: auto;">
+      {% for n in PER_PAGE_OPTIONS %}
+      <option value="{{ n }}" {% if n == 20 %}selected{% endif %}>{{ n }} 条/页</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- 错题列表 -->
+<div id="entryList"></div>
+<div id="emptyState" class="text-center text-muted py-5" style="display: none;">
+  <i class="fa-regular fa-folder-open fa-3x mb-3 d-block"></i>
+  <p class="mb-2">暂无符合条件的错题</p>
+  <a href="/questions" class="btn btn-sm btn-outline-primary">
+    <i class="fa-solid fa-list-check me-1"></i>去题库标记错题
+  </a>
+</div>
+
+<nav aria-label="错题分页">
+  <ul class="pagination pagination-sm justify-content-center" id="pagination"></ul>
+</nav>
+
+<!-- 快速预览 Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-eye me-2"></i>题目预览</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div id="previewInfo" class="mb-3"></div>
+        <h6 class="fw-bold"><i class="fa-solid fa-file-lines me-1"></i>题目内容</h6>
+        <div id="previewQuestion" class="latex-content border rounded p-3 mb-3"></div>
+        <div id="previewQuestionImage" class="mb-3"></div>
+        <button type="button" class="btn btn-sm btn-outline-primary mb-2" id="btnToggleSolution">
+          <i class="fa-solid fa-lightbulb me-1"></i>查看答案
+        </button>
+        <div id="previewSolutionWrap" style="display: none;">
+          <h6 class="fw-bold"><i class="fa-solid fa-key me-1"></i>解答内容</h6>
+          <div id="previewSolution" class="latex-content border rounded p-3 mb-3"></div>
+          <div id="previewSolutionImage"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF 生成配置 Modal -->
+<div class="modal fade" id="pdfModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-file-pdf me-2 text-danger"></i>生成 PDF 试卷</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small mb-1" for="pdfTitle">试卷标题 <span class="text-danger">*</span></label>
+            <input type="text" id="pdfTitle" class="form-control form-control-sm" maxlength="100" value="错题整理试卷">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1" for="pdfSubtitle">副标题</label>
+            <input type="text" id="pdfSubtitle" class="form-control form-control-sm" maxlength="100" placeholder="如:大学院入学考试备考">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1" for="pdfExamDate">考试日期</label>
+            <input type="date" id="pdfExamDate" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1" for="pdfSubject">科目</label>
+            <select id="pdfSubject" class="form-select form-select-sm">
+              <option value="综合">综合</option>
+              {% for s in SUBJECTS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1" for="pdfDuration">考试时间(分钟)</label>
+            <input type="number" id="pdfDuration" class="form-control form-control-sm" min="1" max="999" value="120">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1" for="pdfTotalScore">总分</label>
+            <input type="number" id="pdfTotalScore" class="form-control form-control-sm" min="1" max="9999" value="100">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1" for="pdfNotice">注意事项</label>
+            <textarea id="pdfNotice" class="form-control form-control-sm" rows="3" maxlength="2000"
+                      placeholder="留空则使用默认注意事项;每行一条"></textarea>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1" for="pdfTemplate">试卷模板</label>
+            <select id="pdfTemplate" class="form-select form-select-sm">
+              {% set template_labels = {
+                'custom_exam_template': '正式试卷版式(custom_exam_template)',
+                '试卷模板': '简洁版式(试卷模板)',
+                'error_book_template': '错题整理版式(error_book_template)'
+              } %}
+              {% for t in PDF_TEMPLATES %}
+              <option value="{{ t }}">{{ template_labels.get(t, t) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check form-switch mb-1">
+              <input class="form-check-input" type="checkbox" id="pdfIncludeSolutions">
+              <label class="form-check-label small" for="pdfIncludeSolutions">包含解答区块</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1 d-block">生成范围</label>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="pdfScope" id="scopeAll" value="all" checked>
+              <label class="form-check-label small" for="scopeAll">全部错题</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="pdfScope" id="scopeFiltered" value="filtered">
+              <label class="form-check-label small" for="scopeFiltered">当前筛选结果</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="pdfScope" id="scopeSelected" value="selected">
+              <label class="form-check-label small" for="scopeSelected">勾选题目(<span id="scopeSelectedCount">0</span> 题)</label>
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-success mt-3 mb-0 pdf-result-area" id="pdfResult" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnGeneratePdf">
+          <i class="fa-solid fa-file-pdf me-1"></i>生成试卷
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.PAGE_CONFIG = {
+    subjects: {{ SUBJECTS | tojson }},
+    difficulties: {{ DIFFICULTIES | tojson }},
+    perPageOptions: {{ PER_PAGE_OPTIONS | tojson }},
+    pdfTemplates: {{ PDF_TEMPLATES | tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/error_book.js') }}"></script>
+{% endblock %}

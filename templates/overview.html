@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block title %}管理总览 - 题库系统{% endblock %}
+
+{% block head %}
+<style>
+  .overview-card { background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; }
+  .overview-card .card-header {
+    background: #fff;
+    border-bottom: 1px solid #eef0f4;
+    font-weight: 600;
+    border-radius: 10px 10px 0 0;
+  }
+  /* 分布条 */
+  .dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .dist-row:last-child { margin-bottom: 0; }
+  .dist-label {
+    width: 92px; flex-shrink: 0; font-size: 0.85rem; color: #495057;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dist-count { width: 52px; flex-shrink: 0; text-align: right; font-size: 0.85rem; color: #6c757d; }
+  .dist-row .progress { flex: 1 1 0; height: 12px; background: #eef1f6; }
+  /* 近 14 天查看趋势(纯 CSS 柱状图) */
+  .trend-chart {
+    display: flex; align-items: flex-end; gap: 8px;
+    height: 210px; padding: 8px 4px 0;
+  }
+  .trend-col {
+    flex: 1 1 0; min-width: 0; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  }
+  .trend-count { font-size: 0.72rem; color: #6c757d; margin-bottom: 3px; }
+  .trend-bar {
+    width: 70%; max-width: 30px; min-height: 2px;
+    background: linear-gradient(180deg, #5c9dff, #0d6efd);
+    border-radius: 4px 4px 0 0;
+  }
+  .trend-date { font-size: 0.7rem; color: #98a1ab; margin-top: 6px; white-space: nowrap; }
+  /* 最近新增题目 */
+  .recent-q { border-bottom: 1px solid #eef0f4; padding: 12px 4px; }
+  .recent-q:last-child { border-bottom: none; }
+  .recent-q .latex-content {
+    max-height: 90px; overflow: hidden;
+    font-size: 0.92rem; color: #495057; margin-top: 6px;
+  }
+  .recent-q .recent-meta { font-size: 0.82rem; color: #8b939c; }
+  .loading-block { text-align: center; color: #adb5bd; padding: 28px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-container">
+  <div class="breadcrumb-custom">
+    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
+    <span class="breadcrumb-separator">/</span>
+    <span>管理总览</span>
+  </div>
+</div>
+
+<!-- 顶部统计卡片 -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value" id="statQuestions">—</div>
+      <div class="stat-label"><i class="fa-solid fa-list-check me-1"></i>题目总数</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value" id="statUsers">—</div>
+      <div class="stat-label"><i class="fa-solid fa-users me-1"></i>用户数</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value" id="statErrors">—</div>
+      <div class="stat-label"><i class="fa-solid fa-bookmark me-1"></i>错题总数</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-value" id="statPending">—</div>
+      <div class="stat-label"><i class="fa-solid fa-comment-dots me-1"></i>待处理反馈</div>
+    </div>
+  </div>
+</div>
+
+<!-- 题数分布 -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="overview-card card h-100">
+      <div class="card-header"><i class="fa-solid fa-layer-group me-1 text-primary"></i>按课程题数分布</div>
+      <div class="card-body" id="subjectDist">
+        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="overview-card card h-100">
+      <div class="card-header"><i class="fa-solid fa-gauge-high me-1 text-primary"></i>难度分布</div>
+      <div class="card-body" id="difficultyDist">
+        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 近 14 天查看趋势 -->
+<div class="overview-card card mb-4">
+  <div class="card-header"><i class="fa-solid fa-chart-column me-1 text-primary"></i>近 14 天题目查看趋势</div>
+  <div class="card-body" id="viewTrend">
+    <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+  </div>
+</div>
+
+<!-- Top10 与错题分布 -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="overview-card card h-100">
+      <div class="card-header"><i class="fa-solid fa-fire me-1 text-primary"></i>最常查看题目 Top10</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width:64px">排名</th>
+                <th style="width:88px">编号</th>
+                <th style="width:110px">课程</th>
+                <th>来源</th>
+                <th style="width:110px" class="text-end">查看次数</th>
+              </tr>
+            </thead>
+            <tbody id="topViewedBody">
+              <tr><td colspan="5" class="loading-block">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="overview-card card h-100">
+      <div class="card-header"><i class="fa-solid fa-book-bookmark me-1 text-primary"></i>全体用户错题按科目分布</div>
+      <div class="card-body" id="errorDist">
+        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 最近新增题目 -->
+<div class="overview-card card mb-4">
+  <div class="card-header"><i class="fa-solid fa-clock-rotate-left me-1 text-primary"></i>最近新增题目</div>
+  <div class="card-body" id="recentQuestions">
+    <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview.js') }}"></script>
+{% endblock %}

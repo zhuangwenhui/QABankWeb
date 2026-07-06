@@ -1,0 +1,69 @@
+% ==========================================================================
+% error_book_template —— 错题整理版式(每题含"我的备注"块)
+% 由 pdf_gen.py 以双圆括号占位符注入内容后编译(xelatex,需 Noto CJK 字体)。
+% 备注块由 pdf_gen.py 在注入题目区时按题渲染。
+% 占位符键:TITLE / SUBTITLE / EXAM_DATE / SUBJECT / DURATION /
+%           TOTAL_SCORE / NOTICE / QUESTIONS
+% ==========================================================================
+\documentclass[12pt, a4paper, fontset=none]{ctexart}
+
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.3cm, right=2.3cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+
+% 中文字体(假定系统已安装 Noto CJK 系列)
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+
+% 题号标题样式
+\ctexset{
+  section = {
+    format     = {\large\bfseries},
+    beforeskip = {1.3em},
+    afterskip  = {0.6em},
+  },
+}
+
+% 页眉页脚
+\setlength{\headheight}{16pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small 错题整理}
+\fancyhead[R]{\small ((TITLE))}
+\fancyfoot[C]{\small 第~\thepage~页}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% ------------------------------ 标题区 ------------------------------
+\begin{center}
+  {\huge\bfseries ((TITLE))\par}
+  \vspace{0.5em}
+  {\large ((SUBTITLE))\par}
+  \vspace{0.8em}
+  {\normalsize 整理日期:((EXAM_DATE)) \qquad 科目:((SUBJECT)) \qquad
+   建议用时:((DURATION))~分钟 \qquad 总分:((TOTAL_SCORE))~分\par}
+\end{center}
+
+\vspace{0.4em}
+
+% ------------------------------ 使用说明框 ------------------------------
+\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
+  \textbf{使用说明}\par\smallskip
+  ((NOTICE))\par
+}}
+
+\vspace{1em}
+
+% ------------------------------ 错题区(每题含"我的备注"块) ------------------------------
+((QUESTIONS))
+
+\vspace{2em}
+\begin{center}
+  {\small --- 错题整理完 ---}
+\end{center}
+
+\end{document}

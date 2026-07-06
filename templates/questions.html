@@ -1,0 +1,387 @@
+{% extends 'base.html' %}
+
+{% block title %}题目管理 - 题库系统{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+<style>
+  /* 题目管理页局部样式(公共样式见 style.css) */
+  .card-latex-clip { max-height: 170px; overflow: hidden; cursor: pointer; }
+  .filter-label { display: block; font-size: .8rem; color: #6c757d; margin-bottom: 2px; }
+  /* 窄屏(手机)卡片视图单列,避免 minmax(420px) 撑出整页横向滚动 */
+  @media (max-width: 480px) { .question-card-view { grid-template-columns: 1fr; } }
+  .history-menu, .preset-menu { min-width: 330px; max-width: 420px; max-height: 380px; overflow-y: auto; }
+  .history-item { cursor: pointer; white-space: normal; }
+  .history-item small { color: #adb5bd; }
+  .preset-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 6px; }
+  .preset-row:hover { background: #f0f6ff; }
+  .preset-row .preset-load { cursor: pointer; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail-section-title { font-weight: 600; border-left: 4px solid #0d6efd; padding-left: 8px; margin: 18px 0 10px; }
+  .detail-info-item { margin-bottom: 6px; }
+  .image-upload-preview { margin-top: 8px; display: flex; align-items: flex-start; gap: 8px; }
+  .empty-hint { text-align: center; color: #6c757d; padding: 40px 0; }
+  #cardView .bookmark-btn, .question-table .bookmark-btn { font-size: 1.05rem; }
+  .source-hint { font-size: .8rem; margin-top: 4px; min-height: 1.1em; }
+  .advanced-panel-body { background: #f8f9fb; border: 1px solid #e3e6ec; border-radius: 8px; padding: 12px; margin-top: 12px; }
+  #cardView .empty-hint, #cardView > .w-100 { grid-column: 1 / -1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-container">
+  <div class="breadcrumb-custom">
+    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
+    <span class="breadcrumb-separator">/</span>
+    <span>题目管理</span>
+  </div>
+</div>
+
+<!-- 工具行:视图切换 / 全选 / 历史 / 预设 / 高级搜索 / 新建 -->
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div class="view-toggle" role="group" aria-label="视图切换">
+    <button type="button" class="view-toggle-btn active" id="btnViewTable" title="表格视图">
+      <i class="fa-solid fa-table-list me-1"></i>表格
+    </button>
+    <button type="button" class="view-toggle-btn" id="btnViewCard" title="卡片视图">
+      <i class="fa-solid fa-grip me-1"></i>卡片
+    </button>
+  </div>
+  <div class="form-check mb-0 ms-2">
+    <input class="form-check-input" type="checkbox" id="checkAllPage">
+    <label class="form-check-label" for="checkAllPage">全选本页</label>
+  </div>
+  <div class="ms-auto d-flex flex-wrap gap-2">
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="true">
+        <i class="fa-solid fa-clock-rotate-left me-1"></i>搜索历史
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end history-menu" id="historyMenu"></ul>
+    </div>
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="btnPresetDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+        <i class="fa-solid fa-filter me-1"></i>筛选预设
+      </button>
+      <div class="dropdown-menu dropdown-menu-end p-2 preset-menu">
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" class="form-control" id="presetNameInput" placeholder="预设名称" maxlength="30">
+          <button class="btn btn-primary" type="button" id="btnSavePreset">
+            <i class="fa-solid fa-floppy-disk me-1"></i>保存为预设
+          </button>
+        </div>
+        <div id="presetList"></div>
+      </div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#advancedPanel" aria-expanded="false">
+      <i class="fa-solid fa-sliders me-1"></i>高级搜索
+    </button>
+    <button class="btn btn-primary btn-sm" type="button" id="btnNewQuestion">
+      <i class="fa-solid fa-plus me-1"></i>新建题目
+    </button>
+  </div>
+</div>
+
+<!-- 筛选区 -->
+<div class="card mb-3">
+  <div class="card-body pb-2">
+    <div class="row g-2">
+      <div class="col-6 col-md-2">
+        <label class="filter-label" for="filterSubject">课程</label>
+        <select id="filterSubject" class="form-select form-select-sm">
+          <option value="">全部课程</option>
+          {% for s in SUBJECTS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="filter-label" for="filterChapter">章节</label>
+        <select id="filterChapter" class="form-select form-select-sm">
+          <option value="">全部章节</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="filter-label" for="filterDifficulty">难度</label>
+        <select id="filterDifficulty" class="form-select form-select-sm">
+          <option value="">全部难度</option>
+          {% for d in DIFFICULTIES %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="filter-label" for="filterSource">来源</label>
+        <input type="text" id="filterSource" class="form-control form-control-sm" list="sourceOptions" placeholder="来源(模糊匹配)">
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="filter-label" for="filterSearch">关键词</label>
+        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="题目/解答/来源/章节">
+      </div>
+    </div>
+    <!-- 高级搜索(可折叠) -->
+    <div class="collapse" id="advancedPanel">
+      <div class="advanced-panel-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2">
+            <label class="filter-label" for="advQuestionId">题目 ID</label>
+            <input type="text" id="advQuestionId" class="form-control form-control-sm" placeholder="如 128">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="filter-label" for="advTags">标签(逗号分隔,含任一即命中)</label>
+            <input type="text" id="advTags" class="form-control form-control-sm" placeholder="如:固有值,对角化">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="filter-label" for="advDateFrom">创建起始</label>
+            <input type="date" id="advDateFrom" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="filter-label" for="advDateTo">创建截止</label>
+            <input type="date" id="advDateTo" class="form-control form-control-sm">
+          </div>
+          <div class="col-12 col-md-3 d-flex gap-2">
+            <button class="btn btn-primary btn-sm flex-fill" id="btnAdvSearch">
+              <i class="fa-solid fa-magnifying-glass me-1"></i>搜索
+            </button>
+            <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnAdvReset">
+              <i class="fa-solid fa-rotate-left me-1"></i>重置全部
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<datalist id="sourceOptions"></datalist>
+<datalist id="editChapterOptions"></datalist>
+
+<!-- 批量操作工具栏 -->
+<div class="batch-toolbar d-none" id="batchToolbar">
+  <span class="fw-semibold text-primary" id="batchCount">已选中 0 项</span>
+  <button class="btn btn-sm btn-outline-danger" id="btnBatchDelete"><i class="fa-solid fa-trash me-1"></i>批量删除</button>
+  <button class="btn btn-sm btn-outline-primary" id="btnBatchTags"><i class="fa-solid fa-tags me-1"></i>批量编辑标签</button>
+  <button class="btn btn-sm btn-outline-primary" id="btnBatchSource"><i class="fa-solid fa-pen me-1"></i>批量修改来源</button>
+  <button class="btn btn-sm btn-outline-warning" id="btnBatchErrorBook"><i class="fa-solid fa-bookmark me-1"></i>批量加入错题本</button>
+  <button class="btn btn-sm btn-outline-secondary ms-auto" id="btnBatchCancel"><i class="fa-solid fa-xmark me-1"></i>取消选择</button>
+</div>
+
+<!-- 表格视图 -->
+<div id="tableView">
+  <div class="table-responsive question-table shadow-sm">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" class="form-check-input" id="checkAll"></th>
+          <th>编号</th>
+          <th>课程</th>
+          <th>章节</th>
+          <th>难度</th>
+          <th>来源</th>
+          <th>标签</th>
+          <th>题目预览</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="questionTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 卡片视图 -->
+<div id="cardView" class="question-card-view d-none"></div>
+
+<!-- 分页 -->
+<div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+  <span class="text-muted small" id="resultSummary"></span>
+  <div class="ms-auto d-flex align-items-center gap-2">
+    <select id="perPageSelect" class="form-select form-select-sm" style="width:auto">
+      {% for n in PER_PAGE_OPTIONS %}
+      <option value="{{ n }}" {% if n == 20 %}selected{% endif %}>每页 {{ n }} 条</option>
+      {% endfor %}
+    </select>
+    <nav aria-label="分页">
+      <ul class="pagination pagination-sm mb-0" id="paginationList"></ul>
+    </nav>
+  </div>
+</div>
+
+<!-- 题目详情 Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-file-lines me-2"></i>题目详情 <span class="text-primary" id="detailQid"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-section-title"><i class="fa-solid fa-circle-info me-1"></i>题目信息</div>
+        <div class="row" id="detailInfo"></div>
+        <div class="detail-section-title"><i class="fa-solid fa-square-root-variable me-1"></i>题目内容</div>
+        <div id="detailQuestionLatex" class="latex-content"></div>
+        <div class="detail-section-title"><i class="fa-regular fa-image me-1"></i>题目图片</div>
+        <div id="detailQuestionImage"></div>
+        <div class="text-center my-3">
+          <button type="button" class="btn btn-outline-primary" id="btnToggleSolution">
+            <i class="fa-solid fa-eye me-1"></i>查看答案
+          </button>
+        </div>
+        <div id="detailSolutionWrap" class="d-none">
+          <div class="detail-section-title"><i class="fa-solid fa-lightbulb me-1"></i>解答内容</div>
+          <div id="detailSolutionLatex" class="latex-content"></div>
+          <div class="detail-section-title"><i class="fa-regular fa-image me-1"></i>解答图片</div>
+          <div id="detailSolutionImage"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-warning" id="btnDetailBookmark">
+          <i class="fa-regular fa-bookmark me-1"></i>加入错题本
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="btnDetailEdit">
+          <i class="fa-solid fa-pen me-1"></i>编辑
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新建/编辑 Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" data-bs-backdrop="static" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editModalTitle">新建题目</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editForm" novalidate>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label" for="editSubject">课程 <span class="text-danger">*</span></label>
+              <select id="editSubject" class="form-select">
+                <option value="">请选择课程</option>
+                {% for s in SUBJECTS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" for="editChapter">章节</label>
+              <input type="text" id="editChapter" class="form-control" list="editChapterOptions" placeholder="知识点章节或年份" maxlength="128">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label" for="editDifficulty">难度</label>
+              <select id="editDifficulty" class="form-select">
+                {% for d in DIFFICULTIES %}<option value="{{ d }}" {% if d == '中等' %}selected{% endif %}>{{ d }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="editSource">来源</label>
+              <input type="text" id="editSource" class="form-control" list="sourceOptions" placeholder="如:东京工业大学 计算数理" maxlength="128">
+              <div id="sourceHint" class="source-hint"></div>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="editTags">标签</label>
+              <input type="text" id="editTags" class="form-control" placeholder="多个标签用逗号分隔,如:线性代数, 固有值">
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="editQuestionLatex">题目内容(LaTeX)</label>
+              <textarea id="editQuestionLatex" class="form-control" rows="6" placeholder="支持 $...$ 与 $$...$$ 数学公式"></textarea>
+              <div class="filter-label mt-2">实时预览</div>
+              <div id="previewQuestion" class="latex-preview"></div>
+            </div>
+            <div class="col-12">
+              <label class="form-label" for="editSolutionLatex">解答内容(LaTeX)</label>
+              <textarea id="editSolutionLatex" class="form-control" rows="6" placeholder="支持 $...$ 与 $$...$$ 数学公式"></textarea>
+              <div class="filter-label mt-2">实时预览</div>
+              <div id="previewSolution" class="latex-preview"></div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="fileQuestionImage">题目附件(图片 / PDF)</label>
+              <input type="file" id="fileQuestionImage" class="form-control form-control-sm" accept="image/*,application/pdf">
+              <div id="questionImagePreview" class="mt-2"></div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="fileSolutionImage">解答附件(图片 / PDF)</label>
+              <input type="file" id="fileSolutionImage" class="form-control form-control-sm" accept="image/*,application/pdf">
+              <div id="solutionImagePreview" class="mt-2"></div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnSaveQuestion">
+          <i class="fa-solid fa-floppy-disk me-1"></i>保存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 批量编辑标签 Modal -->
+<div class="modal fade" id="batchTagsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-tags me-2"></i>批量编辑标签</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">将对选中的 <span class="fw-semibold" id="batchTagsCount">0</span> 道题目生效。</p>
+        <div class="mb-3">
+          <label class="form-label" for="batchTagsInput">标签(逗号分隔)</label>
+          <input type="text" id="batchTagsInput" class="form-control" placeholder="如:线性代数, 固有值">
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="batchTagsMode" id="modeReplace" value="replace" checked>
+          <label class="form-check-label" for="modeReplace">替换现有标签</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="batchTagsMode" id="modeAdd" value="add">
+          <label class="form-check-label" for="modeAdd">追加到现有标签</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmBatchTags">确认修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 批量修改来源 Modal -->
+<div class="modal fade" id="batchSourceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-pen me-2"></i>批量修改来源</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">将对选中的 <span class="fw-semibold" id="batchSourceCount">0</span> 道题目生效。</p>
+        <label class="form-label" for="batchSourceInput">新来源</label>
+        <input type="text" id="batchSourceInput" class="form-control" list="sourceOptions" placeholder="如:东京工业大学 计算数理" maxlength="128">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmBatchSource">确认修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 右键上下文菜单 -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" data-action="detail"><i class="fa-solid fa-eye"></i>查看详情</div>
+  <div class="context-menu-item" data-action="edit"><i class="fa-solid fa-pen"></i>编辑</div>
+  <div class="context-menu-item" data-action="bookmark"><i class="fa-solid fa-bookmark"></i><span id="ctxBookmarkText">加入错题本</span></div>
+  <div class="context-menu-item" data-action="copy"><i class="fa-solid fa-copy"></i>复制题目 LaTeX</div>
+  <div class="context-menu-item text-danger" data-action="delete"><i class="fa-solid fa-trash"></i>删除</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.PAGE_CONFIG = {
+    subjects: {{ SUBJECTS | tojson }},
+    difficulties: {{ DIFFICULTIES | tojson }},
+    perPageOptions: {{ PER_PAGE_OPTIONS | tojson }}
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/stex/stex.min.js"></script>
+<script src="{{ url_for('static', filename='js/questions.js') }}"></script>
+{% endblock %}

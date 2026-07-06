@@ -1,0 +1,76 @@
+% ==========================================================================
+% custom_exam_template —— 正式试卷版式
+% 由 pdf_gen.py 以双圆括号占位符注入内容后编译(xelatex,需 Noto CJK 字体)。
+% 占位符键:TITLE / SUBTITLE / EXAM_DATE / SUBJECT / DURATION /
+%           TOTAL_SCORE / NOTICE / QUESTIONS
+% ==========================================================================
+\documentclass[12pt, a4paper, fontset=none]{ctexart}
+
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.2cm, right=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+
+% 中文字体(假定系统已安装 Noto CJK 系列)
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+
+% 题号标题样式:加粗、适度紧凑
+\ctexset{
+  section = {
+    format     = {\large\bfseries},
+    beforeskip = {1.2em},
+    afterskip  = {0.6em},
+  },
+}
+
+% 页眉页脚
+\setlength{\headheight}{16pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small ((SUBJECT))}
+\fancyhead[R]{\small ((TITLE))}
+\fancyfoot[C]{\small 第~\thepage~页}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% ------------------------------ 试卷标题 ------------------------------
+\begin{center}
+  {\huge\bfseries ((TITLE))\par}
+  \vspace{0.6em}
+  {\large ((SUBTITLE))\par}
+\end{center}
+
+\vspace{0.4em}
+
+% ------------------------------ 考试信息行 ------------------------------
+\begin{center}
+  考试日期:((EXAM_DATE)) \qquad 科目:((SUBJECT)) \qquad
+  考试时间:((DURATION))~分钟 \qquad 总分:((TOTAL_SCORE))~分
+\end{center}
+
+\vspace{0.4em}
+\noindent 姓名:\underline{\hspace{7em}} \hfill 学号:\underline{\hspace{7em}} \hfill 得分:\underline{\hspace{5em}}
+\vspace{0.8em}
+
+% ------------------------------ 注意事项框 ------------------------------
+\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
+  \textbf{注意事项}\par\smallskip
+  ((NOTICE))\par
+}}
+
+\vspace{1em}
+\noindent\rule{\linewidth}{0.8pt}
+
+% ------------------------------ 题目区 ------------------------------
+((QUESTIONS))
+
+\vspace{2em}
+\begin{center}
+  {\small --- 试卷结束 ---}
+\end{center}
+
+\end{document}

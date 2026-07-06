@@ -1,0 +1,53 @@
+% ==========================================================================
+% 试卷模板 —— 简洁版式
+% 由 pdf_gen.py 以双圆括号占位符注入内容后编译(xelatex,需 Noto CJK 字体)。
+% 占位符键:TITLE / SUBTITLE / EXAM_DATE / SUBJECT / DURATION /
+%           TOTAL_SCORE / NOTICE / QUESTIONS
+% ==========================================================================
+\documentclass[11pt, a4paper, fontset=none]{ctexart}
+
+\usepackage[top=2.4cm, bottom=2.4cm, left=2.4cm, right=2.4cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+
+% 中文字体(假定系统已安装 Noto CJK 系列)
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans Mono CJK SC}
+
+% 题号标题样式
+\ctexset{
+  section = {
+    format     = {\large\bfseries},
+    beforeskip = {1.1em},
+    afterskip  = {0.5em},
+  },
+}
+
+\pagestyle{plain}
+
+\begin{document}
+
+% ------------------------------ 标题区 ------------------------------
+\begin{center}
+  {\LARGE\bfseries ((TITLE))\par}
+  \vspace{0.4em}
+  {\normalsize\color[gray]{0.35} ((SUBTITLE))\par}
+  \vspace{0.7em}
+  {\small 日期:((EXAM_DATE)) \qquad 科目:((SUBJECT)) \qquad
+   时长:((DURATION))~分钟 \qquad 满分:((TOTAL_SCORE))~分\par}
+\end{center}
+
+\noindent\rule{\linewidth}{0.6pt}
+\smallskip
+
+% ------------------------------ 说明 ------------------------------
+{\small\itshape ((NOTICE))\par}
+
+\bigskip
+
+% ------------------------------ 题目区 ------------------------------
+((QUESTIONS))
+
+\end{document}

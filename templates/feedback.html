@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block title %}意见反馈 - 题库系统{% endblock %}
+
+{% block head %}
+<style>
+  .feedback-item {
+    background: #fff;
+    border: 1px solid #e3e6ec;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: box-shadow 0.15s ease;
+  }
+  .feedback-item:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); }
+  .feedback-item .feedback-title { font-weight: 600; font-size: 1.02rem; word-break: break-word; }
+  .feedback-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #495057;
+    margin: 8px 0;
+    font-size: 0.95rem;
+  }
+  .feedback-meta { font-size: 0.82rem; color: #8b939c; display: flex; flex-wrap: wrap; gap: 14px; }
+  .feedback-reply {
+    background: #f0f7ff;
+    border-left: 3px solid #0d6efd;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    font-size: 0.92rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .feedback-reply .reply-label { color: #0d6efd; font-weight: 600; margin-right: 6px; }
+  #feedbackTabs .nav-link { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb-container">
+  <div class="breadcrumb-custom">
+    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
+    <span class="breadcrumb-separator">/</span>
+    <span>意见反馈</span>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- 提交反馈表单 -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white">
+        <i class="fa-solid fa-paper-plane me-1 text-primary"></i>提交反馈
+      </div>
+      <div class="card-body">
+        <form id="feedbackForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label" for="fbTitle">标题 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="fbTitle" maxlength="128"
+                   placeholder="请简要描述问题或建议" required>
+            <div class="invalid-feedback">标题不能为空</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="fbContent">内容</label>
+            <textarea class="form-control" id="fbContent" rows="6" maxlength="5000"
+                      placeholder="请详细描述你的意见或遇到的问题(选填)"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100" id="fbSubmitBtn">
+            <i class="fa-solid fa-paper-plane me-1"></i>提交反馈
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工单列表 -->
+  <div class="col-lg-8">
+    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+      <ul class="nav nav-pills" id="feedbackTabs">
+        <li class="nav-item">
+          <a class="nav-link active" data-status="全部">全部 <span class="badge bg-secondary ms-1" id="countAll">0</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" data-status="待处理">待处理 <span class="badge bg-warning text-dark ms-1" id="countPending">0</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" data-status="已处理">已处理 <span class="badge bg-success ms-1" id="countDone">0</span></a>
+        </li>
+      </ul>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="resetFilterBtn">
+        <i class="fa-solid fa-rotate-left me-1"></i>重置筛选
+      </button>
+    </div>
+    <div id="feedbackList">
+      <div class="text-center text-muted py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="mt-2">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if current_user.is_admin %}
+<!-- 管理员处理弹窗:标记状态 + 填写回复 -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-clipboard-check me-1"></i>处理反馈</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3 text-muted small" id="statusModalInfo"></div>
+        <div class="mb-3">
+          <label class="form-label" for="statusSelect">状态</label>
+          <select class="form-select" id="statusSelect">
+            <option value="待处理">待处理</option>
+            <option value="已处理">已处理</option>
+          </select>
+        </div>
+        <div class="mb-1">
+          <label class="form-label" for="replyText">回复</label>
+          <textarea class="form-control" id="replyText" rows="4" maxlength="5000"
+                    placeholder="填写给用户的回复(选填)"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="statusSaveBtn">
+          <i class="fa-solid fa-check me-1"></i>保存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  window.PAGE_CONFIG = {
+    isAdmin: {{ 'true' if current_user.is_admin else 'false' }},
+    userId: {{ current_user.id }}
+  };
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/feedback.js') }}"></script>
+{% endblock %}
