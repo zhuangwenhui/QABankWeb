@@ -393,6 +393,10 @@ FEEDBACK_ITEMS = [
 
 def seed(drop=False):
     with app.app_context():
+        from sqlalchemy import inspect as _inspect
+        if not drop and not _inspect(db.engine).has_table('questions'):
+            print('数据库尚未初始化,请先执行: .venv/bin/flask --app app db upgrade')
+            return
         if drop:
             db.drop_all()
             db.create_all()

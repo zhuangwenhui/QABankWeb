@@ -8,6 +8,7 @@ import secrets
 
 from flask import (Flask, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
+from flask_migrate import Migrate
 
 import captcha
 import config
@@ -30,6 +31,7 @@ def create_app(config_object=None):
     os.makedirs(os.path.join(config.BASE_DIR, 'instance'), exist_ok=True)
 
     db.init_app(app)
+    Migrate(app, db, render_as_batch=True)  # SQLite 改表需 batch 模式
 
     from api.questions import bp as questions_bp
     from api.error_book import bp as error_book_bp
@@ -186,9 +188,6 @@ def create_app(config_object=None):
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='服务器内部错误', code='SERVER_ERROR'), 500
         return '服务器内部错误', 500
-
-    with app.app_context():
-        db.create_all()
 
     return app
 
