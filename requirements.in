@@ -1,0 +1,6 @@
+flask>=3.0
+flask-sqlalchemy>=3.1
+flask-migrate>=4.1
+flask-talisman>=1.1
+Pillow>=10.0
+gunicorn>=23.0

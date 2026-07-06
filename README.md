@@ -22,15 +22,12 @@
 ```bash
 cd question-bank
 
-# 1. 创建虚拟环境并安装依赖(已创建则跳过)
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-
-# 2. 初始化演示数据(--drop 清空重建)
-.venv/bin/python seed.py --drop
-
-# 3. 启动
-.venv/bin/python app.py
+.venv/bin/pip install -r requirements.txt          # 生产依赖(锁定版本)
+.venv/bin/pip install -r requirements-dev.txt      # 开发/测试(可选)
+.venv/bin/flask --app app db upgrade               # 初始化/升级数据库 schema
+.venv/bin/python seed.py --drop                    # (可选)开发演示数据
+.venv/bin/python app.py                            # 开发服务器
 # 访问 http://127.0.0.1:5000
 ```
 
