@@ -73,6 +73,7 @@ def create_app(config_object=None):
         strict_transport_security=app.config.get('TALISMAN_FORCE_HTTPS', False),
         session_cookie_secure=app.config.get('SESSION_COOKIE_SECURE', False),
         session_cookie_http_only=True,
+        session_cookie_samesite=app.config['SESSION_COOKIE_SAMESITE'],
     )
 
     # ------------------------------------------------------------------ hooks

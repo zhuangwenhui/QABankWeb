@@ -1,7 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
-instance/*.db
+instance/*.db*
 uploads/*
 !uploads/.gitkeep
 generated_pdfs/*
