@@ -73,10 +73,11 @@ def setup_logging(app):
 
     # 防御:同进程内若曾调用 logging.config.fileConfig(...)(如 Alembic env.py 的
     # flask db upgrade)且未显式 disable_existing_loggers=False,会把当时已存在的
-    # 具名 logger .disabled 置 True 且不可逆。审计/请求日志是本应用的关键可观测性
-    # 通道,显式复位,不受第三方一次性 fileConfig 调用影响。
+    # 具名 logger .disabled 置 True 且不可逆。审计/请求日志与 Flask 自身的 app.logger
+    # 都是本应用的关键可观测性通道,显式复位,不受第三方一次性 fileConfig 调用影响。
     logging.getLogger('audit').disabled = False
     logging.getLogger('request').disabled = False
+    app.logger.disabled = False
 
     @app.before_request
     def _assign_request_id():

@@ -7,7 +7,7 @@ import os
 import secrets
 from urllib.parse import urlparse
 
-from flask import (Flask, flash, g, jsonify, redirect, render_template,
+from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
 from flask_migrate import Migrate
 from flask_talisman import Talisman
@@ -222,7 +222,12 @@ def create_app(config_object=None):
     @app.route('/generated/<path:filename>')
     @login_required
     def generated_file(filename):
-        return send_from_directory(app.config['GENERATED_PDF_FOLDER'], filename)
+        from models import GeneratedFile
+        record = GeneratedFile.query.filter_by(
+            filename=os.path.basename(filename)).first()
+        if record is None or (record.user_id != g.user.id and not g.user.is_admin):
+            abort(404)
+        return send_from_directory(app.config['GENERATED_PDF_FOLDER'], record.filename)
 
     # ------------------------------------------------------------------ 错误处理
 

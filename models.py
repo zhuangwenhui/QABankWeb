@@ -146,6 +146,16 @@ class ViewLog(db.Model):
     viewed_at = db.Column(db.DateTime, default=datetime.now, index=True)
 
 
+class GeneratedFile(db.Model):
+    """PDF/试卷产物登记:属主校验与 TTL 清理的依据。"""
+    __tablename__ = 'generated_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, index=True)
+
+
 # --------------------------------------------------------------------- SQLite 加固
 from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _Engine
