@@ -32,12 +32,23 @@ python3 -m venv .venv
 # 访问 http://127.0.0.1:5000
 ```
 
-演示账号:
+演示账号(**仅限本地开发 `seed.py` 灌入的数据,生产环境不适用**):
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
 | `admin` | `admin123` | 管理员(可访问总览、处理反馈) |
 | `student` | `student123` | 学生 |
+
+> 生产环境不运行 `seed.py`,因此不存在上表这两个弱口令账号。生产环境请用
+> `flask --app app create-admin <用户名>` 引导创建管理员(首次登录会强制改密),
+> 详见 [docs/ops/deploy.md](docs/ops/deploy.md) 与 [docs/ops/launch-checklist.md](docs/ops/launch-checklist.md)。
+
+## 生产部署
+
+生产环境请勿使用 `python app.py`(开发服务器)。完整流程见
+[docs/ops/deploy.md](docs/ops/deploy.md)(gunicorn + systemd + Nginx + TLS + 备份),
+上线前逐项核对 [docs/ops/launch-checklist.md](docs/ops/launch-checklist.md)。
+最小形态:`APP_ENV=production SECRET_KEY=<强随机> .venv/bin/gunicorn -w 2 -k gthread --threads 4 -b 127.0.0.1:8000 app:app`
 
 ## PDF 生成说明
 
@@ -82,8 +93,8 @@ question-bank/
 ## 测试
 
 ```bash
-.venv/bin/python tests/test_auth_captcha.py   # 登录验证码 + 限流,8 项
-# 装了 pytest 也可: .venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q                        # 全量测试
+.venv/bin/python -m pytest tests/test_auth_captcha.py -q    # 仅登录验证码 + 限流
 ```
 
 ## 安全说明
