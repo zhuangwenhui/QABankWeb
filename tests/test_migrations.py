@@ -8,6 +8,8 @@ import config as config_module
 from app import create_app
 from models import db
 
+MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), '..', 'migrations')
+
 
 def test_upgrade_creates_schema(tmp_path):
     db_file = tmp_path / 'fresh.db'
@@ -16,7 +18,7 @@ def test_upgrade_creates_schema(tmp_path):
     application = create_app(cfg)
     with application.app_context():
         from flask_migrate import upgrade
-        upgrade()  # 使用项目根 migrations/
+        upgrade(directory=MIGRATIONS_DIR)  # 显式传目录,不依赖 CWD
         names = {row[0] for row in db.session.execute(
             db.text("SELECT name FROM sqlite_master WHERE type='table'"))}
         for table in ('users', 'questions', 'error_book', 'feedback', 'view_logs'):
