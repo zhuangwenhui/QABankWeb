@@ -22,7 +22,7 @@ login_throttle = LoginThrottle(max_attempts=5, window=300, lockout=900)
 def create_app(config_object=None):
     app = Flask(__name__)
     app.config.from_object(config_object or config.get_config())
-    if app.config.get('ENV_NAME') == 'production' and not app.config.get('SECRET_KEY'):
+    if app.config.get('ENV_NAME') == 'production' and not (app.config.get('SECRET_KEY') or '').strip():
         raise RuntimeError('生产环境必须通过环境变量 SECRET_KEY 注入会话密钥,拒绝启动')
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

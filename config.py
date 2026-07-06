@@ -28,7 +28,11 @@ class Config:
 
 
 class DevConfig(Config):
-    """开发:无 SECRET_KEY 时随机生成(每次重启会话失效),不打印告警避免测试噪音。"""
+    """开发:无 SECRET_KEY 时随机生成(每次重启会话失效),不打印告警避免测试噪音。
+
+    仅限单进程使用:随机密钥在多 worker 下各进程互不相同,会互踢会话,
+    勿用于 gunicorn -w>1;多进程部署请走 ProdConfig 并注入固定 SECRET_KEY。
+    """
     ENV_NAME = 'development'
     SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
@@ -52,13 +56,17 @@ class TestingConfig(Config):
 
 
 def get_config():
-    """按 APP_ENV 环境变量返回配置类,默认开发。"""
+    """按 APP_ENV 环境变量返回配置类;未设默认开发,非法值拒绝启动。"""
     env = os.environ.get('APP_ENV', 'development')
-    return {
+    mapping = {
         'development': DevConfig,
         'production': ProdConfig,
         'testing': TestingConfig,
-    }.get(env, DevConfig)
+    }
+    if env not in mapping:
+        raise RuntimeError(
+            f'未知 APP_ENV={env!r},必须是 development / production / testing')
+    return mapping[env]
 
 
 # 课程为固定分类(见技术文档 §4)
