@@ -151,6 +151,9 @@ def create_app(config_object=None):
 
             # 3) 凭据校验
             user = User.query.filter_by(username=username).first()
+            # 停用检查置于 check_password 之前:换取被停用用户看到明确提示去联系管理员。
+            # 已知取舍——会向未认证者泄露"该用户名存在且已停用";在管理员建号、无公开注册、
+            # 验证码 + 双维度限流(5次/15分钟)语境下枚举风险可接受。若日后开放注册应移到密码校验后。
             if user and not user.is_active:
                 audit('login_failed', target=username, detail='disabled')
                 flash('该账号已被停用,请联系管理员。', 'danger')
