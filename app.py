@@ -5,6 +5,7 @@
 """
 import os
 import secrets
+from urllib.parse import urlparse
 
 from flask import (Flask, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
@@ -49,7 +50,7 @@ def create_app(config_object=None):
 
     if app.config.get('USE_PROXYFIX'):
         # 仅生产启用:信任前置 Nginx 的 X-Forwarded-For/Proto 各一跳
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     # ------------------------------------------------------------------ hooks
 
@@ -212,7 +213,12 @@ def create_app(config_object=None):
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='文件过大,上限 20MB', code='TOO_LARGE'), 413
         flash('上传内容过大(上限 20MB)', 'danger')
-        return redirect(request.referrer or url_for('questions_page'))
+        ref = request.referrer
+        if ref:
+            p = urlparse(ref)
+            if p.netloc and p.netloc != request.host:   # 跨站 referrer → 丢弃
+                ref = None
+        return redirect(ref or url_for('questions_page'))
 
     @app.errorhandler(500)
     def server_error(e):

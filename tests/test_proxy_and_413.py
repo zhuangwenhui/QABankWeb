@@ -45,3 +45,24 @@ def test_413_page_redirects_with_flash(app_factory):
     client = application.test_client()
     r = client.post('/login', data={'x': 'y' * 4096})
     assert r.status_code in (302, 303)
+
+
+def test_413_page_drops_cross_site_referrer(app_factory):
+    # 开放重定向回归:413 先于 CSRF/鉴权触发,匿名跨站超大 POST 若把
+    # 客户端可控 Referer 反射进 Location 即可 302 到外站。跨站 referrer 须被丢弃。
+    application = app_factory(MAX_CONTENT_LENGTH=1024)
+    client = application.test_client()
+    r = client.post('/login', data={'x': 'y' * 4096},
+                    headers={'Referer': 'https://evil.example.com/phish'})
+    assert r.status_code in (302, 303)
+    assert 'evil.example.com' not in r.headers['Location']
+
+
+def test_413_page_keeps_same_origin_referrer(app_factory):
+    # 同源 referrer 应保留:回到用户来时的本站页面。
+    application = app_factory(MAX_CONTENT_LENGTH=1024)
+    client = application.test_client()
+    r = client.post('/login', data={'x': 'y' * 4096},
+                    headers={'Referer': 'http://localhost/error_book'})
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'] == 'http://localhost/error_book'
