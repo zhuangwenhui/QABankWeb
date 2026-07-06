@@ -86,6 +86,13 @@ def create_app(config_object=None):
         user_id = session.get('user_id')
         if user_id:
             g.user = db.session.get(User, user_id)
+        if g.user is not None and not g.user.is_active:
+            session.clear()
+            g.user = None
+            if request.path.startswith('/api/'):
+                return jsonify(success=False, error='账号已被停用', code='UNAUTHORIZED'), 401
+            flash('该账号已被停用,请联系管理员。', 'danger')
+            return redirect(url_for('login'))
         return csrf_protect()
 
     @app.context_processor
@@ -144,6 +151,11 @@ def create_app(config_object=None):
 
             # 3) 凭据校验
             user = User.query.filter_by(username=username).first()
+            if user and not user.is_active:
+                audit('login_failed', target=username, detail='disabled')
+                flash('该账号已被停用,请联系管理员。', 'danger')
+                return render_template('login.html')
+
             if user and user.check_password(password):
                 login_throttle.reset(ip_key)
                 if user_key:
