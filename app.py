@@ -3,6 +3,7 @@
 页面路由(服务端渲染)+ /api/ 蓝图(JSON 接口)。
 运行: .venv/bin/python app.py  (默认 http://127.0.0.1:5000)
 """
+import mimetypes
 import os
 import secrets
 from urllib.parse import urlparse
@@ -268,10 +269,21 @@ def create_app(config_object=None):
 
     # ------------------------------------------------------------------ 文件服务
 
+    def _protected_send(folder, internal_prefix, filename):
+        """鉴权后的文件发送:生产走 Nginx X-Accel,开发由 Flask 直接发送。"""
+        safe_name = os.path.basename(filename)
+        if app.config.get('USE_X_ACCEL'):
+            resp = Response(b'')
+            resp.headers['X-Accel-Redirect'] = f'{internal_prefix}/{safe_name}'
+            resp.headers['Content-Type'] = (mimetypes.guess_type(safe_name)[0]
+                                            or 'application/octet-stream')
+            return resp
+        return send_from_directory(folder, safe_name)
+
     @app.route('/uploads/<path:filename>')
     @login_required
     def uploaded_file(filename):
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        return _protected_send(app.config['UPLOAD_FOLDER'], '/_protected_uploads', filename)
 
     @app.route('/generated/<path:filename>')
     @login_required
@@ -281,7 +293,8 @@ def create_app(config_object=None):
             filename=os.path.basename(filename)).first()
         if record is None or (record.user_id != g.user.id and not g.user.is_admin):
             abort(404)
-        return send_from_directory(app.config['GENERATED_PDF_FOLDER'], record.filename)
+        return _protected_send(app.config['GENERATED_PDF_FOLDER'],
+                               '/_protected_generated', record.filename)
 
     # ------------------------------------------------------------------ 错误处理
 
