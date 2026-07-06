@@ -10,6 +10,7 @@ from flask import (Flask, flash, g, jsonify, redirect, render_template,
                    request, Response, send_from_directory, session, url_for)
 from flask_migrate import Migrate
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import captcha
 import config
@@ -45,6 +46,10 @@ def create_app(config_object=None):
     app.register_blueprint(overview_bp)
 
     setup_logging(app)  # 须先于 load_user_and_csrf 注册,保证 g.request_id 先于其他 hook 就绪
+
+    if app.config.get('USE_PROXYFIX'):
+        # 仅生产启用:信任前置 Nginx 的 X-Forwarded-For/Proto 各一跳
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # ------------------------------------------------------------------ hooks
 
@@ -204,7 +209,10 @@ def create_app(config_object=None):
 
     @app.errorhandler(413)
     def too_large(e):
-        return jsonify(success=False, error='文件过大,上限 20MB', code='TOO_LARGE'), 413
+        if request.path.startswith('/api/'):
+            return jsonify(success=False, error='文件过大,上限 20MB', code='TOO_LARGE'), 413
+        flash('上传内容过大(上限 20MB)', 'danger')
+        return redirect(request.referrer or url_for('questions_page'))
 
     @app.errorhandler(500)
     def server_error(e):
