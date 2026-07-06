@@ -220,6 +220,12 @@ def create_app(config_object=None):
                 g.user.must_change_password = False
                 db.session.commit()
                 audit('password_changed', target=g.user.username)
+                uid = g.user.id
+                session.clear()
+                session['user_id'] = uid
+                session.permanent = True
+                # 注:轮换当前会话防固定;客户端签名 Cookie 下无法撤销已被复制的旧 Cookie,
+                # 真正的跨会话撤销需 per-user 密码 epoch,超出本里程碑范围。
                 flash('密码修改成功', 'success')
                 return redirect(url_for('questions_page'))
         return render_template('change_password.html')

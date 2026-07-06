@@ -73,6 +73,13 @@ def test_change_password_rejects_mismatch(client, login):
     assert '两次输入不一致' in r.get_data(as_text=True)
 
 
+def test_change_password_rejects_same_as_old(client, login):
+    login('student', 'StudentPass123456')
+    r = _change_password(client, 'StudentPass123456', 'StudentPass123456')
+    assert r.status_code == 200
+    assert '新密码不能与旧密码相同' in r.get_data(as_text=True)
+
+
 def test_must_change_password_forces_redirect(app, client, login):
     _set(app, 'student', must_change_password=True)
     login('student', 'StudentPass123456')
