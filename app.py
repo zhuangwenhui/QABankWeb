@@ -330,6 +330,10 @@ def create_app(config_object=None):
     def create_admin(username):
         """创建管理员账号:密码读 ADMIN_INITIAL_PASSWORD 环境变量,否则交互输入。"""
         import getpass
+        from api.overview import _USERNAME_RE  # 与 API 建号同款用户名校验
+        if not _USERNAME_RE.match(username):
+            click.echo('用户名需为 3-32 位字母/数字/下划线/连字符')
+            raise SystemExit(1)
         if User.query.filter_by(username=username).first():
             click.echo(f'用户 {username} 已存在,未做修改')
             return

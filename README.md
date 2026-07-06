@@ -26,7 +26,8 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt          # 生产依赖(锁定版本)
 .venv/bin/pip install -r requirements-dev.txt      # 开发/测试(可选)
 .venv/bin/flask --app app db upgrade               # 初始化/升级数据库 schema
-.venv/bin/python seed.py --drop                    # (可选)开发演示数据
+.venv/bin/python seed.py                           # (可选)首次灌入开发演示数据(空库直接跑)
+# 重置已有数据需显式 --force 防误清:.venv/bin/python seed.py --drop --force
 .venv/bin/python app.py                            # 开发服务器
 # 访问 http://127.0.0.1:5000
 ```

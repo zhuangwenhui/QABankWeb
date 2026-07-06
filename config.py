@@ -9,7 +9,9 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 class Config:
     """公共基础配置。"""
     ENV_NAME = 'base'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(BASE_DIR, 'instance', 'question_bank.db')
+    # 优先用 DATABASE_URL(12-factor / 便于隔离测试与运维),缺省落到 instance 下的 SQLite
+    SQLALCHEMY_DATABASE_URI = (os.environ.get('DATABASE_URL')
+                               or 'sqlite:///' + os.path.join(BASE_DIR, 'instance', 'question_bank.db'))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     GENERATED_PDF_FOLDER = os.path.join(BASE_DIR, 'generated_pdfs')

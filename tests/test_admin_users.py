@@ -37,6 +37,14 @@ def test_create_user_returns_initial_password_once(app, client, login):
         assert u.check_password(pw) and u.must_change_password is True
 
 
+def test_create_user_response_is_no_store(client, login):
+    """明文初始密码过线的响应必须带 Cache-Control: no-store,防中间缓存/浏览器存盘。"""
+    login('admin', 'AdminPass123456')
+    r = _post(client, '/api/overview/users', {'username': 'nocache', 'role': 'student'})
+    assert r.status_code == 200
+    assert r.headers.get('Cache-Control') == 'no-store'
+
+
 def test_create_user_validates(client, login):
     login('admin', 'AdminPass123456')
     assert _post(client, '/api/overview/users',
@@ -80,6 +88,18 @@ def test_create_admin_cli(app, monkeypatch):
     assert '已存在' in result.output
 
 
+def test_create_admin_cli_rejects_bad_username(app, monkeypatch):
+    """CLI 用户名校验与 API 统一:非法用户名被拒,且不建号。"""
+    monkeypatch.setenv('ADMIN_INITIAL_PASSWORD', 'CliAdminPass1234')
+    runner = app.test_cli_runner()
+    for bad in ('ab', 'bad name'):
+        result = runner.invoke(args=['create-admin', bad])
+        assert result.exit_code != 0
+        assert '用户名需为' in result.output
+        with app.app_context():
+            assert User.query.filter_by(username=bad).first() is None
+
+
 def test_seed_refuses_production(monkeypatch):
     monkeypatch.setenv('APP_ENV', 'production')
     import subprocess
@@ -89,6 +109,57 @@ def test_seed_refuses_production(monkeypatch):
         env={**os.environ, 'APP_ENV': 'production', 'SECRET_KEY': 'x' * 32})
     assert proc.returncode != 0
     assert '生产环境' in (proc.stdout + proc.stderr)
+
+
+def _run_seed(args, db_file):
+    """在隔离的临时库上跑 seed.py(DATABASE_URL 指向 tmp,绝不碰 instance 真实库)。"""
+    import subprocess
+    env = {**os.environ, 'APP_ENV': 'development',
+           'SECRET_KEY': 'x' * 32,
+           'DATABASE_URL': f'sqlite:///{db_file}'}
+    env.pop('PYTEST_CURRENT_TEST', None)
+    return subprocess.run(
+        [sys.executable, os.path.join(os.path.dirname(__file__), '..', 'seed.py'), *args],
+        capture_output=True, text=True, env=env)
+
+
+def test_seed_drop_requires_force(tmp_path):
+    """--drop 防误清:库已有数据时,不加 --force 应拒绝清空并提示;加 --force 才执行。"""
+    import sqlite3
+    db_file = tmp_path / 'seedtest.db'
+
+    # 首次:空库 + --force 建 schema 并灌入演示数据
+    proc = _run_seed(['--drop', '--force'], db_file)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert db_file.exists()
+
+    def _counts():
+        con = sqlite3.connect(str(db_file))
+        try:
+            q = con.execute('SELECT COUNT(*) FROM questions').fetchone()[0]
+            u = con.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+            return q, u
+        finally:
+            con.close()
+
+    q0, u0 = _counts()
+    assert q0 > 0 and u0 == 2  # admin + student
+
+    # 库已有数据 + 仅 --drop(无 --force):必须拒绝且不清库
+    proc = _run_seed(['--drop'], db_file)
+    assert '--force' in proc.stdout
+    assert _counts() == (q0, u0)  # 数据原封不动
+
+    # 追加一行,再用 --drop --force:应清空重建(行数回到基线,而非累加)
+    con = sqlite3.connect(str(db_file))
+    con.execute("INSERT INTO users (username, password_hash, role, "
+                "must_change_password, is_active) VALUES ('extra', 'x', 'student', 0, 1)")
+    con.commit()
+    con.close()
+    assert _counts()[1] == 3
+    proc = _run_seed(['--drop', '--force'], db_file)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert _counts() == (q0, u0)  # 清空重建,extra 已消失
 
 
 def test_account_full_lifecycle(app, client, login):

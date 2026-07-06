@@ -166,8 +166,10 @@ def create_user():
         current_app.logger.exception('创建用户失败')
         return jsonify(success=False, error='创建用户失败', code='SERVER_ERROR'), 500
     audit('user_created', target=username, detail=f'role={role}')
-    return jsonify(success=True, message='创建成功,初始密码仅本次展示',
+    resp = jsonify(success=True, message='创建成功,初始密码仅本次展示',
                    data={'user': _user_row(user), 'initial_password': password})
+    resp.headers['Cache-Control'] = 'no-store'  # 明文凭据过线,禁缓存/存盘
+    return resp
 
 
 @bp.route('/users/<int:uid>/reset_password', methods=['POST'])
@@ -186,8 +188,10 @@ def reset_password(uid):
         current_app.logger.exception('重置密码失败')
         return jsonify(success=False, error='重置密码失败', code='SERVER_ERROR'), 500
     audit('password_reset', target=user.username)
-    return jsonify(success=True, message='已重置,初始密码仅本次展示',
+    resp = jsonify(success=True, message='已重置,初始密码仅本次展示',
                    data={'initial_password': password})
+    resp.headers['Cache-Control'] = 'no-store'  # 明文凭据过线,禁缓存/存盘
+    return resp
 
 
 @bp.route('/users/<int:uid>/toggle_active', methods=['POST'])
