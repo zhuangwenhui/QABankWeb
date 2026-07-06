@@ -21,5 +21,12 @@ def test_upgrade_creates_schema(tmp_path):
         upgrade(directory=MIGRATIONS_DIR)  # 显式传目录,不依赖 CWD
         names = {row[0] for row in db.session.execute(
             db.text("SELECT name FROM sqlite_master WHERE type='table'"))}
-        for table in ('users', 'questions', 'error_book', 'feedback', 'view_logs'):
+        # 覆盖全部三条迁移的产物:初始 5 表 + generated_files(Task8)
+        for table in ('users', 'questions', 'error_book', 'feedback',
+                      'view_logs', 'generated_files'):
             assert table in names, f'缺表:{table}'
+        # users 的新列(Task10 迁移):must_change_password / is_active
+        user_cols = {row[1] for row in db.session.execute(
+            db.text("PRAGMA table_info(users)"))}
+        for col in ('must_change_password', 'is_active'):
+            assert col in user_cols, f'users 缺列:{col}'

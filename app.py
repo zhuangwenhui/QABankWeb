@@ -198,7 +198,7 @@ def create_app(config_object=None):
 
     @app.route('/logout')
     def logout():
-        session.pop('user_id', None)
+        session.pop('user_id', None)  # 仅清登录态;csrf_token 保留供后续表单,下次登录会 session.clear 轮换
         flash('已退出登录', 'info')
         return redirect(url_for('login'))
 
