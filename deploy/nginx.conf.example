@@ -1,0 +1,47 @@
+# /etc/nginx/sites-available/question-bank —— 域名与证书路径按实际替换
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+
+server {
+    listen 80;
+    server_name example.com;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    # certbot --nginx 会自动填充证书;手动模式取消注释:
+    # ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    client_max_body_size 20m;
+
+    location /static/ {
+        alias /srv/question-bank/static/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    # 受保护文件:Flask 鉴权后经 X-Accel-Redirect 由 Nginx 发送
+    location /_protected_uploads/ {
+        internal;
+        alias /srv/question-bank/uploads/;
+    }
+    location /_protected_generated/ {
+        internal;
+        alias /srv/question-bank/generated_pdfs/;
+    }
+
+    location = /login {
+        limit_req zone=login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/proxy_params;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/proxy_params;
+    }
+}
