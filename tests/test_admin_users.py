@@ -199,3 +199,10 @@ def test_account_full_lifecycle(app, client, login):
     client.get('/logout')
     r = _raw_login('journey', 'JourneyNewPass12')
     assert '已被停用' in r.get_data(as_text=True)                   # 拒登
+
+
+def test_overview_page_has_user_management(client, login):
+    login('admin', 'AdminPass123456')
+    html = client.get('/overview').get_data(as_text=True)
+    for el in ('userManageCard', 'userTableBody', 'createUserModal', 'initialPwModal'):
+        assert el in html

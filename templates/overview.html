@@ -155,6 +155,88 @@
     <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
   </div>
 </div>
+
+<!-- 用户管理 -->
+<div class="overview-card card mb-4" id="userManageCard">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="fa-solid fa-user-gear me-1 text-primary"></i>用户管理</span>
+    <button class="btn btn-sm btn-primary" id="btnCreateUser">
+      <i class="fa-solid fa-user-plus me-1"></i>创建用户
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th style="width:64px">ID</th>
+            <th>用户名</th>
+            <th style="width:100px">角色</th>
+            <th style="width:100px">状态</th>
+            <th style="width:170px">创建时间</th>
+            <th style="width:200px" class="text-end">操作</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody">
+          <tr><td colspan="6" class="loading-block">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 创建用户 Modal -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">创建用户</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label" for="newUsername">用户名(3-32 位字母/数字/_-)</label>
+          <input type="text" class="form-control" id="newUsername" maxlength="32" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="newUserRole">角色</label>
+          <select class="form-select" id="newUserRole">
+            <option value="student" selected>学生</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnSubmitCreateUser">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 初始密码一次性展示 Modal -->
+<div class="modal fade" id="initialPwModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fa-solid fa-key me-1 text-warning"></i>初始密码(仅本次展示)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">请立即复制并交给用户;关闭后无法再次查看,只能重置。用户首次登录会被要求改密。</p>
+        <div class="input-group">
+          <input type="text" class="form-control" id="initialPwValue" readonly>
+          <button class="btn btn-outline-primary" type="button" id="btnCopyInitialPw">
+            <i class="fa-solid fa-copy me-1"></i>复制
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">我已保存</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
