@@ -5,9 +5,14 @@
     .venv/bin/python seed.py          # 首次初始化(库非空则跳过)
     .venv/bin/python seed.py --drop   # 清空重建
 """
+import os
 import random
 import sys
 from datetime import datetime, timedelta
+
+if os.environ.get('APP_ENV') == 'production':
+    print('拒绝在生产环境运行 seed.py:演示数据包含公开的弱口令账号。')
+    sys.exit(1)
 
 from app import app
 from models import ErrorBook, Feedback, Question, User, ViewLog, db
@@ -391,9 +396,21 @@ FEEDBACK_ITEMS = [
 ]
 
 
-def seed(drop=False):
+def seed(drop=False, force=False):
     with app.app_context():
+        from sqlalchemy import inspect as _inspect
+        if not drop and not _inspect(db.engine).has_table('questions'):
+            print('数据库尚未初始化,请先执行: .venv/bin/flask --app app db upgrade')
+            return
         if drop:
+            # 防误清:库里已有账号且未加 --force 时拒绝清空(容错:表不存在视为空库)
+            existing_users = 0
+            if _inspect(db.engine).has_table('users'):
+                existing_users = User.query.count()
+            if existing_users and not force:
+                print('数据库已有数据(将被清空),确认请加 --force:'
+                      '.venv/bin/python seed.py --drop --force')
+                return
             db.drop_all()
             db.create_all()
         elif Question.query.first() is not None:
@@ -452,4 +469,4 @@ def seed(drop=False):
 
 
 if __name__ == '__main__':
-    seed(drop='--drop' in sys.argv)
+    seed(drop='--drop' in sys.argv, force='--force' in sys.argv)

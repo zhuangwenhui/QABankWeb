@@ -22,24 +22,33 @@
 ```bash
 cd question-bank
 
-# 1. 创建虚拟环境并安装依赖(已创建则跳过)
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-
-# 2. 初始化演示数据(--drop 清空重建)
-.venv/bin/python seed.py --drop
-
-# 3. 启动
-.venv/bin/python app.py
+.venv/bin/pip install -r requirements.txt          # 生产依赖(锁定版本)
+.venv/bin/pip install -r requirements-dev.txt      # 开发/测试(可选)
+.venv/bin/flask --app app db upgrade               # 初始化/升级数据库 schema
+.venv/bin/python seed.py                           # (可选)首次灌入开发演示数据(空库直接跑)
+# 重置已有数据需显式 --force 防误清:.venv/bin/python seed.py --drop --force
+.venv/bin/python app.py                            # 开发服务器
 # 访问 http://127.0.0.1:5000
 ```
 
-演示账号:
+演示账号(**仅限本地开发 `seed.py` 灌入的数据,生产环境不适用**):
 
 | 账号 | 密码 | 角色 |
 |---|---|---|
 | `admin` | `admin123` | 管理员(可访问总览、处理反馈) |
 | `student` | `student123` | 学生 |
+
+> 生产环境不运行 `seed.py`,因此不存在上表这两个弱口令账号。生产环境请用
+> `flask --app app create-admin <用户名>` 引导创建管理员(首次登录会强制改密),
+> 详见 [docs/ops/deploy.md](docs/ops/deploy.md) 与 [docs/ops/launch-checklist.md](docs/ops/launch-checklist.md)。
+
+## 生产部署
+
+生产环境请勿使用 `python app.py`(开发服务器)。完整流程见
+[docs/ops/deploy.md](docs/ops/deploy.md)(gunicorn + systemd + Nginx + TLS + 备份),
+上线前逐项核对 [docs/ops/launch-checklist.md](docs/ops/launch-checklist.md)。
+最小形态:`APP_ENV=production SECRET_KEY=<强随机> .venv/bin/gunicorn -w 2 -k gthread --threads 4 --timeout 130 -b 127.0.0.1:8000 app:app`(`--timeout 130` 不可省——PDF 编译最坏约 120s,默认 30s 会中途杀 worker)
 
 ## PDF 生成说明
 
@@ -84,8 +93,8 @@ question-bank/
 ## 测试
 
 ```bash
-.venv/bin/python tests/test_auth_captcha.py   # 登录验证码 + 限流,8 项
-# 装了 pytest 也可: .venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q                        # 全量测试
+.venv/bin/python -m pytest tests/test_auth_captcha.py -q    # 仅登录验证码 + 限流
 ```
 
 ## 安全说明

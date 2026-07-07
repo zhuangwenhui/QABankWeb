@@ -61,3 +61,9 @@ class LoginThrottle:
         with self._lock:
             self._fails.pop(key, None)
             self._locked.pop(key, None)
+
+    def reset_all(self):
+        """清空全部限流状态(测试夹具用)。"""
+        with self._lock:
+            self._fails.clear()
+            self._locked.clear()

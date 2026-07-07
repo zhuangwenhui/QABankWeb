@@ -4,14 +4,17 @@
 以及基于 LaTeX 模板的 PDF 试卷生成(编译逻辑见 pdf_gen.py)。
 所有数据均限定当前登录用户(g.user)。
 """
+import os
 import uuid
+from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 import config
 from auth import login_required
-from models import ErrorBook, Question, db
+from models import ErrorBook, GeneratedFile, Question, db
 from pdf_gen import generate_pdf
 
 bp = Blueprint('api_error_book', __name__, url_prefix='/api/error_book')
@@ -112,6 +115,37 @@ def _split_scores(total_score, count):
     return [base + 1 if i < rem else base for i in range(count)]
 
 
+GENERATED_TTL_HOURS = 24
+
+
+def _cleanup_generated():
+    """删除超过 TTL 的产物记录与文件;孤儿文件(无记录且 mtime 过期)一并清理。"""
+    folder = current_app.config['GENERATED_PDF_FOLDER']
+    cutoff = datetime.now() - timedelta(hours=GENERATED_TTL_HOURS)
+    try:
+        expired = GeneratedFile.query.filter(GeneratedFile.created_at < cutoff).all()
+        known = {r.filename for r in GeneratedFile.query.all()}
+        for rec in expired:
+            path = os.path.join(folder, rec.filename)
+            if os.path.isfile(path):
+                os.remove(path)
+            db.session.delete(rec)
+        db.session.commit()
+        cutoff_ts = cutoff.timestamp()
+        for name in os.listdir(folder):
+            if name.startswith('.') or name in known:
+                continue
+            path = os.path.join(folder, name)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) < cutoff_ts:
+                    os.remove(path)
+            except OSError:
+                continue
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('清理生成物失败(不影响本次请求)')
+
+
 # ---------------------------------------------------------------- 列表与统计
 
 @bp.route('', methods=['GET'])
@@ -120,7 +154,8 @@ def list_entries():
     """错题列表:按课程/章节/难度/来源/关键词筛选 + 分页。"""
     query = (ErrorBook.query
              .filter(ErrorBook.user_id == g.user.id)
-             .join(Question, ErrorBook.question_id == Question.id))
+             .join(Question, ErrorBook.question_id == Question.id)
+             .options(selectinload(ErrorBook.question)))
 
     subject = request.args.get('subject', '').strip()
     chapter = request.args.get('chapter', '').strip()
@@ -347,6 +382,7 @@ def update_notes():
 @login_required
 def generate_pdf_route():
     """按配置生成 PDF 试卷;服务器无 LaTeX 引擎时降级为生成 .tex 源文件。"""
+    _cleanup_generated()
     data = request.get_json(silent=True) or {}
 
     template = data.get('template')
@@ -375,6 +411,7 @@ def generate_pdf_route():
         entries = (ErrorBook.query
                    .filter(ErrorBook.user_id == g.user.id,
                            ErrorBook.question_id.in_(ids))
+                   .options(selectinload(ErrorBook.question))
                    .all())
         order = {qid: i for i, qid in enumerate(ids)}
         entries.sort(key=lambda e: order.get(e.question_id, len(order)))
@@ -382,6 +419,7 @@ def generate_pdf_route():
         entries = (ErrorBook.query
                    .filter(ErrorBook.user_id == g.user.id)
                    .join(Question, ErrorBook.question_id == Question.id)
+                   .options(selectinload(ErrorBook.question))
                    .order_by(Question.subject.asc(), Question.id.asc())
                    .all())
 
@@ -421,12 +459,30 @@ def generate_pdf_route():
 
     basename = uuid.uuid4().hex[:12]
     try:
-        result = generate_pdf(template, context, questions, basename)
+        result = generate_pdf(template, context, questions, basename,
+                              out_dir=current_app.config['GENERATED_PDF_FOLDER'])
     except Exception:
         current_app.logger.exception('PDF 生成异常')
         return _err('PDF 生成过程中发生服务器错误', 'SERVER_ERROR', 500)
 
+    if result.get('busy'):
+        return _err('服务器繁忙,已有试卷正在生成,请稍后重试', 'BUSY', 429)
+
+    def _register_outputs():
+        """把本次真实产出的文件登记到当前用户名下。"""
+        folder = current_app.config['GENERATED_PDF_FOLDER']
+        for ext in ('.tex', '.pdf'):
+            if os.path.isfile(os.path.join(folder, basename + ext)):
+                db.session.add(GeneratedFile(filename=basename + ext, user_id=g.user.id))
+        db.session.commit()
+
     if result.get('engine_missing'):
+        try:
+            _register_outputs()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('登记生成物失败')
+            return _err('生成记录保存失败,请重试', 'SERVER_ERROR', 500)
         return _ok(
             {'tex_url': f'/generated/{basename}.tex',
              'filename': f'{basename}.tex',
@@ -440,5 +496,11 @@ def generate_pdf_route():
         current_app.logger.warning('PDF 编译失败: %s', error_text)
         return _err('PDF 编译失败:' + error_text, 'PDF_COMPILE_FAILED', 500)
 
+    try:
+        _register_outputs()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('登记生成物失败')
+        return _err('生成记录保存失败,请重试', 'SERVER_ERROR', 500)
     return _ok({'pdf_url': f'/generated/{basename}.pdf', 'filename': f'{basename}.pdf'},
                message='试卷生成成功')

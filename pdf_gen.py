@@ -11,6 +11,7 @@ escape_latex 转义,题目 LaTeX 原样注入)→ 探测 xelatex/pdflatex 编译
 import os
 import shutil
 import subprocess
+import threading
 
 import config
 
@@ -21,6 +22,9 @@ PLACEHOLDER_KEYS = ('TITLE', 'SUBTITLE', 'EXAM_DATE', 'SUBJECT',
 # 编译超时(秒)与失败时提取的日志尾部行数
 COMPILE_TIMEOUT = 60
 LOG_TAIL_LINES = 30
+
+# 进程内编译并发闸门:每 gunicorn worker 同时最多 1 个编译(见 spec §3.5)
+_compile_slot = threading.BoundedSemaphore(1)
 
 # LaTeX 特殊字符转义表(注意:反斜杠必须最先处理,这里用逐字符映射天然规避二次转义)
 _LATEX_SPECIAL = {
@@ -122,7 +126,17 @@ def _cleanup_aux(out_dir, basename):
             pass
 
 
-def generate_pdf(template_name, context, questions, output_basename):
+def _cleanup_failed(out_dir, basename):
+    """编译失败/超时:辅助文件连同本次 .tex 与半成品 .pdf 一并删除(spec §3.5)。"""
+    _cleanup_aux(out_dir, basename)
+    for ext in ('.tex', '.pdf'):
+        try:
+            os.remove(os.path.join(out_dir, basename + ext))
+        except OSError:
+            pass
+
+
+def generate_pdf(template_name, context, questions, output_basename, out_dir=None):
     """生成 PDF 试卷(或降级生成 .tex)。
 
     参数:
@@ -133,103 +147,115 @@ def generate_pdf(template_name, context, questions, output_basename):
         questions: 题目字典列表(question_latex/solution_latex/subject/source/
                    difficulty/notes/score)
         output_basename: 输出文件基名(由调用方用 uuid 生成,不含用户输入)
+        out_dir: 输出目录,默认取 config.Config.GENERATED_PDF_FOLDER
 
     返回:
         {'ok': bool, 'pdf_path' 或 'tex_path', 'engine_missing': bool, 'error': str|None}
+        并发闸门已满时:{'ok': False, 'busy': True, 'engine_missing': False, 'error': str}
     """
-    result = {'ok': False, 'engine_missing': False, 'error': None}
-
-    # ---- 模板白名单校验(防任意文件读取) ----
-    if template_name not in config.PDF_TEMPLATES:
-        result['error'] = '非法的模板名称'
-        return result
-    template_path = os.path.join(config.Config.LATEX_TEMPLATE_FOLDER,
-                                 template_name + '.tex')
-    if not os.path.isfile(template_path):
-        result['error'] = f'模板文件不存在:{template_name}.tex'
-        return result
-
-    # ---- 输出基名校验(调用方用 uuid 生成,这里做双保险) ----
-    if not output_basename or not str(output_basename).isalnum():
-        result['error'] = '非法的输出文件名'
-        return result
-    output_basename = str(output_basename)
-
+    if not _compile_slot.acquire(blocking=False):
+        return {'ok': False, 'busy': True, 'engine_missing': False,
+                'error': '已有试卷正在生成'}
     try:
-        with open(template_path, encoding='utf-8') as f:
-            tex = f.read()
-    except OSError as exc:
-        result['error'] = f'读取模板失败:{exc}'
-        return result
+        result = {'ok': False, 'engine_missing': False, 'error': None}
 
-    # ---- 占位符替换 ----
-    context = dict(context or {})
-    include_solutions = bool(context.pop('include_solutions', False))
-    with_notes = (template_name == 'error_book_template')
-    questions_block = _build_questions_block(questions, include_solutions, with_notes)
+        # ---- 模板白名单校验(防任意文件读取) ----
+        if template_name not in config.PDF_TEMPLATES:
+            result['error'] = '非法的模板名称'
+            return result
+        template_path = os.path.join(config.Config.LATEX_TEMPLATE_FOLDER,
+                                     template_name + '.tex')
+        if not os.path.isfile(template_path):
+            result['error'] = f'模板文件不存在:{template_name}.tex'
+            return result
 
-    for key in PLACEHOLDER_KEYS:
-        if key == 'QUESTIONS':
-            value = questions_block          # 题目 LaTeX 原样注入
-        elif key == 'NOTICE':
-            value = _escape_multiline(context.get(key, ''))
-        else:
-            value = escape_latex(context.get(key, ''))
-        tex = tex.replace(f'(({key}))', value)
+        # ---- 输出基名校验(调用方用 uuid 生成,这里做双保险) ----
+        if not output_basename or not str(output_basename).isalnum():
+            result['error'] = '非法的输出文件名'
+            return result
+        output_basename = str(output_basename)
 
-    # ---- 写出 .tex ----
-    out_dir = config.Config.GENERATED_PDF_FOLDER
-    os.makedirs(out_dir, exist_ok=True)
-    tex_name = output_basename + '.tex'
-    tex_path = os.path.join(out_dir, tex_name)
-    try:
-        with open(tex_path, 'w', encoding='utf-8') as f:
-            f.write(tex)
-    except OSError as exc:
-        result['error'] = f'写入 .tex 文件失败:{exc}'
-        return result
-    result['tex_path'] = tex_path
+        try:
+            with open(template_path, encoding='utf-8') as f:
+                tex = f.read()
+        except OSError as exc:
+            result['error'] = f'读取模板失败:{exc}'
+            return result
 
-    # ---- 引擎探测:xelatex 优先,其次 pdflatex;都没有则优雅降级 ----
-    engine = shutil.which('xelatex') or shutil.which('pdflatex')
-    if engine is None:
+        # ---- 占位符替换 ----
+        context = dict(context or {})
+        include_solutions = bool(context.pop('include_solutions', False))
+        with_notes = (template_name == 'error_book_template')
+        questions_block = _build_questions_block(questions, include_solutions, with_notes)
+
+        for key in PLACEHOLDER_KEYS:
+            if key == 'QUESTIONS':
+                value = questions_block          # 题目 LaTeX 原样注入
+            elif key == 'NOTICE':
+                value = _escape_multiline(context.get(key, ''))
+            else:
+                value = escape_latex(context.get(key, ''))
+            tex = tex.replace(f'(({key}))', value)
+
+        # ---- 写出 .tex ----
+        out_dir = out_dir or config.Config.GENERATED_PDF_FOLDER
+        os.makedirs(out_dir, exist_ok=True)
+        tex_name = output_basename + '.tex'
+        tex_path = os.path.join(out_dir, tex_name)
+        try:
+            with open(tex_path, 'w', encoding='utf-8') as f:
+                f.write(tex)
+        except OSError as exc:
+            result['error'] = f'写入 .tex 文件失败:{exc}'
+            return result
+        result['tex_path'] = tex_path
+
+        # ---- 引擎探测:xelatex 优先,其次 pdflatex;都没有则优雅降级 ----
+        engine = shutil.which('xelatex') or shutil.which('pdflatex')
+        if engine is None:
+            result['ok'] = True
+            result['engine_missing'] = True
+            return result
+
+        # ---- 编译两遍(稳定页码等交叉引用),nonstopmode + 超时保护 ----
+        # 安全加固:题目 LaTeX 为用户输入且原样注入,编译时必须禁用 shell-escape 并限制
+        # 文件读写范围,防止 \write18 / \input{/etc/passwd} / \openin 等原语读取服务器任意文件。
+        pdf_path = os.path.join(out_dir, output_basename + '.pdf')
+        cmd = [engine, '-no-shell-escape',
+               '-interaction=nonstopmode', '-halt-on-error', tex_name]
+        # openin_any/openout_any=p(paranoid):禁止绝对路径与上级目录访问
+        compile_env = dict(os.environ)
+        compile_env['openin_any'] = 'p'
+        compile_env['openout_any'] = 'p'
+        proc = None
+        try:
+            for _ in range(2):
+                proc = subprocess.run(cmd, cwd=out_dir, timeout=COMPILE_TIMEOUT,
+                                      env=compile_env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                if proc.returncode != 0:
+                    break
+        except subprocess.TimeoutExpired:
+            result['error'] = f'LaTeX 编译超时({COMPILE_TIMEOUT} 秒),请减少题目数量后重试'
+            _cleanup_failed(out_dir, output_basename)
+            result.pop('tex_path', None)
+            return result
+        except OSError as exc:
+            result['error'] = f'LaTeX 编译进程启动失败:{exc}'
+            _cleanup_failed(out_dir, output_basename)
+            result.pop('tex_path', None)
+            return result
+
+        if proc is None or proc.returncode != 0 or not os.path.isfile(pdf_path):
+            result['error'] = ('LaTeX 编译失败,日志尾部:\n'
+                               + _log_tail(out_dir, output_basename, proc))
+            _cleanup_failed(out_dir, output_basename)
+            result.pop('tex_path', None)
+            return result
+
+        _cleanup_aux(out_dir, output_basename)
         result['ok'] = True
-        result['engine_missing'] = True
+        result['pdf_path'] = pdf_path
         return result
-
-    # ---- 编译两遍(稳定页码等交叉引用),nonstopmode + 超时保护 ----
-    # 安全加固:题目 LaTeX 为用户输入且原样注入,编译时必须禁用 shell-escape 并限制
-    # 文件读写范围,防止 \write18 / \input{/etc/passwd} / \openin 等原语读取服务器任意文件。
-    pdf_path = os.path.join(out_dir, output_basename + '.pdf')
-    cmd = [engine, '-no-shell-escape',
-           '-interaction=nonstopmode', '-halt-on-error', tex_name]
-    # openin_any/openout_any=p(paranoid):禁止绝对路径与上级目录访问
-    compile_env = dict(os.environ)
-    compile_env['openin_any'] = 'p'
-    compile_env['openout_any'] = 'p'
-    proc = None
-    try:
-        for _ in range(2):
-            proc = subprocess.run(cmd, cwd=out_dir, timeout=COMPILE_TIMEOUT,
-                                  env=compile_env,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            if proc.returncode != 0:
-                break
-    except subprocess.TimeoutExpired:
-        result['error'] = f'LaTeX 编译超时({COMPILE_TIMEOUT} 秒),请减少题目数量后重试'
-        _cleanup_aux(out_dir, output_basename)
-        return result
-    except OSError as exc:
-        result['error'] = f'LaTeX 编译进程启动失败:{exc}'
-        return result
-
-    if proc is None or proc.returncode != 0 or not os.path.isfile(pdf_path):
-        result['error'] = ('LaTeX 编译失败,日志尾部:\n'
-                           + _log_tail(out_dir, output_basename, proc))
-        _cleanup_aux(out_dir, output_basename)
-        return result
-
-    _cleanup_aux(out_dir, output_basename)
-    result['ok'] = True
-    result['pdf_path'] = pdf_path
-    return result
+    finally:
+        _compile_slot.release()

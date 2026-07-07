@@ -12,7 +12,10 @@
 
   const TREND_BAR_MAX_PX = 150; // 趋势图柱条最大高度(px)
 
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', function () {
+    init();
+    initUserManage();
+  });
 
   /** 拉取统计数据并渲染各区块 */
   async function init() {
@@ -168,5 +171,107 @@
     }).join('');
     // 动态插入的 LaTeX 内容必须重排 MathJax
     typesetMath(container);
+  }
+
+  // ============ 用户管理 ============
+  function initUserManage() {
+    const card = document.getElementById('userManageCard');
+    if (!card) return;
+    const tbody = document.getElementById('userTableBody');
+    const createModal = new bootstrap.Modal(document.getElementById('createUserModal'));
+    const pwModal = new bootstrap.Modal(document.getElementById('initialPwModal'));
+
+    async function loadUsers() {
+      try {
+        const resp = await apiFetch('/api/overview/users');
+        const users = resp.data.users;
+        tbody.innerHTML = users.map((u) => `
+          <tr>
+            <td>${u.id}</td>
+            <td>${escapeHtml(u.username)}${u.must_change_password ? ' <span class="badge bg-warning text-dark">待改密</span>' : ''}</td>
+            <td>${u.role === 'admin' ? '<span class="badge bg-warning text-dark">管理员</span>' : '学生'}</td>
+            <td>${u.is_active ? '<span class="badge bg-success">正常</span>' : '<span class="badge bg-secondary">已停用</span>'}</td>
+            <td>${escapeHtml(u.created_at || '')}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-secondary me-1" data-action="reset" data-id="${u.id}" data-name="${escapeHtml(u.username)}">重置密码</button>
+              <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}" data-action="toggle" data-id="${u.id}" data-name="${escapeHtml(u.username)}">${u.is_active ? '停用' : '启用'}</button>
+            </td>
+          </tr>`).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-3">${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function showInitialPassword(pw) {
+      document.getElementById('initialPwValue').value = pw;
+      pwModal.show();
+    }
+
+    document.getElementById('btnCreateUser').addEventListener('click', () => {
+      document.getElementById('newUsername').value = '';
+      document.getElementById('newUserRole').value = 'student';
+      createModal.show();
+    });
+
+    document.getElementById('btnSubmitCreateUser').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
+      const username = document.getElementById('newUsername').value.trim();
+      const role = document.getElementById('newUserRole').value;
+      if (!username) { showToast('请输入用户名', 'warning'); return; }
+      btn.disabled = true;
+      try {
+        const resp = await apiFetch('/api/overview/users', { method: 'POST', body: { username, role } });
+        // 串行化两个 Modal:先等创建 Modal 完全隐藏(hidden.bs.modal)再展示初始密码,
+        // 避免 hide 动画未完就 show 另一个导致 body 的 modal-open/padding 滚动锁残留卡死。
+        const createEl = document.getElementById('createUserModal');
+        createEl.addEventListener('hidden.bs.modal',
+          () => showInitialPassword(resp.data.initial_password), { once: true });
+        createModal.hide();
+        showToast(resp.message || '创建成功', 'success');
+        loadUsers();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('btnCopyInitialPw').addEventListener('click', () => {
+      const input = document.getElementById('initialPwValue');
+      input.select();
+      // HTTP(非安全上下文)下 navigator.clipboard 可能整个 undefined,
+      // 直接调 writeText 会同步抛 TypeError,.then(ok,err) 捕获不到,故先判空。
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value).then(
+          () => showToast('已复制到剪贴板', 'success'),
+          () => showToast('复制失败,请手动 Ctrl+C', 'warning'));
+      } else {
+        showToast('当前环境不支持自动复制,文本已选中,请手动 Ctrl+C', 'warning');
+      }
+    });
+
+    tbody.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const { action, id, name } = btn.dataset;
+      try {
+        if (action === 'reset') {
+          if (!confirm(`确认重置用户「${name}」的密码?`)) return;
+          const resp = await apiFetch(`/api/overview/users/${id}/reset_password`, { method: 'POST', body: {} });
+          showInitialPassword(resp.data.initial_password);
+        } else if (action === 'toggle') {
+          // 停用是破坏性操作(用户将无法登录),需二次确认;启用无需确认。
+          const isDisable = btn.textContent.trim().includes('停用');
+          if (isDisable && !confirm(`确认停用用户「${name}」?该用户将无法登录。`)) return;
+          const resp = await apiFetch(`/api/overview/users/${id}/toggle_active`, { method: 'POST', body: {} });
+          showToast(resp.message, 'success');
+        }
+        loadUsers();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    });
+
+    loadUsers();
   }
 })();

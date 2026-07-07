@@ -49,7 +49,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
   // 点击验证码图片刷新(加时间戳绕过缓存),并清空已输入内容
   (function () {
     var img = document.getElementById('captchaImg');

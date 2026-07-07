@@ -19,6 +19,8 @@ class User(db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(16), nullable=False, default='student')  # student | admin
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     error_entries = db.relationship('ErrorBook', backref='user', lazy='dynamic',
@@ -144,3 +146,37 @@ class ViewLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
     viewed_at = db.Column(db.DateTime, default=datetime.now, index=True)
+
+
+class GeneratedFile(db.Model):
+    """PDF/试卷产物登记:属主校验与 TTL 清理的依据。"""
+    __tablename__ = 'generated_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, index=True)
+
+
+# --------------------------------------------------------------------- SQLite 加固
+from sqlalchemy import event as _sa_event
+from sqlalchemy.engine import Engine as _Engine
+
+
+# 注意:全局 Engine 监听,Alembic 迁移连接同样生效;迁移期需关外键,见 migrations/env.py
+@_sa_event.listens_for(_Engine, 'connect')
+def _sqlite_pragmas(dbapi_connection, connection_record):
+    """每个 SQLite 连接建立时启用外键约束、WAL 与忙等待。
+
+    - foreign_keys:SQLite 默认 OFF,不开则 ForeignKey/级联形同虚设
+    - journal_mode=WAL:读写不互斥,多用户并发的基础(内存库返回 memory,无害);
+      WAL 为库级持久设置,此处每连接重复执行为幂等确认
+    - busy_timeout:写锁冲突时等待 5s 而非立刻 database is locked
+    """
+    if type(dbapi_connection).__module__.startswith('sqlite3'):
+        cursor = dbapi_connection.cursor()
+        cursor.execute('PRAGMA foreign_keys=ON')
+        cursor.execute('PRAGMA busy_timeout=5000')
+        cursor.execute('PRAGMA journal_mode=WAL')
+        cursor.execute('PRAGMA synchronous=NORMAL')
+        cursor.close()

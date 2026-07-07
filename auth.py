@@ -3,6 +3,8 @@ from functools import wraps
 
 from flask import g, jsonify, redirect, request, session, url_for
 
+from logging_setup import audit
+
 
 def _wants_json():
     return request.path.startswith('/api/')
@@ -13,6 +15,7 @@ def login_required(f):
     def wrapper(*args, **kwargs):
         if g.get('user') is None:
             if _wants_json():
+                audit('access_denied', detail='unauthorized ' + request.path)
                 return jsonify(success=False, error='未登录或会话已过期', code='UNAUTHORIZED'), 401
             return redirect(url_for('login', next=request.path))
         return f(*args, **kwargs)
@@ -24,12 +27,15 @@ def admin_required(f):
     def wrapper(*args, **kwargs):
         if g.get('user') is None:
             if _wants_json():
+                audit('access_denied', detail='unauthorized ' + request.path)
                 return jsonify(success=False, error='未登录或会话已过期', code='UNAUTHORIZED'), 401
             return redirect(url_for('login', next=request.path))
         if not g.user.is_admin:
             if _wants_json():
+                audit('access_denied', detail='forbidden ' + request.path)
                 return jsonify(success=False, error='需要管理员权限', code='FORBIDDEN'), 403
             # 总览为管理侧视图,学生角色重定向至题目管理页
+            audit('access_denied', detail='forbidden ' + request.path)
             return redirect(url_for('questions_page'))
         return f(*args, **kwargs)
     return wrapper

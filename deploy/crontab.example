@@ -1,0 +1,3 @@
+# crontab -e(deploy 用户)
+# 每日 04:30 备份
+30 4 * * * /srv/question-bank/deploy/backup.sh >> /srv/backups/question-bank/backup.log 2>&1
