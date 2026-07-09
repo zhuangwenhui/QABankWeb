@@ -129,9 +129,13 @@ sudo systemctl status question-bank
 ### 2.5 验证
 
 ```bash
-curl http://127.0.0.1:8000/healthz
+curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 # 期望输出: {"status":"ok"}
 ```
+
+> 注:`-H 'X-Forwarded-Proto: https'` 不可省。生产模式强制 HTTPS(Talisman force_https),
+> 直连 gunicorn 的裸 HTTP 请求会收到 302 重定向页;带上此头即模拟经过 Nginx 的真实链路
+> (ProxyFix 信任一跳该头)。经 Nginx 的正常流量由 proxy_params 自动携带,无此问题。
 
 若失败,先看日志排障:
 
@@ -270,7 +274,7 @@ sudo systemctl start question-bank
 sudo systemctl status question-bank
 
 # 5. 抽查数据:登录、看题目列表数量、看错题本、确认时间戳与备份点一致
-curl http://127.0.0.1:8000/healthz
+curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 ```
 
 ---
@@ -292,7 +296,7 @@ APP_ENV=production SECRET_KEY=$(grep ^SECRET_KEY /etc/question-bank.env | cut -d
   sudo -u deploy /srv/question-bank/.venv/bin/flask --app app db upgrade
 
 sudo systemctl restart question-bank
-curl http://127.0.0.1:8000/healthz
+curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 ```
 
 ### 5.2 回滚
