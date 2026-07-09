@@ -3,6 +3,7 @@
 页面路由(服务端渲染)+ /api/ 蓝图(JSON 接口)。
 运行: .venv/bin/python app.py  (默认 http://127.0.0.1:5000)
 """
+import hmac as _hmac
 import mimetypes
 import os
 import secrets
@@ -25,6 +26,12 @@ from ratelimit import LoginThrottle
 
 # 登录限流:同一 IP 或用户名 5 分钟内失败 5 次,锁定 15 分钟
 login_throttle = LoginThrottle(max_attempts=5, window=300, lockout=900)
+
+# 导入通道限流:30 次/分,锁 1 分钟(进程内;导入器单机串行足够)
+import_throttle = LoginThrottle(max_attempts=30, window=60, lockout=60)
+IMPORT_ROUTES = frozenset({('POST', '/api/questions'),
+                           ('POST', '/api/upload_question_image'),
+                           ('GET', '/api/source_exists')})   # 判重是 GET,发布幂等必需
 
 
 def create_app(config_object=None):
@@ -85,6 +92,26 @@ def create_app(config_object=None):
         if 'csrf_token' not in session:
             session['csrf_token'] = secrets.token_hex(16)
         g.user = None
+        # 导入通道:仅当配置令牌且命中白名单端点 + Bearer 头时启用
+        g.import_api = False
+        token = app.config.get('QB_IMPORT_TOKEN')
+        auth_header = request.headers.get('Authorization', '')
+        if (token and (request.method, request.path) in IMPORT_ROUTES
+                and auth_header.startswith('Bearer ')):
+            if not _hmac.compare_digest(auth_header[7:], token):
+                import_throttle.record_failure(request.remote_addr)   # 爆破尝试也计数
+                audit('import_api', detail='bad token ' + request.path)
+                return jsonify(success=False, error='导入令牌无效', code='UNAUTHORIZED'), 401
+            if import_throttle.locked_for(request.remote_addr):
+                return jsonify(success=False, error='导入过于频繁', code='RATE_LIMITED'), 429
+            import_throttle.record_failure(request.remote_addr)   # 复用计数器:每次调用计 1
+            g.user = (User.query.filter_by(role='admin', is_active=True)
+                      .order_by(User.id).first())
+            if g.user is None:
+                return jsonify(success=False, error='无可用管理员身份', code='SERVER_ERROR'), 500
+            g.import_api = True
+            audit('import_api', target=request.path)
+            return None
         user_id = session.get('user_id')
         if user_id:
             g.user = db.session.get(User, user_id)

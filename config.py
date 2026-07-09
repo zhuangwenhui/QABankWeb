@@ -27,6 +27,8 @@ class Config:
     USE_PROXYFIX = False
     USE_X_ACCEL = False
     TALISMAN_FORCE_HTTPS = False
+    # 导入通道令牌:仅当环境变量注入时开启(缺省 None = 关闭,零行为变化)
+    QB_IMPORT_TOKEN = os.environ.get('QB_IMPORT_TOKEN') or None
 
 
 class DevConfig(Config):
@@ -72,7 +74,7 @@ def get_config():
 
 
 # 课程为固定分类(见技术文档 §4)
-SUBJECTS = ['向量解析', '备注', '复变函数', '微分方程', '微积分', '概率统计', '线性代数']
+SUBJECTS = ['算法', '向量解析', '备注', '复变函数', '微分方程', '微积分', '概率统计', '线性代数']
 DIFFICULTIES = ['简单', '中等', '困难']
 PER_PAGE_OPTIONS = [10, 20, 50, 100]
 FEEDBACK_STATUSES = ['待处理', '已处理']

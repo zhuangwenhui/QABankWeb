@@ -42,7 +42,9 @@ def admin_required(f):
 
 
 def csrf_protect():
-    """对非安全方法校验 CSRF token(header 或表单字段)。"""
+    """对非安全方法校验 CSRF token(header 或表单字段)。导入通道(Bearer)豁免。"""
+    if g.get('import_api'):
+        return None
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
         token = session.get('csrf_token')
         sent = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
