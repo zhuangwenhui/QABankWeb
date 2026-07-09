@@ -2,6 +2,10 @@
 # 每日备份:SQLite 安全快照 + uploads 打包;保留 14 天。
 set -euo pipefail
 
+# 与调用方 cwd 解耦:find 结束时要求能返回初始目录,
+# 若从 deploy 无权进入的目录(如他人 home)调用会报错中断
+cd /
+
 APP_DIR="/srv/question-bank"
 BACKUP_DIR="/srv/backups/question-bank"
 STAMP="$(date +%Y%m%d_%H%M%S)"
