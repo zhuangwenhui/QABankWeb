@@ -98,7 +98,7 @@ def create_app(config_object=None):
         auth_header = request.headers.get('Authorization', '')
         if (token and (request.method, request.path) in IMPORT_ROUTES
                 and auth_header.startswith('Bearer ')):
-            if not _hmac.compare_digest(auth_header[7:], token):
+            if not _hmac.compare_digest(auth_header[7:].encode('utf-8'), token.encode('utf-8')):
                 import_throttle.record_failure(request.remote_addr)   # 爆破尝试也计数
                 audit('import_api', detail='bad token ' + request.path)
                 return jsonify(success=False, error='导入令牌无效', code='UNAUTHORIZED'), 401

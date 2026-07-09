@@ -92,3 +92,26 @@ def test_throttle_429(token_app, monkeypatch):
     r = c.post('/api/questions', json=_payload(),
                headers={'Authorization': f'Bearer {TOKEN}'})
     assert r.status_code == 429
+
+
+def test_non_ascii_bearer_rejected(token_app):
+    """非 ASCII 的 Bearer 值应按坏令牌返回 401,而非 compare_digest TypeError 兜成 500。"""
+    c = token_app.test_client()
+    r = c.post('/api/questions', json=_payload(),
+               headers={'Authorization': 'Bearer 令牌'})
+    assert r.status_code == 401 and r.get_json()['code'] == 'UNAUTHORIZED'
+
+
+def test_no_admin_returns_500(app_factory, tmp_path):
+    """配了令牌但无在职管理员时,正确令牌命中导入通道应 500(无可用管理员身份)。"""
+    application = app_factory(QB_IMPORT_TOKEN=TOKEN,
+                              UPLOAD_FOLDER=str(tmp_path / 'up'))
+    with application.app_context():
+        student = User(username='onlystudent', role='student')
+        student.set_password('x' * 12)
+        db.session.add(student); db.session.commit()
+    c = application.test_client()
+    r = c.post('/api/questions', json=_payload(),
+               headers={'Authorization': f'Bearer {TOKEN}'})
+    assert r.status_code == 500 and r.get_json()['code'] == 'SERVER_ERROR'
+    app_module.import_throttle.reset_all()
