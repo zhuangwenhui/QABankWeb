@@ -48,7 +48,7 @@ python3 -m venv .venv
 生产环境请勿使用 `python app.py`(开发服务器)。完整流程见
 [docs/ops/deploy.md](docs/ops/deploy.md)(gunicorn + systemd + Nginx + TLS + 备份),
 上线前逐项核对 [docs/ops/launch-checklist.md](docs/ops/launch-checklist.md)。
-最小形态:`APP_ENV=production SECRET_KEY=<强随机> .venv/bin/gunicorn -w 2 -k gthread --threads 4 --timeout 130 -b 127.0.0.1:8000 app:app`(`--timeout 130` 不可省——PDF 编译最坏约 120s,默认 30s 会中途杀 worker)
+最小形态:`APP_ENV=production SECRET_KEY=<强随机> .venv/bin/gunicorn -w 1 -k gthread --threads 8 --timeout 130 -b 127.0.0.1:8000 app:app`(`--timeout 130` 不可省——PDF 编译最坏约 120s,默认 30s 会中途杀 worker;单 worker 是有意为之——登录限流为进程内计数,多 worker 会使阈值失真)
 
 ## PDF 生成说明
 

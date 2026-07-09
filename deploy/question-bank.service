@@ -8,7 +8,9 @@ User=deploy
 Group=deploy
 WorkingDirectory=/srv/question-bank
 EnvironmentFile=/etc/question-bank.env
-ExecStart=/srv/question-bank/.venv/bin/gunicorn -w 2 -k gthread --threads 4 \
+# 单 worker 多线程:登录限流为进程内计数,多 worker 会使阈值失真(5 次→约 10 次);
+# 且 1GB 内存机型下第二个 worker 叠加 xelatex 编译峰值有 OOM 风险。百人规模 8 线程足够。
+ExecStart=/srv/question-bank/.venv/bin/gunicorn -w 1 -k gthread --threads 8 \
     --timeout 130 --graceful-timeout 30 \
     --error-logfile - \
     -b 127.0.0.1:8000 app:app

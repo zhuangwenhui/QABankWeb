@@ -39,6 +39,22 @@ sudo apt install -y texlive-xetex texlive-lang-chinese fonts-noto-cjk
 xelatex --version   # 确认可执行
 ```
 
+### 1.1 swap(1GB 内存机型必做)
+
+xelatex 编译峰值可达数百 MB,1GB 内存实例(如 WebARENA Indigo 1GB)无 swap 时
+编译期间可能触发 OOM 杀掉 gunicorn。建 2GB swap 文件:
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # 开机自动挂载
+free -h   # 确认 Swap 一行为 2.0Gi
+sudo sysctl vm.swappiness=10
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf   # 仅内存吃紧才用 swap
+```
+
 ---
 
 ## 2. 部署应用
@@ -329,7 +345,7 @@ sudo journalctl -u question-bank -n 100 --no-pager
 ```bash
 cd /srv/question-bank
 APP_ENV=production SECRET_KEY=<强随机> \
-  .venv/bin/gunicorn -w 2 -k gthread --threads 4 --timeout 130 --graceful-timeout 30 \
+  .venv/bin/gunicorn -w 1 -k gthread --threads 8 --timeout 130 --graceful-timeout 30 \
   --error-logfile - -b 127.0.0.1:8000 app:app
 ```
 
