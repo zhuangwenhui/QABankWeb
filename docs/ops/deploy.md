@@ -147,13 +147,28 @@ sudo journalctl -u question-bank -n 100 --no-pager
 
 ## 3. Nginx + TLS
 
-```bash
-sudo cp /srv/question-bank/deploy/nginx.conf.example /etc/nginx/sites-available/question-bank
-sudo vi /etc/nginx/sites-available/question-bank   # 把 example.com 换成实际域名
+> ⚠️ **鸡生蛋问题**:模板 443 块的 `ssl_certificate` 是注释状态(证书尚不存在),而 nginx
+> 对 `listen 443 ssl` 缺证书会直接 `nginx -t` 失败;certbot 验证域名又需要 nginx 先活着。
+> 所以流程是:临时 80 端口配置 → webroot 模式取证书 → 再启用正式配置。
 
-sudo ln -s /etc/nginx/sites-available/question-bank /etc/nginx/sites-enabled/question-bank
-sudo nginx -t
-sudo systemctl reload nginx
+```bash
+# 3.0 准备正式配置(先不启用)
+sudo cp /srv/question-bank/deploy/nginx.conf.example /etc/nginx/sites-available/question-bank
+sudo sed -i 's/example\.com/<域名>/g' /etc/nginx/sites-available/question-bank
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo mkdir -p /var/www/certbot
+
+# 3.0.1 临时最小配置:只开 80 口,专供 ACME 验证
+sudo tee /etc/nginx/sites-available/acme-temp >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name <域名>;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+EOF
+sudo ln -s /etc/nginx/sites-available/acme-temp /etc/nginx/sites-enabled/acme-temp
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 > ⚠️ **校验 `/etc/nginx/proxy_params` 含 `proxy_set_header X-Forwarded-Proto $scheme;`**:
@@ -169,13 +184,27 @@ echo 'proxy_set_header X-Forwarded-Proto $scheme;' | sudo tee -a /etc/nginx/prox
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### 3.1 签发证书
+### 3.1 签发证书并启用正式配置
 
 ```bash
-sudo certbot --nginx -d <域名>
+# webroot 模式只取证书(不让 certbot 改写我们的 nginx 配置),并登记续期后自动 reload
+sudo certbot certonly --webroot -w /var/www/certbot -d <域名> \
+  --deploy-hook 'systemctl reload nginx'
+
+# 取消正式配置里两行证书注释(路径 /etc/letsencrypt/live/<域名>/ 此时已真实存在)
+sudo sed -i 's|^    # ssl_certificate|    ssl_certificate|' /etc/nginx/sites-available/question-bank
+
+# 撤下临时配置,启用正式配置
+sudo rm /etc/nginx/sites-enabled/acme-temp
+sudo ln -s /etc/nginx/sites-available/question-bank /etc/nginx/sites-enabled/question-bank
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-- certbot 会自动补全 `nginx.conf` 里的证书路径(取消注释 `ssl_certificate`/`ssl_certificate_key` 那两行,若是手动模式则需自己取消注释),并生成 `options-ssl-nginx.conf`(含推荐的 `ssl_protocols`/`ssl_ciphers`)。
+- 不用 `certbot --nginx` 插件:它会往我们精心分 location 的配置里自动插行(证书、跳转),
+  与模板的 80→443 跳转/PDF 超时 location 叠加后行为难以预期;webroot 模式零改写、可预期。
+- 续期:`certonly --webroot` 会把 webroot 参数写进 `/etc/letsencrypt/renewal/<域名>.conf`,
+  systemd 的 certbot.timer 自动续期走正式配置 80 块里的 `/.well-known/acme-challenge/`
+  (模板已有该 location),`--deploy-hook` 保证续完自动 reload nginx。
 - 验证自动续期:
 
 ```bash
