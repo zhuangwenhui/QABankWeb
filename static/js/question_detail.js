@@ -17,21 +17,30 @@
   if (!appEl) return;
   var qid = appEl.dataset.qid;
 
+  // 容器默认标题按轨取(显式标题仍优先)。防止中文轨渲出日文标签(反之亦然)——
+  // 即用户强调的"中日混搭"。渲染前置 activeTrack,容器 render 据此选默认标签。
+  var LABELS = {
+    ja: { def: '定義・定理', note: 'Note', warn: '注意', insight: '洞察', conclusion: '結論' },
+    zh: { def: '定义·定理', note: '提示', warn: '注意', insight: '洞察', conclusion: '结论' }
+  };
+  var activeTrack = 'ja';
+
   // ---------------------------------------------------------------- markdown-it
   var md = null;
   if (window.markdownit) {
     md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
     if (window.markdownitContainer) {
-      registerContainer('def', '', '');            // 橙:定義/定理
-      registerContainer('note', 'note', 'Note');   // 蓝:Note
-      registerContainer('warn', 'warn', '注意');    // 红:注意/陷阱
-      registerContainer('insight', 'note', 'Insight'); // 洞察 ≈ note
-      registerContainer('conclusion', '__concl__', '結論');
+      registerContainer('def', '');            // 橙:定義/定理
+      registerContainer('note', 'note');       // 蓝:Note
+      registerContainer('warn', 'warn');       // 红:注意/陷阱
+      registerContainer('insight', 'note');    // 洞察 ≈ note
+      registerContainer('conclusion', '__concl__');
     }
   }
 
-  /** 注册一种 markdown-it-container,输出与 mockup 完全一致的 class 结构。 */
-  function registerContainer(name, klass, defaultTitle) {
+  /** 注册一种 markdown-it-container,输出与 mockup 完全一致的 class 结构。
+   *  无显式标题时,按当前 activeTrack 取该轨默认标签(避免中日混搭)。 */
+  function registerContainer(name, klass) {
     md.use(window.markdownitContainer, name, {
       validate: function (params) {
         return params.trim().split(' ', 1)[0] === name;
@@ -40,10 +49,11 @@
         var tok = tokens[idx];
         if (tok.nesting !== 1) return '</div>\n';
         var info = tok.info.trim();
-        var title = info.slice(name.length).trim() || defaultTitle || '';
+        var byTrack = (LABELS[activeTrack] || LABELS.ja)[name] || '';
+        var title = info.slice(name.length).trim() || byTrack;
         if (klass === '__concl__') {
           return '<div class="conclusion"><span class="t">' +
-                 md.utils.escapeHtml(title || '結論') + '</span>\n';
+                 md.utils.escapeHtml(title) + '</span>\n';
         }
         return '<div class="callout' + (klass ? ' ' + klass : '') + '">' +
                '<div class="t"><span class="mk"></span>' +
@@ -82,9 +92,10 @@
     ADD_ATTR: ['class', 'display', 'aria-hidden']
   };
 
-  /** raw markdown → 经消毒的 HTML 字符串。缺库时降级为转义分段。 */
-  function renderMarkdown(raw) {
+  /** raw markdown → 经消毒的 HTML 字符串。track 决定容器默认标签(ja/zh)。缺库时降级为转义分段。 */
+  function renderMarkdown(raw, track) {
     raw = raw || '';
+    activeTrack = (track === 'zh') ? 'zh' : 'ja';
     if (!md) {
       // 降级:无 markdown-it 时,至少按空行分段并转义,避免"一坨"。
       var esc = (window.escapeHtml || function (s) { return s; });
@@ -99,9 +110,9 @@
     return html;
   }
 
-  /** 注入 HTML 到节点并等 MathJax 排版(⑤)。 */
-  function renderInto(node, raw) {
-    node.innerHTML = renderMarkdown(raw);
+  /** 注入 HTML 到节点并等 MathJax 排版(⑤)。track 决定容器默认标签。 */
+  function renderInto(node, raw, track) {
+    node.innerHTML = renderMarkdown(raw, track);
   }
 
   // ---------------------------------------------------------------- MathJax
@@ -187,7 +198,7 @@
 
   function problemHtml(q) {
     var esc = window.escapeHtml;
-    var parts = [renderMarkdown(q.question_latex) ||
+    var parts = [renderMarkdown(q.question_latex, 'ja') ||
                  '<p class="qd-empty">(无题目内容)</p>'];
     // 出典/科目 信息盒
     var rows = [];
@@ -223,8 +234,8 @@
 
       var ja = (q.solution_ja || '').trim();
       var zh = (q.solution_latex || '').trim();
-      renderInto(el.trackJa, ja);
-      renderInto(el.trackZh, zh);
+      renderInto(el.trackJa, ja, 'ja');
+      renderInto(el.trackZh, zh, 'zh');
 
       var hasJa = !!ja, hasZh = !!zh;
       // JA 为空:隐藏日本語标签,只显示中文
