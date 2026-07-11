@@ -125,8 +125,9 @@
   color:var(--green-ink); background:var(--green-soft); padding:4px 10px; border-radius:20px;}
 .qd-badge .d{width:6px;height:6px;border-radius:50%;background:var(--green);}
 .qd-navpills{display:flex; flex-wrap:wrap; gap:5px; margin-left:auto;}
-.qd-navpills a{font-size:11.5px; color:var(--ink-soft); text-decoration:none; padding:3px 9px; border-radius:6px; border:1px solid transparent; cursor:pointer;}
+.qd-navpills a{font-size:11.5px; color:var(--ink-soft); text-decoration:none; padding:3px 9px; border-radius:6px; border:1px solid transparent; cursor:pointer; transition:background .15s,color .15s,border-color .15s;}
 .qd-navpills a:hover{background:var(--panel-2); border-color:var(--hair); color:var(--brand);}
+.qd-navpills a.active{background:var(--brand-soft); border-color:var(--brand-line); color:var(--brand-ink); font-weight:500;}
 
 .qd-page .solbody{padding:22px 30px 32px; font-family:var(--font-read); font-size:15.5px; line-height:1.85; color:var(--ink);}
 .qd-track{display:none;}
@@ -151,10 +152,15 @@
 .qd-page .solbody pre code{background:none; padding:0;}
 .qd-page .solbody a{color:var(--blue);}
 
-/* 步骤:h3 直接样式化(契约允许的简化路径),兼容 .step 手写块 */
+/* 步骤:h3 渲染为步骤块。渲染器把"第N步/编号"前缀包成 .n 徽标(qd-h3-chip),
+   无前缀的 h3 退化为左标尺(qd-h3-plain)。兼容 .step 手写块。 */
 .qd-page .solbody h3{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
-  margin:18px 0 8px; padding-left:12px; position:relative; scroll-margin-top:84px;}
-.qd-page .solbody h3::before{content:""; position:absolute; left:0; top:2px; bottom:2px; width:2px; border-radius:2px; background:var(--brand);}
+  margin:20px 0 9px; scroll-margin-top:84px;}
+.qd-page .solbody h3 .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; font-weight:600;
+  background:var(--brand-soft); color:var(--brand-ink); border-radius:5px; padding:2px 8px; margin-right:9px;
+  white-space:nowrap;}
+.qd-page .solbody h3.qd-h3-plain{padding-left:12px; position:relative;}
+.qd-page .solbody h3.qd-h3-plain::before{content:""; position:absolute; left:0; top:2px; bottom:2px; width:2px; border-radius:2px; background:var(--brand);}
 .qd-page .step{margin:0 0 13px; padding-left:16px; position:relative;}
 .qd-page .step::before{content:""; position:absolute; left:0; top:8px; bottom:5px; width:2px; border-radius:2px; background:var(--hair);}
 .qd-page .step .h{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
@@ -166,6 +172,12 @@
 .qd-page .eqn{margin:13px 0; padding:11px 8px; overflow-x:auto; text-align:center; background:var(--panel-2);
   border-radius:8px; border:1px solid var(--hair-soft);}
 .qd-page .solbody mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
+/* 宽内容不撑破窄栏:长公式/宽表格在各自块内横向滚动;长 token 允许折断 */
+.qd-page .solbody{overflow-wrap:break-word;}
+.qd-page .solbody .eqn math{max-width:none;}
+.qd-page .solbody table{display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; margin:0 0 13px;}
+.qd-page .solbody th,.qd-page .solbody td{border:1px solid var(--hair); padding:5px 9px; text-align:left;}
+.qd-page .solbody th{background:var(--panel-2);}
 
 /* 提示框 callout */
 .qd-page .callout{border:1px solid var(--brand-line); border-left:3px solid var(--brand); border-radius:var(--radius);
@@ -193,8 +205,13 @@
 @media (max-width:920px){
   .qd-split{grid-template-columns:1fr;}
   .qd-gutter{display:none;}
-  .qd-panel{padding:18px 18px 36px;}
-  .qd-soltool{top:0;}
-  .qd-navpills{width:100%; margin-left:0; overflow-x:auto; padding-bottom:2px;}
-  .qd-page .solbody{padding:18px 18px 26px;}
+  .qd-panel{padding:16px 16px 30px;}
+  .qd-titlestrip h1{font-size:16.5px;}
+  .qd-soltool{top:0; gap:8px;}
+  .qd-seg button{padding:8px 14px;}                 /* 更大点触面积 */
+  .qd-navpills{width:100%; margin-left:0; overflow-x:auto; padding-bottom:3px;
+    flex-wrap:nowrap; -webkit-overflow-scrolling:touch;}
+  .qd-navpills a{white-space:nowrap; flex:none;}
+  .qd-page .solbody{padding:16px 16px 24px; font-size:15px;}
+  .qd-page .callout,.qd-page .conclusion{padding-left:13px; padding-right:13px;}
 }

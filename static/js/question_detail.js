@@ -110,9 +110,31 @@
     return html;
   }
 
-  /** 注入 HTML 到节点并等 MathJax 排版(⑤)。track 决定容器默认标签。 */
+  // ### 步骤标题:把"第N步/编号"前缀包成 .n 徽标。只动首个文本节点,保留标题内行内公式。
+  var STEP_RE = /^\s*(第[一二三四五六七八九十百千]+步|Step\s*\d+|\d+)\s*[:：.、)]?\s*/;
+  function enhanceSteps(node) {
+    node.querySelectorAll('h3').forEach(function (h) {
+      var tn = h.firstChild;
+      if (tn && tn.nodeType === 3) {
+        var m = tn.nodeValue.match(STEP_RE);
+        if (m) {
+          var chip = document.createElement('span');
+          chip.className = 'n';
+          chip.textContent = m[1];
+          tn.nodeValue = tn.nodeValue.slice(m[0].length);
+          h.insertBefore(chip, tn);
+          h.classList.add('qd-h3-chip');
+          return;
+        }
+      }
+      h.classList.add('qd-h3-plain');
+    });
+  }
+
+  /** 注入 HTML 到节点、强化步骤块,并等 MathJax 排版(⑤)。track 决定容器默认标签。 */
   function renderInto(node, raw, track) {
     node.innerHTML = renderMarkdown(raw, track);
+    enhanceSteps(node);
   }
 
   // ---------------------------------------------------------------- MathJax
@@ -147,14 +169,15 @@
   };
   var tracks = { ja: el.trackJa, zh: el.trackZh };
   var typesetDone = {};   // 惰性排版:轨首次显示时才 typeset
+  var spy = [];           // scrollspy:[{h2, link}]
 
-  // ---------------------------------------------------------------- 语言切换
+  // ---------------------------------------------------------------- 语言切换 + 章节导航
   function buildNav(track) {
     el.navpills.innerHTML = '';
+    spy = [];
     var node = tracks[track];
     if (!node) return;
-    var heads = node.querySelectorAll('h2');
-    heads.forEach(function (h, i) {
+    node.querySelectorAll('h2').forEach(function (h, i) {
       if (!h.id) h.id = 'qd-sec-' + track + '-' + i;
       var a = document.createElement('a');
       a.textContent = h.textContent;
@@ -164,8 +187,26 @@
         h.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
       el.navpills.appendChild(a);
+      spy.push({ h2: h, link: a });
     });
+    updateSpy();
   }
+
+  // 高亮当前章节:取视口上沿(留出粘性工具栏偏移)之上、最靠下的 h2。
+  function updateSpy() {
+    if (!spy.length) return;
+    var offset = 100, active = 0;
+    for (var i = 0; i < spy.length; i++) {
+      if (spy[i].h2.getBoundingClientRect().top - offset <= 0) active = i;
+    }
+    spy.forEach(function (s, i) { s.link.classList.toggle('active', i === active); });
+  }
+  var spyScheduled = false;
+  window.addEventListener('scroll', function () {
+    if (spyScheduled) return;
+    spyScheduled = true;
+    requestAnimationFrame(function () { spyScheduled = false; updateSpy(); });
+  }, { passive: true });
 
   function pick(track) {
     Object.keys(tracks).forEach(function (k) {
