@@ -502,6 +502,7 @@
         </td>
         <td class="text-nowrap">
           <i class="fa-solid fa-bookmark bookmark-btn${marked ? ' bookmarked' : ''} me-2" data-id="${q.id}" title="加入/移出错题本"></i>
+          <a class="btn btn-sm btn-outline-secondary me-1" href="/questions/${q.id}" title="打开双语题解详情页"><i class="fa-solid fa-up-right-from-square"></i></a>
           <button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}" title="编辑"><i class="fa-solid fa-pen"></i></button>
           <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}" title="删除"><i class="fa-solid fa-trash"></i></button>
         </td>
@@ -528,6 +529,7 @@
         </div>
         <div class="d-flex gap-2 mt-2 pt-2 border-top">
           <button type="button" class="btn btn-sm btn-outline-secondary js-open-detail" data-id="${q.id}"><i class="fa-solid fa-eye me-1"></i>详情</button>
+          <a class="btn btn-sm btn-outline-secondary" href="/questions/${q.id}" title="打开双语题解详情页"><i class="fa-solid fa-up-right-from-square me-1"></i>详情页 ↗</a>
           <button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}"><i class="fa-solid fa-pen me-1"></i>编辑</button>
           <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}"><i class="fa-solid fa-trash me-1"></i>删除</button>
         </div>
@@ -847,6 +849,8 @@
 
     // 区块一:题目信息
     el.detailQid.textContent = `#${question.id}`;
+    const openPageLink = document.getElementById('btnDetailOpenPage');
+    if (openPageLink) openPageLink.href = `/questions/${question.id}`;
     el.detailInfo.innerHTML = `
       <div class="col-md-4 detail-info-item"><span class="text-muted">编号:</span>#${question.id}</div>
       <div class="col-md-4 detail-info-item"><span class="text-muted">课程:</span>${escapeHtml(question.subject)}</div>

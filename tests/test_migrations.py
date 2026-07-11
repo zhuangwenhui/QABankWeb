@@ -30,3 +30,7 @@ def test_upgrade_creates_schema(tmp_path):
             db.text("PRAGMA table_info(users)"))}
         for col in ('must_change_password', 'is_active'):
             assert col in user_cols, f'users 缺列:{col}'
+        # questions 的新列(双轨题解迁移):solution_ja(可空)
+        question_cols = {row[1] for row in db.session.execute(
+            db.text("PRAGMA table_info(questions)"))}
+        assert 'solution_ja' in question_cols, 'questions 缺列:solution_ja'

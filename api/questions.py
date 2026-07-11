@@ -127,7 +127,7 @@ def _extract_question_fields(data, partial=False):
     if 'tags' in data:
         fields['tags'] = _clean_tags(data.get('tags'))
 
-    for key in ('question_latex', 'solution_latex'):
+    for key in ('question_latex', 'solution_latex', 'solution_ja'):
         if key in data:
             value = data.get(key)
             if value is not None and not isinstance(value, str):

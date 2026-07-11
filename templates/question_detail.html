@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}题解详情 · 题库系统{% endblock %}
+
+{% block head %}
+<link href="{{ url_for('static', filename='css/question-detail.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="qd-page" id="qdApp" data-qid="{{ qid }}">
+  <h2 class="sr-only">题目详情:左栏为题面,右栏为可切换的中文速览 / 日本語詳解双轨题解。</h2>
+
+  <div class="qd-topbar">
+    <a class="qd-back" href="{{ url_for('questions_page') }}"><i class="fa-solid fa-arrow-left"></i>返回题库</a>
+    <span class="spacer"></span>
+    <button type="button" class="qd-iconbtn" id="qdThemeBtn" aria-label="切换明暗主题" title="切换明暗">◐</button>
+  </div>
+
+  <div class="qd-titlestrip">
+    <h1 id="qdTitle">题目详情</h1>
+    <div class="qd-chips" id="qdChips"></div>
+  </div>
+
+  <div class="qd-split" id="qdSplit">
+    <!-- ===== 题面栏 ===== -->
+    <section class="qd-panel" id="qdProblemPanel">
+      <p class="qd-kicker">問題</p>
+      <div class="qd-prob" id="qdProblemBody">
+        <p class="qd-empty">加载中…</p>
+      </div>
+    </section>
+
+    <div class="qd-gutter" id="qdGutter" role="separator" aria-label="调整栏宽"></div>
+
+    <!-- ===== 题解栏 ===== -->
+    <section class="qd-panel" id="qdSolutionPanel">
+      <p class="qd-kicker">題解</p>
+      <div class="qd-solwrap">
+        <div class="qd-soltool">
+          <div class="qd-seg" role="tablist" aria-label="解答语言切换">
+            <button type="button" role="tab" aria-selected="false" data-track="zh">中文<span class="sub">速览</span></button>
+            <button type="button" role="tab" aria-selected="true" data-track="ja">日本語<span class="sub">詳解</span></button>
+          </div>
+          <span class="qd-badge" id="qdConfidence"><span class="d"></span>双轨题解</span>
+          <nav class="qd-navpills" id="qdNavpills"></nav>
+        </div>
+        <div class="qd-solbody solbody">
+          <div class="qd-track" id="qdTrackJa" data-track="ja"></div>
+          <div class="qd-track" id="qdTrackZh" data-track="zh"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markdown-it-container@4.0.0/dist/markdown-it-container.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
+<script src="{{ url_for('static', filename='js/question_detail.js') }}"></script>
+{% endblock %}
