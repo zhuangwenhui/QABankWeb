@@ -1,0 +1,300 @@
+<title>本地联调实测 · 双轨题解详情页(真·渲染管线产出)</title>
+<style>
+body{margin:0;background:transparent}
+math{font-size:1.02em}
+.qd-page .eqn math{font-size:1.14em}
+/* ============================================================================
+   LeetCode 式双语题解详情页样式
+   端口自 mockups/detail_preview.html(已锁定视觉规范),全部作用域限定在
+   .qd-page 之下,避免污染 Bootstrap 与既有 .latex-content。
+   ========================================================================== */
+
+/* ---------- 主题变量(明/暗) ---------- */
+.qd-page{
+  --paper:#F5F6F8; --panel:#FFFFFF; --panel-2:#FAFBFC;
+  --ink:#181B1F; --ink-soft:#525A66; --ink-faint:#8B94A1;
+  --hair:#E7E9ED; --hair-soft:#F0F2F5;
+  --brand:#B85528; --brand-soft:#FAEEE6; --brand-ink:#7A3417; --brand-line:#EAD3C2;
+  --blue:#2E6099; --blue-soft:#EBF1F8; --blue-ink:#1B3F63; --blue-line:#CFDDEC;
+  --red:#A83744; --red-soft:#F8ECEE; --red-ink:#6C1F27; --red-line:#EACFD3;
+  --green:#2C7355; --green-soft:#E8F1EC; --green-ink:#1A4632;
+  --shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
+  --font-ui:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans CJK JP","Microsoft YaHei",sans-serif;
+  --font-read:"Charter","Georgia","Songti SC","Noto Serif CJK JP","Yu Mincho",serif;
+  --font-mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,monospace;
+  --radius:10px;
+}
+@media (prefers-color-scheme:dark){
+  .qd-page{
+    --paper:#101317; --panel:#191D22; --panel-2:#1E232A;
+    --ink:#E7E9ED; --ink-soft:#A3ABB6; --ink-faint:#767F8C;
+    --hair:#2A3039; --hair-soft:#222831;
+    --brand:#DD8850; --brand-soft:#352113; --brand-ink:#EEB086; --brand-line:#4A3320;
+    --blue:#6BA1DC; --blue-soft:#152537; --blue-ink:#ABC9E9; --blue-line:#26374C;
+    --red:#DD8892; --red-soft:#341C21; --red-ink:#EEB5BB; --red-line:#452830;
+    --green:#6BC096; --green-soft:#12241B; --green-ink:#A2D8BC;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 5px 18px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="light"] .qd-page{
+  --paper:#F5F6F8; --panel:#FFFFFF; --panel-2:#FAFBFC;
+  --ink:#181B1F; --ink-soft:#525A66; --ink-faint:#8B94A1;
+  --hair:#E7E9ED; --hair-soft:#F0F2F5;
+  --brand:#B85528; --brand-soft:#FAEEE6; --brand-ink:#7A3417; --brand-line:#EAD3C2;
+  --blue:#2E6099; --blue-soft:#EBF1F8; --blue-ink:#1B3F63; --blue-line:#CFDDEC;
+  --red:#A83744; --red-soft:#F8ECEE; --red-ink:#6C1F27; --red-line:#EACFD3;
+  --green:#2C7355; --green-soft:#E8F1EC; --green-ink:#1A4632;
+  --shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
+}
+:root[data-theme="dark"] .qd-page{
+  --paper:#101317; --panel:#191D22; --panel-2:#1E232A;
+  --ink:#E7E9ED; --ink-soft:#A3ABB6; --ink-faint:#767F8C;
+  --hair:#2A3039; --hair-soft:#222831;
+  --brand:#DD8850; --brand-soft:#352113; --brand-ink:#EEB086; --brand-line:#4A3320;
+  --blue:#6BA1DC; --blue-soft:#152537; --blue-ink:#ABC9E9; --blue-line:#26374C;
+  --red:#DD8892; --red-soft:#341C21; --red-ink:#EEB5BB; --red-line:#452830;
+  --green:#6BC096; --green-soft:#12241B; --green-ink:#A2D8BC;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 5px 18px rgba(0,0,0,.3);
+}
+
+/* ---------- 容器 ---------- */
+.qd-page{
+  font-family:var(--font-ui); color:var(--ink); background:var(--paper);
+  line-height:1.6; -webkit-font-smoothing:antialiased;
+  border-radius:14px; overflow:hidden; border:1px solid var(--hair);
+  margin-top:8px;
+}
+.qd-page *{box-sizing:border-box;}
+.qd-page .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+
+/* ---------- 顶部工具行 ---------- */
+.qd-topbar{display:flex; align-items:center; gap:12px; padding:9px 20px;
+  background:var(--panel); border-bottom:1px solid var(--hair);}
+.qd-topbar .qd-back{font-size:13px; color:var(--ink-soft); text-decoration:none; display:inline-flex; align-items:center; gap:6px;}
+.qd-topbar .qd-back:hover{color:var(--brand);}
+.qd-topbar .spacer{flex:1;}
+.qd-iconbtn{border:1px solid var(--hair); background:var(--panel); color:var(--ink-soft);
+  width:32px;height:32px;border-radius:8px; cursor:pointer; font-size:14px;
+  display:grid; place-items:center; transition:.15s;}
+.qd-iconbtn:hover{border-color:var(--brand); color:var(--brand);}
+
+/* ---------- 标题条 ---------- */
+.qd-titlestrip{padding:16px 20px 13px; border-bottom:1px solid var(--hair); background:var(--panel);}
+.qd-titlestrip h1{margin:0 0 9px; font-size:18px; font-weight:600; letter-spacing:.005em;}
+.qd-chips{display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+.qd-chip{font-size:11.5px; padding:2.5px 9px; border-radius:6px; border:1px solid var(--hair);
+  color:var(--ink-soft); background:var(--panel-2); white-space:nowrap;}
+.qd-chip.subject{color:var(--brand-ink); background:var(--brand-soft); border-color:var(--brand-line); font-weight:500;}
+.qd-chip.diff{color:var(--green-ink); background:var(--green-soft); border-color:transparent;}
+.qd-chip .k{color:var(--ink-faint); margin-right:5px;}
+
+/* ---------- 两栏 ---------- */
+.qd-split{display:grid; grid-template-columns:minmax(0,42fr) 9px minmax(0,58fr);
+  align-items:start; background:var(--paper);}
+.qd-gutter{cursor:col-resize; position:relative; align-self:stretch;}
+.qd-gutter::before{content:""; position:absolute; inset:0 4px; border-radius:3px; background:transparent; transition:.15s;}
+.qd-gutter:hover::before{background:var(--brand-line);}
+.qd-panel{padding:20px 24px 46px; min-width:0;}
+
+.qd-kicker{font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-faint);
+  font-weight:600; margin:0 0 13px; display:flex; align-items:center; gap:9px;}
+.qd-kicker::after{content:""; flex:1; height:1px; background:var(--hair);}
+
+/* ---------- 问题栏 ---------- */
+.qd-prob{font-family:var(--font-read); font-size:16px; color:var(--ink); line-height:1.82;}
+.qd-prob p{margin:0 0 14px;}
+.qd-prob .lead{font-weight:600;}
+.qd-srcbox{margin-top:20px; border:1px solid var(--hair); border-radius:var(--radius); background:var(--panel-2);
+  padding:12px 14px; font-size:12.5px; color:var(--ink-soft); display:flex; flex-direction:column; gap:7px; font-family:var(--font-ui);}
+.qd-srcbox .r{display:flex; gap:10px;}
+.qd-srcbox .r span:first-child{color:var(--ink-faint); min-width:44px;}
+.qd-srcbox a{color:var(--blue); text-decoration:none;}
+.qd-srcbox a:hover{text-decoration:underline;}
+.qd-fig{margin-top:14px; border:1px solid var(--hair); border-radius:var(--radius); overflow:hidden; background:var(--panel-2);}
+.qd-fig img{display:block; max-width:100%; height:auto;}
+.qd-figph{margin-top:14px; border:1px dashed var(--hair); border-radius:var(--radius); min-height:96px;
+  display:grid; place-items:center; color:var(--ink-faint); font-size:12px; background:var(--panel-2); font-family:var(--font-ui);}
+
+/* ---------- 题解栏 ---------- */
+.qd-solwrap{background:var(--panel); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow); overflow:hidden;}
+.qd-soltool{position:sticky; top:72px; z-index:10; background:var(--panel); border-bottom:1px solid var(--hair);
+  padding:11px 16px; display:flex; flex-wrap:wrap; gap:11px; align-items:center;}
+.qd-seg{display:inline-flex; background:var(--hair-soft); border-radius:9px; padding:3px; gap:2px;}
+.qd-seg button{border:0; background:transparent; color:var(--ink-soft); font-family:var(--font-ui);
+  font-size:13px; padding:6px 14px; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:.15s; font-weight:500;}
+.qd-seg button .sub{font-size:10.5px; color:var(--ink-faint); font-weight:400;}
+.qd-seg button[aria-selected="true"]{background:var(--panel); color:var(--ink); box-shadow:var(--shadow);}
+.qd-seg button[aria-selected="true"] .sub{color:var(--brand);}
+.qd-seg button[hidden]{display:none;}
+.qd-badge{display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11px;
+  color:var(--green-ink); background:var(--green-soft); padding:4px 10px; border-radius:20px;}
+.qd-badge .d{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.qd-navpills{display:flex; flex-wrap:wrap; gap:5px; margin-left:auto;}
+.qd-navpills a{font-size:11.5px; color:var(--ink-soft); text-decoration:none; padding:3px 9px; border-radius:6px; border:1px solid transparent; cursor:pointer; transition:background .15s,color .15s,border-color .15s;}
+.qd-navpills a:hover{background:var(--panel-2); border-color:var(--hair); color:var(--brand);}
+.qd-navpills a.active{background:var(--brand-soft); border-color:var(--brand-line); color:var(--brand-ink); font-weight:500;}
+
+.qd-page .solbody{padding:22px 30px 32px; font-family:var(--font-read); font-size:15.5px; line-height:1.85; color:var(--ink);}
+.qd-track{display:none;}
+.qd-track.on{display:block; animation:qd-fade .22s ease;}
+@keyframes qd-fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+@media (prefers-reduced-motion:reduce){ .qd-track.on{animation:none;} }
+.qd-empty{color:var(--ink-faint); font-style:italic;}
+
+/* 小节 h2 */
+.qd-page .solbody h2{font-family:var(--font-ui); font-size:15px; font-weight:600; color:var(--ink);
+  margin:28px 0 12px; display:flex; align-items:center; gap:9px; letter-spacing:.01em; scroll-margin-top:84px;}
+.qd-page .solbody h2::before{content:""; width:7px; height:7px; border-radius:2px; background:var(--brand); flex:none;}
+.qd-page .solbody h2:first-child{margin-top:2px;}
+.qd-page .solbody p{margin:0 0 13px;}
+.qd-page .solbody .lede{color:var(--ink-soft);}
+.qd-page .solbody ul,.qd-page .solbody ol{margin:0 0 13px; padding-left:1.4em;}
+.qd-page .solbody li{margin:0 0 5px;}
+.qd-page .solbody code{font-family:var(--font-mono); font-size:.9em; background:var(--hair-soft);
+  border-radius:5px; padding:1px 5px;}
+.qd-page .solbody pre{background:var(--panel-2); border:1px solid var(--hair-soft); border-radius:8px;
+  padding:12px 14px; overflow-x:auto;}
+.qd-page .solbody pre code{background:none; padding:0;}
+.qd-page .solbody a{color:var(--blue);}
+
+/* 步骤:h3 渲染为步骤块。渲染器把"第N步/编号"前缀包成 .n 徽标(qd-h3-chip),
+   无前缀的 h3 退化为左标尺(qd-h3-plain)。兼容 .step 手写块。 */
+.qd-page .solbody h3{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
+  margin:20px 0 9px; scroll-margin-top:84px;}
+.qd-page .solbody h3 .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; font-weight:600;
+  background:var(--brand-soft); color:var(--brand-ink); border-radius:5px; padding:2px 8px; margin-right:9px;
+  white-space:nowrap;}
+.qd-page .solbody h3.qd-h3-plain{padding-left:12px; position:relative;}
+.qd-page .solbody h3.qd-h3-plain::before{content:""; position:absolute; left:0; top:2px; bottom:2px; width:2px; border-radius:2px; background:var(--brand);}
+.qd-page .step{margin:0 0 13px; padding-left:16px; position:relative;}
+.qd-page .step::before{content:""; position:absolute; left:0; top:8px; bottom:5px; width:2px; border-radius:2px; background:var(--hair);}
+.qd-page .step .h{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
+  display:inline-flex; align-items:center; gap:9px; margin-bottom:4px;}
+.qd-page .step .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; background:var(--hair-soft); color:var(--ink-soft);
+  border-radius:5px; padding:1.5px 7px;}
+
+/* 独立公式 */
+.qd-page .eqn{margin:13px 0; padding:11px 8px; overflow-x:auto; text-align:center; background:var(--panel-2);
+  border-radius:8px; border:1px solid var(--hair-soft);}
+.qd-page .solbody mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
+/* 宽内容不撑破窄栏:长公式/宽表格在各自块内横向滚动;长 token 允许折断 */
+.qd-page .solbody{overflow-wrap:break-word;}
+.qd-page .solbody .eqn math{max-width:none;}
+.qd-page .solbody table{display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; margin:0 0 13px;}
+.qd-page .solbody th,.qd-page .solbody td{border:1px solid var(--hair); padding:5px 9px; text-align:left;}
+.qd-page .solbody th{background:var(--panel-2);}
+
+/* 提示框 callout */
+.qd-page .callout{border:1px solid var(--brand-line); border-left:3px solid var(--brand); border-radius:var(--radius);
+  background:var(--brand-soft); padding:13px 16px; margin:16px 0; font-size:14.5px; line-height:1.78;}
+.qd-page .callout .t{font-family:var(--font-ui); font-weight:600; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--brand-ink); margin-bottom:7px; display:flex; align-items:center; gap:8px;}
+.qd-page .callout .t .mk{width:8px; height:8px; border-radius:2px; background:var(--brand); flex:none;}
+.qd-page .callout.note{border-color:var(--blue-line); border-left-color:var(--blue); background:var(--blue-soft);}
+.qd-page .callout.note .t{color:var(--blue-ink);} .qd-page .callout.note .t .mk{background:var(--blue);}
+.qd-page .callout.warn{border-color:var(--red-line); border-left-color:var(--red); background:var(--red-soft);}
+.qd-page .callout.warn .t{color:var(--red-ink);} .qd-page .callout.warn .t .mk{background:var(--red);}
+.qd-page .callout p{margin:0 0 8px;} .qd-page .callout p:last-child{margin-bottom:0;}
+
+/* 结论 conclusion */
+.qd-page .conclusion{border:1.5px solid var(--brand); border-radius:var(--radius); background:var(--brand-soft);
+  padding:17px 18px 15px; margin:22px 0 6px; text-align:center; position:relative;}
+.qd-page .conclusion .t{position:absolute; top:-9px; left:16px; background:var(--brand); color:#fff; font-family:var(--font-ui);
+  font-size:10.5px; font-weight:600; letter-spacing:.08em; padding:2px 11px; border-radius:20px; text-transform:uppercase;}
+.qd-page .conclusion p{margin:0;}
+
+.qd-page .aside{color:var(--ink-faint); font-size:13px; font-style:italic; margin:11px 0 4px; padding-left:12px;
+  border-left:2px solid var(--hair);}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width:920px){
+  .qd-split{grid-template-columns:1fr;}
+  .qd-gutter{display:none;}
+  .qd-panel{padding:16px 16px 30px;}
+  .qd-titlestrip h1{font-size:16.5px;}
+  .qd-soltool{top:0; gap:8px;}
+  .qd-seg button{padding:8px 14px;}                 /* 更大点触面积 */
+  .qd-navpills{width:100%; margin-left:0; overflow-x:auto; padding-bottom:3px;
+    flex-wrap:nowrap; -webkit-overflow-scrolling:touch;}
+  .qd-navpills a{white-space:nowrap; flex:none;}
+  .qd-page .solbody{padding:16px 16px 24px; font-size:15px;}
+  .qd-page .callout,.qd-page .conclusion{padding-left:13px; padding-right:13px;}
+}
+
+.wrap{max-width:1180px;margin:0 auto;padding:10px 12px 60px}
+.note-real{max-width:1180px;margin:14px auto 0;padding:0 12px;font:13px/1.6 system-ui,sans-serif;color:#6b7280}
+</style>
+<div class="note-real">真实渲染管线产出:块结构来自 markdown-it@13 + markdown-it-container@4(线上同版本),CSS 为线上 question-detail.css 原文,含本轮打磨——<b>章节导航滚动高亮</b>、<b>步骤徽标</b>、<b>公式/宽内容横向滚动</b>、<b>移动端堆叠</b>(缩窄窗口看)。数学以 MathML 呈现(线上用 MathJax)。滚动题解可见右上导航胶囊高亮跟随。</div>
+<div class="wrap">
+<div class="qd-page" id="qdApp">
+  <div class="qd-topbar"><a class="qd-back" href="#">&#8592; 返回题库</a><span class="spacer"></span>
+    <button class="qd-iconbtn" id="themeBtn" title="切换明暗">&#9680;</button><button class="qd-iconbtn" title="收藏">&#9734;</button></div>
+  <div class="qd-titlestrip"><h1>定積分の評価(基本定理)</h1>
+    <div class="qd-chips"><span class="qd-chip subject">微积分</span><span class="qd-chip diff">难度 中等</span><span class="qd-chip"><span class="k">出典</span>本地联调样例 2025</span><span class="qd-chip">院試</span></div></div>
+  <div class="qd-split" id="qdSplit">
+    <section class="qd-panel"><p class="qd-kicker">問題</p>
+      <div class="qd-prob"><p class="lead">定積分 <math><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi></math> の値を求めよ。</p>
+        <div class="qd-srcbox"><div class="r"><span>出典</span><span>本地联调样例 · 定積分</span></div><div class="r"><span>科目</span><span>微积分 · 基本定理</span></div></div></div></section>
+    <div class="qd-gutter" id="qdGutter" role="separator"></div>
+    <section class="qd-panel"><p class="qd-kicker">題解</p>
+      <div class="qd-solwrap"><div class="qd-soltool">
+          <div class="qd-seg" role="tablist"><button role="tab" aria-selected="false" data-track="zh">中文<span class="sub">速览</span></button><button role="tab" aria-selected="true" data-track="ja">日本語<span class="sub">詳解</span></button></div>
+          <span class="qd-badge"><span class="d"></span>多解一致 · consensus</span><nav class="qd-navpills" id="nav"></nav></div>
+        <div class="qd-solbody solbody"><div class="qd-track on" id="tja" data-track="ja"><h2>問題重述</h2>
+<p>定積分 <math><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi></math> の値を求めよ。</p>
+<h2>思路</h2>
+<p>面積として捉え、原始関数(不定積分)を用いて基本定理で評価する。分母の係数がどこから来るかを押さえるのが要点。</p>
+<div class="callout note"><div class="t"><span class="mk"></span>見取り図</div>
+<p>「指数を一つ上げて、その新しい指数で割る」——べき関数の積分はこの一手に尽きる。定積分は原始関数の端点差として読み取れる。</p>
+</div>
+<div class="callout"><div class="t"><span class="mk"></span>べき関数の積分公式</div>
+<p><math><mo>&#8747;</mo><msup><mi>x</mi><mi>n</mi></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><msup><mi>x</mi><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></msup><mrow><mi>n</mi><mo>+</mo><mn>1</mn></mrow></mfrac><mo>+</mo><mi>C</mi></math>(ただし <math><mi>n</mi><mo>&#8800;</mo><mo>&#8722;</mo><mn>1</mn></math>)。</p>
+</div>
+<h2>分步推導</h2>
+<h3>第一步:原始関数を求める</h3>
+<p>指数を一つ上げて割る:<math><mo>&#8747;</mo><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><msup><mi>x</mi><mn>3</mn></msup><mn>3</mn></mfrac></math>。</p>
+<h3>第二步:上端・下端を代入</h3>
+<div class="eqn"><math display="block"><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><msubsup><mrow><mo>[</mo><mfrac><msup><mi>x</mi><mn>3</mn></msup><mn>3</mn></mfrac><mo>]</mo></mrow><mn>0</mn><mn>1</mn></msubsup><mo>=</mo><mfrac><mn>1</mn><mn>3</mn></mfrac></math></div>
+<div class="callout warn"><div class="t"><span class="mk"></span>よくある誤り</div>
+<p>分母の <math><mn>3</mn></math> を落とさないこと。「指数を上げてから割る」の順序を守る。</p>
+</div>
+<div class="conclusion"><span class="t">結論</span>
+<p><math><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><mn>1</mn><mn>3</mn></mfrac></math></p>
+</div>
+<h2>関連題目</h2>
+<p>x のべき乗を 0 から 1 まで積分する類題は、いずれも「次数を一つ上げて割る」同じ型で片付く。区間や被積分関数を変えても、原始関数 → 端点差、という枠組みは変わらない。指数関数・三角関数の定積分も同じ発想で扱える。</p>
+</div><div class="qd-track" id="tzh" data-track="zh"><h2>思路</h2>
+<p>面积视角,套用幂函数积分公式,再用牛顿–莱布尼茨代入上下限。</p>
+<div class="callout note"><div class="t"><span class="mk"></span>一句话</div>
+<p>指数加一再除以新指数;定积分取原函数在端点的差。</p>
+</div>
+<h2>关键步骤</h2>
+<h3>1 求原函数</h3>
+<p><math><mo>&#8747;</mo><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><msup><mi>x</mi><mn>3</mn></msup><mn>3</mn></mfrac></math>。</p>
+<h3>2 代入上下限</h3>
+<p><math><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><mn>1</mn><mn>3</mn></mfrac></math>。</p>
+<div class="conclusion"><span class="t">结论</span>
+<p><math><msubsup><mo>&#8747;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mspace width="0.15em"></mspace><mi>d</mi><mi>x</mi><mo>=</mo><mfrac><mn>1</mn><mn>3</mn></mfrac></math></p>
+</div>
+</div></div></div></section>
+  </div>
+</div></div>
+<script>
+(function(){
+ var STEP_RE=/^\s*(第[一二三四五六七八九十百千]+步|Step\s*\d+|\d+)\s*[:：.、)]?\s*/;
+ function enhanceSteps(node){node.querySelectorAll('h3').forEach(function(h){var tn=h.firstChild;if(tn&&tn.nodeType===3){var m=tn.nodeValue.match(STEP_RE);if(m){var c=document.createElement('span');c.className='n';c.textContent=m[1];tn.nodeValue=tn.nodeValue.slice(m[0].length);h.insertBefore(c,tn);h.classList.add('qd-h3-chip');return;}}h.classList.add('qd-h3-plain');});}
+ var seg=document.querySelectorAll('.qd-seg button'),tr={ja:document.getElementById('tja'),zh:document.getElementById('tzh')},nav=document.getElementById('nav');
+ Object.keys(tr).forEach(function(k){enhanceSteps(tr[k]);});
+ var spy=[];
+ function updateSpy(){if(!spy.length)return;var off=100,a=0;for(var i=0;i<spy.length;i++){if(spy[i].h.getBoundingClientRect().top-off<=0)a=i;}spy.forEach(function(s,i){s.a.classList.toggle('active',i===a);});}
+ function bn(t){nav.innerHTML='';spy=[];tr[t].querySelectorAll('h2').forEach(function(h,i){if(!h.id)h.id=t+'-s'+i;var a=document.createElement('a');a.textContent=h.textContent;a.href='#'+h.id;a.onclick=function(e){e.preventDefault();h.scrollIntoView({behavior:'smooth',block:'start'});};nav.appendChild(a);spy.push({h:h,a:a});});updateSpy();}
+ function pick(t){for(var k in tr)tr[k].classList.toggle('on',k===t);seg.forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.track===t));});bn(t);}
+ seg.forEach(function(b){b.onclick=function(){pick(b.dataset.track);};});bn('ja');
+ var sched=false;window.addEventListener('scroll',function(){if(sched)return;sched=true;requestAnimationFrame(function(){sched=false;updateSpy();});},{passive:true});
+ document.getElementById('themeBtn').onclick=function(){var r=document.documentElement,c=r.getAttribute('data-theme');r.setAttribute('data-theme',c==='dark'?'light':(c==='light'?'dark':(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark')));};
+ var g=document.getElementById('qdGutter'),s=document.getElementById('qdSplit'),dg=false;
+ g.addEventListener('mousedown',function(e){dg=true;e.preventDefault();document.body.style.userSelect='none';});
+ window.addEventListener('mouseup',function(){dg=false;document.body.style.userSelect='';});
+ window.addEventListener('mousemove',function(e){if(!dg)return;var r=s.getBoundingClientRect(),p=(e.clientX-r.left)/r.width*100;p=Math.max(28,Math.min(64,p));s.style.gridTemplateColumns='minmax(0,'+p.toFixed(1)+'fr) 9px minmax(0,'+(100-p).toFixed(1)+'fr)';});
+})();
+</script>
