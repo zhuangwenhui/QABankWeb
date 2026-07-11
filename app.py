@@ -264,6 +264,15 @@ def create_app(config_object=None):
     def questions_page():
         return render_template('questions.html')
 
+    @app.route('/questions/<int:qid>')
+    @login_required
+    def question_detail_page(qid):
+        """LeetCode 式双语题解详情页(新路由,不动既有模态框)。"""
+        from models import Question
+        if db.session.get(Question, qid) is None:
+            abort(404)
+        return render_template('question_detail.html', qid=qid)
+
     @app.route('/error_book')
     @login_required
     def error_book_page():
