@@ -51,7 +51,8 @@ class Question(db.Model):
     tags = db.Column(db.Text, default='[]')  # JSON 数组字符串
     question_latex = db.Column(db.Text, default='')
     question_image = db.Column(db.String(256))  # uploads/ 下的文件名
-    solution_latex = db.Column(db.Text, default='')
+    solution_latex = db.Column(db.Text, default='')  # 中文·速览轨(既有)
+    solution_ja = db.Column(db.Text, nullable=True)   # 日本語·詳解轨(新增,可空;旧题为 NULL)
     solution_image = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now, index=True)
 
@@ -88,6 +89,7 @@ class Question(db.Model):
         if with_solution:
             d.update({
                 'solution_latex': self.solution_latex or '',
+                'solution_ja': self.solution_ja or '',
                 'solution_image': self.solution_image,
                 'solution_image_url': f'/uploads/{self.solution_image}' if self.solution_image else None,
             })

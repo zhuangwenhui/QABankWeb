@@ -1,0 +1,322 @@
+<title>院試題庫 · 双语题解详情页</title>
+<style>
+  :root{
+    --paper:#F5F6F8; --panel:#FFFFFF; --panel-2:#FAFBFC;
+    --ink:#181B1F; --ink-soft:#525A66; --ink-faint:#8B94A1;
+    --hair:#E7E9ED; --hair-soft:#F0F2F5;
+    --brand:#B85528; --brand-soft:#FAEEE6; --brand-ink:#7A3417; --brand-line:#EAD3C2;
+    --blue:#2E6099; --blue-soft:#EBF1F8; --blue-ink:#1B3F63; --blue-line:#CFDDEC;
+    --red:#A83744; --red-soft:#F8ECEE; --red-ink:#6C1F27; --red-line:#EACFD3;
+    --green:#2C7355; --green-soft:#E8F1EC; --green-ink:#1A4632;
+    --shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
+    --font-ui:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans CJK JP","Microsoft YaHei",sans-serif;
+    --font-read:"Charter","Georgia","Songti SC","Noto Serif CJK JP","Yu Mincho",serif;
+    --font-mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,monospace;
+    --radius:10px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#101317; --panel:#191D22; --panel-2:#1E232A;
+      --ink:#E7E9ED; --ink-soft:#A3ABB6; --ink-faint:#767F8C;
+      --hair:#2A3039; --hair-soft:#222831;
+      --brand:#DD8850; --brand-soft:#352113; --brand-ink:#EEB086; --brand-line:#4A3320;
+      --blue:#6BA1DC; --blue-soft:#152537; --blue-ink:#ABC9E9; --blue-line:#26374C;
+      --red:#DD8892; --red-soft:#341C21; --red-ink:#EEB5BB; --red-line:#452830;
+      --green:#6BC096; --green-soft:#12241B; --green-ink:#A2D8BC;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 5px 18px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#F5F6F8; --panel:#FFFFFF; --panel-2:#FAFBFC;
+    --ink:#181B1F; --ink-soft:#525A66; --ink-faint:#8B94A1;
+    --hair:#E7E9ED; --hair-soft:#F0F2F5;
+    --brand:#B85528; --brand-soft:#FAEEE6; --brand-ink:#7A3417; --brand-line:#EAD3C2;
+    --blue:#2E6099; --blue-soft:#EBF1F8; --blue-ink:#1B3F63; --blue-line:#CFDDEC;
+    --red:#A83744; --red-soft:#F8ECEE; --red-ink:#6C1F27; --red-line:#EACFD3;
+    --green:#2C7355; --green-soft:#E8F1EC; --green-ink:#1A4632;
+    --shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
+  }
+  :root[data-theme="dark"]{
+    --paper:#101317; --panel:#191D22; --panel-2:#1E232A;
+    --ink:#E7E9ED; --ink-soft:#A3ABB6; --ink-faint:#767F8C;
+    --hair:#2A3039; --hair-soft:#222831;
+    --brand:#DD8850; --brand-soft:#352113; --brand-ink:#EEB086; --brand-line:#4A3320;
+    --blue:#6BA1DC; --blue-soft:#152537; --blue-ink:#ABC9E9; --blue-line:#26374C;
+    --red:#DD8892; --red-soft:#341C21; --red-ink:#EEB5BB; --red-line:#452830;
+    --green:#6BC096; --green-soft:#12241B; --green-ink:#A2D8BC;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 5px 18px rgba(0,0,0,.3);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .app{font-family:var(--font-ui); color:var(--ink); background:var(--paper);
+    min-height:100vh; -webkit-font-smoothing:antialiased; line-height:1.6;}
+  math{font-size:1.01em;}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+
+  /* ---------- app bar ---------- */
+  .bar{position:sticky; top:0; z-index:20; background:var(--panel);
+    border-bottom:1px solid var(--hair); display:flex; align-items:center; gap:13px;
+    padding:9px 20px;}
+  .bar .brand{display:flex; align-items:center; gap:8px; font-weight:600; letter-spacing:.01em; white-space:nowrap; font-size:14.5px;}
+  .bar .brand .dot{width:8px;height:8px;border-radius:2px;background:var(--brand);}
+  .crumb{color:var(--ink-faint); font-size:12.5px; display:flex; align-items:center; gap:7px; min-width:0;}
+  .crumb .sep{opacity:.5;}
+  .crumb b{color:var(--ink-soft); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .bar .spacer{flex:1;}
+  .iconbtn{border:1px solid var(--hair); background:var(--panel); color:var(--ink-soft);
+    width:33px;height:33px;border-radius:8px; cursor:pointer; font-size:14px; display:grid; place-items:center; transition:.15s;}
+  .iconbtn:hover{border-color:var(--brand); color:var(--brand);}
+
+  /* ---------- title strip ---------- */
+  .titlestrip{padding:16px 20px 13px; border-bottom:1px solid var(--hair); background:var(--panel);}
+  .titlestrip h1{margin:0 0 9px; font-size:18px; font-weight:600; letter-spacing:.005em; text-wrap:balance;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; align-items:center;}
+  .chip{font-size:11.5px; padding:2.5px 9px; border-radius:6px; border:1px solid var(--hair);
+    color:var(--ink-soft); background:var(--panel-2); white-space:nowrap;}
+  .chip.subject{color:var(--brand-ink); background:var(--brand-soft); border-color:var(--brand-line); font-weight:500;}
+  .chip.diff{color:var(--green-ink); background:var(--green-soft); border-color:transparent;}
+  .chip .k{color:var(--ink-faint); margin-right:5px;}
+
+  /* ---------- two-panel ---------- */
+  .split{display:grid; grid-template-columns:minmax(0,42fr) 9px minmax(0,58fr);
+    align-items:start; max-width:1440px; margin:0 auto;}
+  .gutter{cursor:col-resize; position:relative; align-self:stretch;}
+  .gutter::before{content:""; position:absolute; inset:0 4px; border-radius:3px; background:transparent; transition:.15s;}
+  .gutter:hover::before{background:var(--brand-line);}
+  .panel{padding:20px 24px 46px; min-width:0;}
+
+  .kicker{font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-faint);
+    font-weight:600; margin:0 0 13px; display:flex; align-items:center; gap:9px;}
+  .kicker::after{content:""; flex:1; height:1px; background:var(--hair);}
+
+  /* ---------- problem panel ---------- */
+  .prob{font-family:var(--font-read); font-size:16px; color:var(--ink); line-height:1.82;}
+  .prob p{margin:0 0 14px;}
+  .prob .lead{font-weight:600;}
+  .srcbox{margin-top:20px; border:1px solid var(--hair); border-radius:var(--radius); background:var(--panel-2);
+    padding:12px 14px; font-size:12.5px; color:var(--ink-soft); display:flex; flex-direction:column; gap:7px; font-family:var(--font-ui);}
+  .srcbox .r{display:flex; gap:10px;}
+  .srcbox .r span:first-child{color:var(--ink-faint); min-width:44px;}
+  .srcbox a{color:var(--blue); text-decoration:none;}
+  .srcbox a:hover{text-decoration:underline;}
+  .figph{margin-top:14px; border:1px dashed var(--hair); border-radius:var(--radius); height:112px;
+    display:grid; place-items:center; color:var(--ink-faint); font-size:12px; background:var(--panel-2); font-family:var(--font-ui);}
+
+  /* ---------- solution panel ---------- */
+  .solwrap{background:var(--panel); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow); overflow:hidden;}
+  .soltool{position:sticky; top:51px; z-index:10; background:var(--panel); border-bottom:1px solid var(--hair);
+    padding:11px 16px; display:flex; flex-wrap:wrap; gap:11px; align-items:center;}
+  .seg{display:inline-flex; background:var(--hair-soft); border-radius:9px; padding:3px; gap:2px;}
+  .seg button{border:0; background:transparent; color:var(--ink-soft); font-family:var(--font-ui);
+    font-size:13px; padding:6px 14px; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:.15s; font-weight:500;}
+  .seg button .sub{font-size:10.5px; color:var(--ink-faint); font-weight:400;}
+  .seg button[aria-selected="true"]{background:var(--panel); color:var(--ink); box-shadow:var(--shadow);}
+  .seg button[aria-selected="true"] .sub{color:var(--brand);}
+  .badge{display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11px;
+    color:var(--green-ink); background:var(--green-soft); padding:4px 10px; border-radius:20px;}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:var(--green);}
+  .navpills{display:flex; flex-wrap:wrap; gap:5px; margin-left:auto;}
+  .navpills a{font-size:11.5px; color:var(--ink-soft); text-decoration:none; padding:3px 9px; border-radius:6px; border:1px solid transparent;}
+  .navpills a:hover{background:var(--panel-2); border-color:var(--hair); color:var(--brand);}
+
+  .solbody{padding:22px 30px 32px; font-family:var(--font-read); font-size:15.5px; line-height:1.85; color:var(--ink);}
+  .track{display:none;}
+  .track.on{display:block; animation:fade .22s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  @media (prefers-reduced-motion:reduce){ .track.on{animation:none;} }
+
+  .solbody h2{font-family:var(--font-ui); font-size:15px; font-weight:600; color:var(--ink);
+    margin:28px 0 12px; display:flex; align-items:center; gap:9px; letter-spacing:.01em;}
+  .solbody h2::before{content:""; width:7px; height:7px; border-radius:2px; background:var(--brand); flex:none;}
+  .solbody h2:first-child{margin-top:2px;}
+  .solbody p{margin:0 0 13px;}
+  .solbody .lede{color:var(--ink-soft);}
+
+  .step{margin:0 0 13px; padding-left:16px; position:relative;}
+  .step::before{content:""; position:absolute; left:0; top:8px; bottom:5px; width:2px; border-radius:2px; background:var(--hair);}
+  .step .h{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
+    display:inline-flex; align-items:center; gap:9px; margin-bottom:4px;}
+  .step .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; background:var(--hair-soft); color:var(--ink-soft);
+    border-radius:5px; padding:1.5px 7px;}
+
+  .eqn{margin:13px 0; padding:11px 8px; overflow-x:auto; text-align:center; background:var(--panel-2);
+    border-radius:8px; border:1px solid var(--hair-soft);}
+  .eqn math{font-size:1.12em;}
+
+  .callout{border:1px solid var(--brand-line); border-left:3px solid var(--brand); border-radius:var(--radius);
+    background:var(--brand-soft); padding:13px 16px; margin:16px 0; font-size:14.5px; line-height:1.78;}
+  .callout .t{font-family:var(--font-ui); font-weight:600; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--brand-ink); margin-bottom:7px; display:flex; align-items:center; gap:8px;}
+  .callout .t .mk{width:8px; height:8px; border-radius:2px; background:var(--brand); flex:none;}
+  .callout.note{border-color:var(--blue-line); border-left-color:var(--blue); background:var(--blue-soft);}
+  .callout.note .t{color:var(--blue-ink);} .callout.note .t .mk{background:var(--blue);}
+  .callout.warn{border-color:var(--red-line); border-left-color:var(--red); background:var(--red-soft);}
+  .callout.warn .t{color:var(--red-ink);} .callout.warn .t .mk{background:var(--red);}
+  .callout p{margin:0 0 8px;} .callout p:last-child{margin-bottom:0;}
+
+  .conclusion{border:1.5px solid var(--brand); border-radius:var(--radius); background:var(--brand-soft);
+    padding:17px 18px 15px; margin:22px 0 6px; text-align:center; position:relative;}
+  .conclusion .t{position:absolute; top:-9px; left:16px; background:var(--brand); color:#fff; font-family:var(--font-ui);
+    font-size:10.5px; font-weight:600; letter-spacing:.08em; padding:2px 11px; border-radius:20px; text-transform:uppercase;}
+  .conclusion math{font-size:1.18em;}
+
+  .aside{color:var(--ink-faint); font-size:13px; font-style:italic; margin:11px 0 4px; padding-left:12px;
+    border-left:2px solid var(--hair);}
+
+  @media (max-width:920px){
+    .split{grid-template-columns:1fr; max-width:640px;}
+    .gutter{display:none;}
+    .panel{padding:18px 18px 36px;}
+    .soltool{top:0;}
+    .navpills{width:100%; margin-left:0; overflow-x:auto; padding-bottom:2px;}
+    .solbody{padding:18px 18px 26px;}
+  }
+</style>
+
+<div class="app">
+  <h2 class="sr-only">院試題庫システムの問題詳細ページ:左に日本語の問題、右に日本語(詳解)と中国語(速览)を切り替えられる二本立ての解答。</h2>
+
+  <div class="bar">
+    <span class="brand"><span class="dot"></span>院試題庫</span>
+    <span class="crumb"><span class="sep">/</span>複素関数<span class="sep">/</span><b>京都大学 情報学 2025</b></span>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="themeBtn" aria-label="切换明暗主题" title="切换明暗">◐</button>
+    <button class="iconbtn" aria-label="收藏" title="收藏">☆</button>
+    <button class="iconbtn" aria-label="编辑" title="编辑">✎</button>
+  </div>
+
+  <div class="titlestrip">
+    <h1>留数定理による複素積分</h1>
+    <div class="chips">
+      <span class="chip subject">复变函数</span>
+      <span class="chip diff">难度 中等</span>
+      <span class="chip"><span class="k">出典</span>京都大学 情報学 2025</span>
+      <span class="chip">複素解析</span>
+      <span class="chip">留数</span>
+      <span class="chip">院試</span>
+    </div>
+  </div>
+
+  <div class="split" id="split">
+    <!-- ===== problem panel ===== -->
+    <section class="panel" id="probPanel">
+      <p class="kicker">問題</p>
+      <div class="prob">
+        <p class="lead">次の複素積分の値を求めよ。</p>
+        <div class="eqn"><math display="block"><msub><mo>∮</mo><mrow><mo>|</mo><mi>z</mi><mo>|</mo><mo>=</mo><mn>2</mn></mrow></msub><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mspace width="0.2em"></mspace><mi>d</mi><mi>z</mi></math></div>
+        <p>ただし積分路は原点を中心とする半径 <math><mn>2</mn></math> の円を正の向き(反時計回り)に一周するものとする。</p>
+
+        <div class="srcbox">
+          <div class="r"><span>出典</span><span>京都大学 大学院 情報学研究科 2025 年度 数学 第1問</span></div>
+          <div class="r"><span>科目</span><span>复变函数 · 留数定理</span></div>
+          <div class="r"><span>原文</span><a href="#">examarchive / km_2025_sys.pdf ↗</a></div>
+        </div>
+        <div class="figph">図(原題スクリーンショット)· 内部閲覧のみ</div>
+      </div>
+    </section>
+
+    <div class="gutter" id="gutter" role="separator" aria-label="调整栏宽"></div>
+
+    <!-- ===== solution panel ===== -->
+    <section class="panel">
+      <p class="kicker">題解</p>
+      <div class="solwrap">
+        <div class="soltool">
+          <div class="seg" role="tablist" aria-label="解答语言切换">
+            <button role="tab" aria-selected="false" data-track="zh">中文<span class="sub">速览</span></button>
+            <button role="tab" aria-selected="true" data-track="ja">日本語<span class="sub">詳解</span></button>
+          </div>
+          <span class="badge"><span class="d"></span>多解一致 · consensus</span>
+          <nav class="navpills" id="navpills"></nav>
+        </div>
+
+        <div class="solbody">
+          <!-- ---- 日本語 詳解 (default) ---- -->
+          <div class="track on" id="track-ja">
+            <h2 id="ja-restate">問題重述</h2>
+            <p>複素平面上の円 |z|=2 に沿って、正の向きに <math><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></mrow></mfrac></math> を一周積分した値を求める。</p>
+
+            <h2 id="ja-idea">思路</h2>
+            <p class="lede">被積分関数は分母 <math><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></math> の零点で発散する。<b>まずどこに特異点があり、そのうち積分路の内部に入るのはどれか</b>——これを見極めることが、留数計算の出発点である。分母を因数分解した瞬間に、問題の骨格が見えてくる。</p>
+
+            <div class="callout"><div class="t"><span class="mk"></span>定義 ── 留数定理 (Residue Theorem)</div><p>関数 <math><mi>f</mi></math> が単純閉曲線 <math><mi>C</mi></math> の内部で、有限個の孤立特異点 <math><msub><mi>z</mi><mi>k</mi></msub></math> を除いて正則ならば</p><div class="eqn"><math display="block"><msub><mo>∮</mo><mi>C</mi></msub><mi>f</mi><mo>(</mo><mi>z</mi><mo>)</mo><mi>d</mi><mi>z</mi><mo>=</mo><mn>2</mn><mi>π</mi><mi>i</mi><munder><mo>∑</mo><mi>k</mi></munder><munder><mrow><mi>Res</mi></mrow><mrow><mi>z</mi><mo>=</mo><msub><mi>z</mi><mi>k</mi></msub></mrow></munder><mi>f</mi></math></div><p>一位の極 <math><msub><mi>z</mi><mn>0</mn></msub></math> では <math><munder><mrow><mi>Res</mi></mrow><mrow><msub><mi>z</mi><mn>0</mn></msub></mrow></munder><mi>f</mi><mo>=</mo><munder><mi>lim</mi><mrow><mi>z</mi><mo>→</mo><msub><mi>z</mi><mn>0</mn></msub></mrow></munder><mo>(</mo><mi>z</mi><mo>−</mo><msub><mi>z</mi><mn>0</mn></msub><mo>)</mo><mi>f</mi><mo>(</mo><mi>z</mi><mo>)</mo></math>。</p></div>
+
+            <h2 id="ja-derive">分步推導</h2>
+            <div class="step"><span class="h"><span class="n">第一步</span>特異点の特定</span><p><math><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn><mo>=</mo><mo>(</mo><mi>z</mi><mo>−</mo><mi>i</mi><mo>)</mo><mo>(</mo><mi>z</mi><mo>+</mo><mi>i</mi><mo>)</mo><mo>=</mo><mn>0</mn></math> より <math><mi>z</mi><mo>=</mo><mo>±</mo><mi>i</mi></math>。いずれも <math><mo>|</mo><mo>±</mo><mi>i</mi><mo>|</mo><mo>=</mo><mn>1</mn><mo>&lt;</mo><mn>2</mn></math> だから、両方とも <math><mi>C</mi></math> の内部にある。</p></div>
+            <div class="step"><span class="h"><span class="n">第二步</span>各留数の計算</span><p>一位の極なので、公式 <math><mi>Res</mi><mo>=</mo><mfrac><mrow><msup><mi>e</mi><mi>z</mi></msup></mrow><mrow><mfrac><mi>d</mi><mrow><mi>d</mi><mi>z</mi></mrow></mfrac><mo>(</mo><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn><mo>)</mo></mrow></mfrac><mo>=</mo><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><mn>2</mn><mi>z</mi></mrow></mfrac></math> を用いる。</p>
+              <div class="eqn"><math display="block"><munder><mrow><mi>Res</mi></mrow><mrow><mi>z</mi><mo>=</mo><mi>i</mi></mrow></munder><mo>=</mo><mfrac><msup><mi>e</mi><mi>i</mi></msup><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>,</mo><mspace width="1.4em"></mspace><munder><mrow><mi>Res</mi></mrow><mrow><mi>z</mi><mo>=</mo><mo>−</mo><mi>i</mi></mrow></munder><mo>=</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi></mrow></msup><mrow><mo>−</mo><mn>2</mn><mi>i</mi></mrow></mfrac></math></div></div>
+            <div class="step"><span class="h"><span class="n">第三步</span>和をとる</span>
+              <div class="eqn"><math display="block"><munder><mo>∑</mo><mi>k</mi></munder><mi>Res</mi><mo>=</mo><mfrac><msup><mi>e</mi><mi>i</mi></msup><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>−</mo><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi></mrow></msup><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>=</mo><mfrac><mrow><msup><mi>e</mi><mi>i</mi></msup><mo>−</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi></mrow></msup></mrow><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>=</mo><mi>sin</mi><mn>1</mn></math></div></div>
+
+            <div class="callout note"><div class="t"><span class="mk"></span>Note ── なぜ sin になるのか</div><p><math><mfrac><mrow><msup><mi>e</mi><mrow><mi>i</mi><mi>θ</mi></mrow></msup><mo>−</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi><mi>θ</mi></mrow></msup></mrow><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>=</mo><mi>sin</mi><mi>θ</mi></math> はオイラーの公式そのもの。共役な極 <math><mo>±</mo><mi>i</mi></math> を持つ実係数関数で、留数の対が三角関数へ化けるのは一般的な現象である。</p></div>
+
+            <div class="callout warn"><div class="t"><span class="mk"></span>注意 ── よくある誤り</div><p>分母を <math><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></math> のまま「二位の極」と誤認しないこと。因数分解すれば<b>一位の極が二つ</b>である。また積分路 |z|=2 の外部にある特異点は、決して数えてはならない。</p></div>
+
+            <div class="conclusion"><span class="t">結論</span><math display="block"><msub><mo>∮</mo><mrow><mo>|</mo><mi>z</mi><mo>|</mo><mo>=</mo><mn>2</mn></mrow></msub><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mi>d</mi><mi>z</mi><mo>=</mo><mn>2</mn><mi>π</mi><mi>i</mi><mo>·</mo><mi>sin</mi><mn>1</mn></math></div>
+            <p class="aside">補足:数値では <math><mn>2</mn><mi>π</mi><mi>i</mi><mo>·</mo><mi>sin</mi><mn>1</mn><mo>≈</mo><mn>5.29</mn><mi>i</mi></math>。純虚数になるのは被積分関数が実軸対称性を持つためである。</p>
+          </div>
+
+          <!-- ---- 中文 速览 ---- -->
+          <div class="track" id="track-zh">
+            <h2 id="zh-idea">思路</h2>
+            <p class="lede">被积函数 <math><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></mrow></mfrac></math> 的奇点是 <math><mi>z</mi><mo>=</mo><mo>±</mo><mi>i</mi></math>,均为一阶极点,且都落在 |z|=2 内部。留数定理一步到位:积分 = 2πi ×(两个留数之和)。</p>
+
+            <h2 id="zh-steps">关键步骤</h2>
+            <div class="step"><span class="h"><span class="n">1</span>定位极点</span><p><math><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn><mo>=</mo><mn>0</mn></math> ⟹ z = ±i,两点都在 |z|&lt;2 内 → 两个都要算。</p></div>
+            <div class="step"><span class="h"><span class="n">2</span>一阶极点留数</span><p>Res = <math><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><mn>2</mn><mi>z</mi></mrow></mfrac></math>。于 z=i 得 <math><mfrac><msup><mi>e</mi><mi>i</mi></msup><mrow><mn>2</mn><mi>i</mi></mrow></mfrac></math>,于 z=−i 得 <math><mfrac><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi></mrow></msup><mrow><mo>−</mo><mn>2</mn><mi>i</mi></mrow></mfrac></math>。</p></div>
+            <div class="step"><span class="h"><span class="n">3</span>求和</span><p><math><mfrac><mrow><msup><mi>e</mi><mi>i</mi></msup><mo>−</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>i</mi></mrow></msup></mrow><mrow><mn>2</mn><mi>i</mi></mrow></mfrac><mo>=</mo><mi>sin</mi><mn>1</mn></math>(欧拉公式)。</p></div>
+
+            <div class="conclusion"><span class="t">结论</span><math display="block"><msub><mo>∮</mo><mrow><mo>|</mo><mi>z</mi><mo>|</mo><mo>=</mo><mn>2</mn></mrow></msub><mfrac><msup><mi>e</mi><mi>z</mi></msup><mrow><msup><mi>z</mi><mn>2</mn></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mi>d</mi><mi>z</mi><mo>=</mo><mn>2</mn><mi>π</mi><mi>i</mi><mo>·</mo><mi>sin</mi><mn>1</mn></math></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  var seg=document.querySelectorAll('.seg button');
+  var tracks={zh:document.getElementById('track-zh'),ja:document.getElementById('track-ja')};
+  var navpills=document.getElementById('navpills');
+  var navmap={
+    zh:[['zh-idea','思路'],['zh-steps','关键步骤']],
+    ja:[['ja-restate','問題重述'],['ja-idea','思路'],['ja-derive','分步推導']]
+  };
+  function buildNav(t){
+    navpills.innerHTML='';
+    navmap[t].forEach(function(x){
+      var a=document.createElement('a'); a.href='#'+x[0]; a.textContent=x[1];
+      a.onclick=function(e){e.preventDefault();var el=document.getElementById(x[0]);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});};
+      navpills.appendChild(a);
+    });
+  }
+  function pick(t){
+    for(var k in tracks){tracks[k].classList.toggle('on',k===t);}
+    seg.forEach(function(b){b.setAttribute('aria-selected',b.dataset.track===t);});
+    buildNav(t);
+  }
+  seg.forEach(function(b){b.onclick=function(){pick(b.dataset.track);};});
+  buildNav('ja');
+
+  var btn=document.getElementById('themeBtn');
+  btn.onclick=function(){
+    var root=document.documentElement;
+    var cur=root.getAttribute('data-theme');
+    var next = cur==='dark' ? 'light' : (cur==='light' ? 'dark' : (matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark'));
+    root.setAttribute('data-theme',next);
+  };
+
+  var gutter=document.getElementById('gutter'), split=document.getElementById('split'), dragging=false;
+  gutter.addEventListener('mousedown',function(e){dragging=true;e.preventDefault();document.body.style.userSelect='none';});
+  window.addEventListener('mouseup',function(){dragging=false;document.body.style.userSelect='';});
+  window.addEventListener('mousemove',function(e){
+    if(!dragging)return;
+    var r=split.getBoundingClientRect();
+    var pct=(e.clientX-r.left)/r.width*100;
+    pct=Math.max(28,Math.min(64,pct));
+    split.style.gridTemplateColumns='minmax(0,'+pct.toFixed(1)+'fr) 9px minmax(0,'+(100-pct).toFixed(1)+'fr)';
+  });
+})();
+</script>
