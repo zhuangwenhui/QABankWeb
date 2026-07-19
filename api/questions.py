@@ -7,6 +7,7 @@
 """
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -23,6 +24,26 @@ bp = Blueprint('api_questions', __name__, url_prefix='/api')
 # 字段长度上限(与 models.py 列宽保持一致)
 _MAX_CHAPTER_LEN = 128
 _MAX_SOURCE_LEN = 128
+
+# 院試题定位筛选(2026-07-19):院校/専攻/年份从 source 标签解析,学科按 subject 归三大类。
+# exam-harvest 标签格式恒为 "{院校} {専攻} {年份} {科目} 第n問"(实测 166/166 命中),
+# 故无需改表、无需回填数据——纯读侧解析即可支撑 时间/院校→専攻/学科 三级筛选。
+_EXAM_LABEL_RE = re.compile(r'^(\S+)\s+(\S+)\s+(\d{4})\s+\S+\s+第\d+問$')
+# 学科粗分组(学科范围):数学 / 复变 / 算法。subject 细类归并到这三档。
+_SUBJECT_GROUPS = [
+    ('数学', ['线性代数', '微积分', '概率统计', '微分方程', '向量解析', '备注']),
+    ('复变', ['复变函数']),
+    ('算法', ['算法']),
+]
+_SUBJECT_TO_GROUP = {s: g for g, subs in _SUBJECT_GROUPS for s in subs}
+
+
+def _parse_exam_label(source):
+    """从 source 标签解析 (院校, 専攻, 年份);非院試格式返回 None。"""
+    if not source:
+        return None
+    m = _EXAM_LABEL_RE.match(source.strip())
+    return (m.group(1), m.group(2), m.group(3)) if m else None
 
 
 # ---------------------------------------------------------------- 响应辅助
@@ -256,6 +277,28 @@ def list_questions():
     except ValueError as exc:
         return _fail(str(exc))
 
+    # 院試定位筛选(2026-07-19):院校/専攻走 source 前缀锚定,年份走 chapter(exam-harvest
+    # 恒 chapter==年份),学科范围走 subject 归组。専攻在 UI 上从属院校,故与院校联合锚定。
+    school = (args.get('school') or '').strip()
+    major = (args.get('major') or '').strip()
+    if school and major:
+        query = query.filter(Question.source.like(
+            f'{_escape_like(school)} {_escape_like(major)} %', escape='\\'))
+    elif school:
+        query = query.filter(Question.source.like(f'{_escape_like(school)} %', escape='\\'))
+    elif major:
+        query = query.filter(Question.source.like(f'% {_escape_like(major)} %', escape='\\'))
+
+    year = (args.get('year') or '').strip()
+    if year:
+        query = query.filter(Question.chapter == year)
+
+    subject_group = (args.get('subjectGroup') or '').strip()
+    if subject_group:
+        subs = dict(_SUBJECT_GROUPS).get(subject_group)
+        if subs:
+            query = query.filter(Question.subject.in_(subs))
+
     pagination = (query.order_by(Question.created_at.desc(), Question.id.desc())
                        .paginate(page=page, per_page=per_page, error_out=False))
     return _ok({
@@ -483,6 +526,42 @@ def question_filters():
         'chapters': sorted(chapters),
         'sources': sorted(sources),
         'tags': sorted(tag_set),
+    })
+
+
+@bp.route('/questions/facets', methods=['GET'])
+@login_required
+def question_facets():
+    """定位筛选字典:院校→専攻(嵌套)、年份、学科范围(带题量)。
+    从 source 标签解析院校/専攻/年份(非院試格式的题不进入此三级,仍可经课程/来源筛选)。"""
+    rows = db.session.query(Question.source, Question.chapter, Question.subject).all()
+    school_majors = {}          # 院校 -> {専攻: 计数}
+    years, group_count = {}, {}
+    for source, chapter, subject in rows:
+        parsed = _parse_exam_label(source)
+        if parsed:
+            school, major, ylabel = parsed
+            school_majors.setdefault(school, {})
+            school_majors[school][major] = school_majors[school].get(major, 0) + 1
+        # 年份优先取 chapter(exam-harvest 恒为年份);否则回落到标签解析出的年份
+        y = chapter if (chapter or '').isdigit() and len(chapter) == 4 else (parsed[2] if parsed else None)
+        if y:
+            years[y] = years.get(y, 0) + 1
+        grp = _SUBJECT_TO_GROUP.get(subject)
+        if grp:
+            group_count[grp] = group_count.get(grp, 0) + 1
+
+    schools = [{
+        'name': s,
+        'count': sum(majors.values()),
+        'majors': [{'name': mj, 'count': c} for mj, c in sorted(majors.items())],
+    } for s, majors in sorted(school_majors.items(), key=lambda kv: -sum(kv[1].values()))]
+
+    return _ok({
+        'schools': schools,
+        'years': sorted(years.keys(), reverse=True),
+        'subjectGroups': [{'name': g, 'count': group_count.get(g, 0)}
+                          for g, _ in _SUBJECT_GROUPS if group_count.get(g)],
     })
 
 

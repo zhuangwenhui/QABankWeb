@@ -70,6 +70,7 @@
       'btnViewTable', 'btnViewCard', 'checkAllPage', 'checkAll',
       'historyMenu', 'btnPresetDropdown', 'presetNameInput', 'btnSavePreset', 'presetList',
       'btnNewQuestion', 'filterSubject', 'filterChapter', 'filterDifficulty',
+      'filterSchool', 'filterMajor', 'filterYear', 'filterSubjectGroup',
       'filterSource', 'filterSearch', 'sourceOptions', 'editChapterOptions',
       'advancedPanel', 'advQuestionId', 'advTags', 'advDateFrom', 'advDateTo',
       'btnAdvSearch', 'btnAdvReset',
@@ -108,6 +109,7 @@
     renderHistoryMenu();
     renderPresetList();
     await loadChapterOptions('');
+    await loadFacets();
     await loadQuestions({ record: false });
   }
 
@@ -127,6 +129,16 @@
     });
     el.filterChapter.addEventListener('change', resetAndLoad);
     el.filterDifficulty.addEventListener('change', resetAndLoad);
+
+    // 院試定位:院校变→重建専攻级联;任一变更→高亮 + 重新加载
+    el.filterSchool.addEventListener('change', () => {
+      populateMajors(el.filterSchool.value);
+      markLocatorActive();
+      resetAndLoad();
+    });
+    [el.filterMajor, el.filterYear, el.filterSubjectGroup].forEach((sel) => {
+      sel.addEventListener('change', () => { markLocatorActive(); resetAndLoad(); });
+    });
     // 文本框输入过程中只实时加载,不写历史(避免把「线」「线性」等中间态挤入历史);
     // 仅在明确的搜索动作(失焦 / 回车)时写入一次搜索历史。
     el.filterSource.addEventListener('input', debounce(() => resetAndLoad({ record: false }), 400));
@@ -257,6 +269,10 @@
   /** 收集当前全部筛选条件(基础 + 高级) */
   function collectFilters() {
     return {
+      school: el.filterSchool.value,
+      major: el.filterMajor.value,
+      year: el.filterYear.value,
+      subjectGroup: el.filterSubjectGroup.value,
       subject: el.filterSubject.value,
       chapter: el.filterChapter.value,
       difficulty: el.filterDifficulty.value,
@@ -272,6 +288,13 @@
   /** 把一组筛选条件写回表单控件(章节选项需先按课程联动加载) */
   async function applyFilterState(filters) {
     const f = filters || {};
+    // 院試定位:先写院校再重建専攻级联,才能正确选中専攻
+    el.filterSchool.value = f.school || '';
+    populateMajors(f.school || '');
+    el.filterMajor.value = f.major || '';
+    el.filterYear.value = f.year || '';
+    el.filterSubjectGroup.value = f.subjectGroup || '';
+    markLocatorActive();
     el.filterSubject.value = f.subject || '';
     await loadChapterOptions(f.chapter || '');
     el.filterDifficulty.value = f.difficulty || '';
@@ -306,6 +329,43 @@
     }
     el.filterChapter.innerHTML = opts.join('');
     el.filterChapter.value = current || '';
+  }
+
+  // ---- 院試定位筛选:院校→専攻级联 + 年份 + 学科范围(数据来自 /api/questions/facets) ----
+  let facets = { schools: [], years: [], subjectGroups: [] };
+
+  async function loadFacets() {
+    try {
+      const resp = await apiFetch('/api/questions/facets');
+      facets = (resp && resp.data) || facets;
+    } catch (e) {
+      console.warn('加载定位筛选字典失败:', e.message);
+      return;
+    }
+    const opt = (v, label) => `<option value="${escapeHtml(v)}">${escapeHtml(label)}</option>`;
+    el.filterSchool.innerHTML = ['<option value="">全部院校</option>']
+      .concat((facets.schools || []).map((s) => opt(s.name, `${s.name}(${s.count})`))).join('');
+    el.filterYear.innerHTML = ['<option value="">全部年份</option>']
+      .concat((facets.years || []).map((y) => opt(y, y))).join('');
+    el.filterSubjectGroup.innerHTML = ['<option value="">全部学科</option>']
+      .concat((facets.subjectGroups || []).map((g) => opt(g.name, `${g.name}(${g.count})`))).join('');
+    populateMajors('');
+  }
+
+  function populateMajors(school) {
+    const entry = (facets.schools || []).find((s) => s.name === school);
+    const majors = entry ? entry.majors : [];
+    el.filterMajor.innerHTML = ['<option value="">全部専攻</option>']
+      .concat(majors.map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}(${m.count})</option>`))
+      .join('');
+    el.filterMajor.value = '';
+    el.filterMajor.disabled = !majors.length;   // 未选院校或该校单一専攻时禁用
+  }
+
+  function markLocatorActive() {
+    [['filterSchool'], ['filterMajor'], ['filterYear'], ['filterSubjectGroup']].forEach(([id]) => {
+      el[id].classList.toggle('filter-active', !!el[id].value);
+    });
   }
 
   /** 重置到第一页并加载(筛选变更/执行搜索的统一入口) */

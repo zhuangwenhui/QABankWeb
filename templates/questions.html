@@ -24,6 +24,17 @@
   .source-hint { font-size: .8rem; margin-top: 4px; min-height: 1.1em; }
   .advanced-panel-body { background: #f8f9fb; border: 1px solid #e3e6ec; border-radius: 8px; padding: 12px; margin-top: 12px; }
   #cardView .empty-hint, #cardView > .w-100 { grid-column: 1 / -1; }
+  /* 院試定位筛选条 */
+  .locator-bar { display: flex; align-items: flex-start; gap: 12px; }
+  .locator-title { flex: 0 0 auto; font-size: .82rem; font-weight: 600; color: #0d6efd;
+                   background: #eaf2ff; border-radius: 6px; padding: 26px 10px 0; align-self: stretch;
+                   display: flex; align-items: center; white-space: nowrap; }
+  .locator-sep { margin: 10px 0 8px; border-top: 1px dashed #dde2ea; opacity: 1; }
+  .filter-active { border-color: #0d6efd; box-shadow: 0 0 0 1px #0d6efd33; }
+  @media (max-width: 767px) {
+    .locator-bar { flex-direction: column; gap: 4px; }
+    .locator-title { align-self: flex-start; padding: 4px 10px; }
+  }
 </style>
 {% endblock %}
 
@@ -83,6 +94,37 @@
 <!-- 筛选区 -->
 <div class="card mb-3">
   <div class="card-body pb-2">
+    <!-- 院試定位筛选:按目标院校 / 専攻 / 年份 / 学科范围快速缩小 -->
+    <div class="locator-bar mb-2">
+      <span class="locator-title"><i class="fa-solid fa-crosshairs me-1"></i>定位</span>
+      <div class="row g-2 flex-grow-1">
+        <div class="col-6 col-md-3">
+          <label class="filter-label" for="filterSchool">院校</label>
+          <select id="filterSchool" class="form-select form-select-sm">
+            <option value="">全部院校</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="filter-label" for="filterMajor">専攻(专业)</label>
+          <select id="filterMajor" class="form-select form-select-sm" disabled>
+            <option value="">全部専攻</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="filter-label" for="filterYear">年份</label>
+          <select id="filterYear" class="form-select form-select-sm">
+            <option value="">全部年份</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="filter-label" for="filterSubjectGroup">学科范围</label>
+          <select id="filterSubjectGroup" class="form-select form-select-sm">
+            <option value="">全部学科</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <hr class="locator-sep">
     <div class="row g-2">
       <div class="col-6 col-md-2">
         <label class="filter-label" for="filterSubject">课程</label>
