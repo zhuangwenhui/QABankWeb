@@ -112,6 +112,12 @@ tr.selected {
   background: #f8f9fb;
 }
 
+/* 来源/标签列的列宽下限。院試出处标签(如"京都大学 情報学 2025 复变 第3問")是无空格的
+   CJK 长串,自动表格布局会把它压成一字一行的竖条、把行高撑到数百像素。外层已有
+   .table-responsive,超宽时横向滚动,不会撑破页面。 */
+.question-table th:nth-child(6), .question-table td:nth-child(6) { min-width: 150px; }
+.question-table th:nth-child(7), .question-table td:nth-child(7) { min-width: 110px; }
+
 .question-table .latex-content {
   max-height: 120px;
   overflow: hidden;

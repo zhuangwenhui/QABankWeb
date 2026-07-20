@@ -111,9 +111,14 @@
   display:grid; place-items:center; color:var(--ink-faint); font-size:12px; background:var(--panel-2); font-family:var(--font-ui);}
 
 /* ---------- 题解栏 ---------- */
-.qd-solwrap{background:var(--panel); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow); overflow:hidden;}
+/* 注意:此处**不可**用 overflow:hidden。任何 overflow≠visible 的祖先都会成为 sticky 的
+   滚动容器,于是下面工具条的 top:72px 会被解读为"距本面板顶 72px"而非"距视口顶 72px",
+   结果工具条在面板内被下推 72px、盖住并永久裁掉题解开头(sticky 不占位,且此处无滚动条
+   可救)。改由子元素自行贴合圆角。 */
+.qd-solwrap{background:var(--panel); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow);}
 .qd-soltool{position:sticky; top:72px; z-index:10; background:var(--panel); border-bottom:1px solid var(--hair);
-  padding:11px 16px; display:flex; flex-wrap:wrap; gap:11px; align-items:center;}
+  padding:11px 16px; display:flex; flex-wrap:wrap; gap:11px; align-items:center;
+  border-radius:12px 12px 0 0;}   /* 顶部圆角自理(父级已不再裁剪) */
 .qd-seg{display:inline-flex; background:var(--hair-soft); border-radius:9px; padding:3px; gap:2px;}
 .qd-seg button{border:0; background:transparent; color:var(--ink-soft); font-family:var(--font-ui);
   font-size:13px; padding:6px 14px; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:.15s; font-weight:500;}
@@ -172,12 +177,36 @@
 .qd-page .eqn{margin:13px 0; padding:11px 8px; overflow-x:auto; text-align:center; background:var(--panel-2);
   border-radius:8px; border:1px solid var(--hair-soft);}
 .qd-page .solbody mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
+/* 题面栏同样需要:院試题里大量 C/Python 程序清单以 \texttt 排在 display 公式内,
+   宽度常超窄栏。此前本栏无溢出规则,代码被裁掉且无法横向滚动=内容真的取不到。 */
+.qd-page .qd-prob mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
+/* 可横向滚动的块常驻一条细滚动条:覆盖式滚动条不滚不显,用户会把"可滑动"误读成"被截断"。 */
+.qd-page .qd-prob mjx-container, .qd-page .solbody mjx-container,
+.qd-page .solbody table, .qd-page .eqn{scrollbar-width:thin; scrollbar-color:var(--hair) transparent;}
+.qd-page .qd-prob mjx-container::-webkit-scrollbar, .qd-page .solbody mjx-container::-webkit-scrollbar,
+.qd-page .solbody table::-webkit-scrollbar, .qd-page .eqn::-webkit-scrollbar{height:7px;}
+.qd-page .qd-prob mjx-container::-webkit-scrollbar-thumb, .qd-page .solbody mjx-container::-webkit-scrollbar-thumb,
+.qd-page .solbody table::-webkit-scrollbar-thumb, .qd-page .eqn::-webkit-scrollbar-thumb{
+  background:var(--hair); border-radius:4px;}
 /* 宽内容不撑破窄栏:长公式/宽表格在各自块内横向滚动;长 token 允许折断 */
 .qd-page .solbody{overflow-wrap:break-word;}
 .qd-page .solbody .eqn math{max-width:none;}
 .qd-page .solbody table{display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; margin:0 0 13px;}
 .qd-page .solbody th,.qd-page .solbody td{border:1px solid var(--hair); padding:5px 9px; text-align:left;}
 .qd-page .solbody th{background:var(--panel-2);}
+/* 题面栏的表格同样要有边框:院試题常把数据表(得点表・t分布表等)放在题面,
+   无样式时数字挤成一片,学生读不出行列对应关系。 */
+.qd-page .qd-prob table{display:block; max-width:100%; overflow-x:auto; border-collapse:collapse;
+  font-size:14px; margin:4px 0 14px; scrollbar-width:thin; scrollbar-color:var(--hair) transparent;}
+.qd-page .qd-prob th,.qd-page .qd-prob td{border:1px solid var(--hair); padding:5px 9px; text-align:left;}
+.qd-page .qd-prob th{background:var(--panel-2);}
+.qd-page .qd-prob table::-webkit-scrollbar{height:7px;}
+.qd-page .qd-prob table::-webkit-scrollbar-thumb{background:var(--hair); border-radius:4px;}
+/* 题面里的代码围栏(程序清单)也需要基本样式 */
+.qd-page .qd-prob pre{background:var(--panel-2); border:1px solid var(--hair-soft); border-radius:8px;
+  padding:11px 13px; overflow-x:auto; font-size:13.5px; line-height:1.6; margin:4px 0 14px;}
+.qd-page .qd-prob code{font-family:var(--font-mono);}
+.qd-page .qd-prob pre code{background:none; padding:0;}
 
 /* 提示框 callout */
 .qd-page .callout{border:1px solid var(--brand-line); border-left:3px solid var(--brand); border-radius:var(--radius);

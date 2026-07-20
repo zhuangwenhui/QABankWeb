@@ -65,10 +65,38 @@
   // ---------------------------------------------------------------- 数学占位
   function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
 
+  // MathJax 的文本模式(\text/\texttt/…)不认 \_ 与 \&(实测 \{ \} 正常),会把反斜杠
+  // 原样画出来,题面里的 C 代码就显示成 compare\_swap、\&a[i]。这里在文本组内把它们
+  // 还原成字面字符。**必须限定在文本组内**:数学模式下 _ 是下标运算符、& 是对齐分隔符,
+  // 全局替换会直接毁掉公式。扫描时对 \X 整体跳过,使 \{ \} 不干扰花括号配平。
+  var TEXT_CMD = /\\(?:text|texttt|textrm|textbf|textit|textsf|mathtt|mathrm)\s*\{/g;
+
+  function fixTextModeEscapes(tex) {
+    if (tex.indexOf('\\_') < 0 && tex.indexOf('\\&') < 0) return tex;   // 快路径
+    var out = '', last = 0, m;
+    TEXT_CMD.lastIndex = 0;
+    while ((m = TEXT_CMD.exec(tex)) !== null) {
+      var open = m.index + m[0].length;     // 组内首字符下标
+      var depth = 1, i = open;
+      while (i < tex.length && depth > 0) {
+        var ch = tex.charAt(i);
+        if (ch === '\\') { i += 2; continue; }        // 跳过 \X,不计入配平
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        i++;
+      }
+      var close = i - 1;                    // 收尾 } 的下标(未配平时退化为串尾)
+      out += tex.slice(last, open) + tex.slice(open, close).replace(/\\([_&])/g, '$1');
+      last = close;
+      TEXT_CMD.lastIndex = i;               // 从组尾继续:嵌套组已随整体 body 一并处理
+    }
+    return out + tex.slice(last);
+  }
+
   /** ① 抽出 $$…$$ 与 $…$,替换为纯字母数字占位符(防 markdown 吞掉 _ / *)。 */
   function protectMath(src) {
     var store = [];
-    function grab(m) { store.push(m); return ph(store.length - 1); }
+    function grab(m) { store.push(fixTextModeEscapes(m)); return ph(store.length - 1); }
     src = src.replace(/\$\$([\s\S]+?)\$\$/g, grab);   // 先 display
     src = src.replace(/\$((?:\\.|[^\$\\\n])+?)\$/g, grab); // 再 inline
     return { src: src, store: store };
