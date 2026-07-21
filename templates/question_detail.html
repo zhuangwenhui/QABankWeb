@@ -24,8 +24,9 @@
     <!-- ===== 题面栏 ===== -->
     <section class="qd-panel" id="qdProblemPanel">
       <p class="qd-kicker">問題</p>
-      <div class="qd-prob" id="qdProblemBody">
-        <p class="qd-empty">加载中…</p>
+      <!-- 院試题面为日文原文,标 lang=ja 以取日文字形与断行规则 -->
+      <div class="qd-prob" id="qdProblemBody" lang="ja">
+        <p class="qd-empty" lang="zh-CN">加载中…</p>
       </div>
     </section>
 
@@ -44,8 +45,9 @@
           <nav class="qd-navpills" id="qdNavpills"></nav>
         </div>
         <div class="qd-solbody solbody">
-          <div class="qd-track" id="qdTrackJa" data-track="ja"></div>
-          <div class="qd-track" id="qdTrackZh" data-track="zh"></div>
+          <!-- lang 决定 CJK 字形与断行规则:日本語轨用日文字形,中文轨用中文字形 -->
+          <div class="qd-track" id="qdTrackJa" data-track="ja" lang="ja"></div>
+          <div class="qd-track" id="qdTrackZh" data-track="zh" lang="zh-CN"></div>
         </div>
       </div>
     </section>

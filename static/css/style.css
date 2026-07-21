@@ -1,6 +1,42 @@
+/* ============================================================================
+   全站设计令牌(2026-07-21)
+   此前只有详情页 .qd-page 有成套令牌,列表页用 Bootstrap 默认值,两页观感割裂。
+   这里把同一套色板/字体/圆角提升为全站变量,列表页复用。
+   ========================================================================== */
+:root{
+  /* —— 色板:与 question-detail.css 的 .qd-page 令牌同源 —— */
+  --qb-paper:#F5F6F8;   --qb-panel:#FFFFFF;  --qb-panel-2:#FAFBFC;
+  --qb-ink:#181B1F;     --qb-ink-soft:#525A66; --qb-ink-faint:#8B94A1;
+  --qb-hair:#E7E9ED;    --qb-hair-soft:#F0F2F5;
+  --qb-brand:#B85528;   --qb-brand-soft:#FAEEE6; --qb-brand-ink:#7A3417;
+  --qb-blue:#2E6099;    --qb-blue-soft:#EBF1F8;  --qb-blue-ink:#1B3F63;
+  --qb-green:#2C7355;   --qb-green-soft:#E8F1EC; --qb-green-ink:#1A4632;
+  --qb-red:#A83744;     --qb-red-soft:#F8ECEE;   --qb-red-ink:#6C1F27;
+  --qb-shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
+  --qb-radius:10px;
+
+  /* —— 字体:**按语言分栈**(修 Mac 上中日字形互串)——
+     汉字在中日两套字形中形态有别(直/骨/今/経…)。此前 --font-ui 把日文
+     Hiragino 排在中文字体前、--font-read 把中文 Songti 排在日文字体前,
+     macOS 两套字体齐全 → 中文用日文字形、日文用中文字形,双向串味。
+     现按 :lang() 分派,浏览器据元素语言选对应字形。 */
+  --qb-font-latin:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --qb-font-zh:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+  --qb-font-ja:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP","Source Han Sans JP",sans-serif;
+  --qb-font-mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+  /* 默认(文档语言 zh-CN):拉丁字形优先,汉字回落到中文字体 */
+  --qb-font-ui:var(--qb-font-latin),var(--qb-font-zh);
+}
+/* 元素标了 lang 就用对应语言的字形;中日内容混排时各自正确 */
+:lang(ja){ --qb-font-ui:var(--qb-font-latin),var(--qb-font-ja); }
+:lang(zh),:lang(zh-CN){ --qb-font-ui:var(--qb-font-latin),var(--qb-font-zh); }
+
 /* ============ 布局 ============ */
 body {
-  background-color: #f5f6fa;
+  background-color: var(--qb-paper);
+  font-family: var(--qb-font-ui);
+  /* CJK 正文行高需高于拉丁文才透气(全角字面无上下留白) */
+  line-height: 1.7;
 }
 
 .main-content {
@@ -37,20 +73,20 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
-  color: #6c757d;
+  color: var(--qb-ink-soft);
 }
 
 .breadcrumb-custom a {
-  color: #6c757d;
+  color: var(--qb-ink-soft);
   text-decoration: none;
 }
 
 .breadcrumb-custom a:hover {
-  color: #0d6efd;
+  color: var(--qb-blue);
 }
 
 .breadcrumb-separator {
-  color: #adb5bd;
+  color: var(--qb-ink-faint);
 }
 
 /* ============ 系统消息 ============ */
@@ -67,8 +103,8 @@ body {
 /* ============ 题目展示:卡片视图 ============ */
 .question-card,
 .question-card-item {
-  background: #fff;
-  border: 1px solid #e3e6ec;
+  background: var(--qb-panel);
+  border: 1px solid var(--qb-hair);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
@@ -84,8 +120,8 @@ body {
 .question-card.selected,
 .question-card-item.selected,
 tr.selected {
-  border-color: #0d6efd;
-  background-color: #f0f6ff;
+  border-color: var(--qb-blue);
+  background-color: var(--qb-blue-soft);
 }
 
 .question-card-view {
@@ -102,14 +138,14 @@ tr.selected {
 
 /* ============ 题目展示:表格视图 ============ */
 .question-table {
-  background: #fff;
+  background: var(--qb-panel);
   border-radius: 10px;
   overflow: hidden;
 }
 
 .question-table th {
   white-space: nowrap;
-  background: #f8f9fb;
+  background: var(--qb-panel-2);
 }
 
 /* 来源/标签列的列宽下限。院試出处标签(如"京都大学 情報学 2025 复变 第3問")是无空格的
@@ -126,9 +162,9 @@ tr.selected {
 
 /* ============ 公式渲染 ============ */
 .latex-code {
-  font-family: SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--qb-font-mono);
   font-size: 0.85rem;
-  background: #f6f8fa;
+  background: var(--qb-panel-2);
   border-radius: 6px;
   padding: 8px 12px;
   white-space: pre-wrap;
@@ -148,8 +184,8 @@ tr.selected {
 
 .latex-preview {
   min-height: 60px;
-  background: #fff;
-  border: 1px dashed #ced4da;
+  background: var(--qb-panel);
+  border: 1px dashed var(--qb-hair);
   border-radius: 6px;
   padding: 12px;
   margin-top: 8px;
@@ -166,19 +202,20 @@ tr.selected {
   white-space: nowrap;
 }
 
+/* 难度色码取自全站语义色板(与详情页同源),不再用 Bootstrap 默认配色 */
 .difficulty-badge.difficulty-easy {
-  background: #d1e7dd;
-  color: #0f5132;
+  background: var(--qb-green-soft);
+  color: var(--qb-green-ink);
 }
 
 .difficulty-badge.difficulty-medium {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--qb-brand-soft);
+  color: var(--qb-brand-ink);
 }
 
 .difficulty-badge.difficulty-hard {
-  background: #f8d7da;
-  color: #842029;
+  background: var(--qb-red-soft);
+  color: var(--qb-red-ink);
 }
 
 /* ============ 交互:批量工具栏 ============ */
@@ -186,8 +223,8 @@ tr.selected {
   position: sticky;
   top: 60px;
   z-index: 1020;
-  background: #fff;
-  border: 1px solid #0d6efd;
+  background: var(--qb-panel);
+  border: 1px solid var(--qb-blue);
   border-radius: 10px;
   padding: 10px 16px;
   margin-bottom: 12px;
@@ -195,35 +232,35 @@ tr.selected {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  box-shadow: 0 4px 14px rgba(13, 110, 253, 0.12);
+  box-shadow: var(--qb-shadow);
 }
 
 /* ============ 交互:视图切换 ============ */
 .view-toggle {
   display: inline-flex;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--qb-hair);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .view-toggle-btn {
   border: none;
-  background: #fff;
+  background: var(--qb-panel);
   padding: 6px 14px;
-  color: #495057;
+  color: var(--qb-ink-soft);
   cursor: pointer;
 }
 
 .view-toggle-btn.active {
-  background: #0d6efd;
-  color: #fff;
+  background: var(--qb-blue);
+  color: var(--qb-panel);
 }
 
 /* ============ 标签 ============ */
 .tag-badge {
   display: inline-block;
-  background: #e7f1ff;
-  color: #0a58ca;
+  background: var(--qb-blue-soft);
+  color: var(--qb-blue-ink);
   border-radius: 10px;
   padding: 2px 8px;
   font-size: 0.75rem;
@@ -234,7 +271,7 @@ tr.selected {
 /* ============ 书签 ============ */
 .bookmark-btn {
   cursor: pointer;
-  color: #adb5bd;
+  color: var(--qb-ink-faint);
   transition: color 0.15s;
 }
 
@@ -250,8 +287,8 @@ tr.selected {
 .context-menu {
   position: fixed;
   z-index: 2000;
-  background: #fff;
-  border: 1px solid #dee2e6;
+  background: var(--qb-panel);
+  border: 1px solid var(--qb-hair);
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   min-width: 180px;
@@ -269,17 +306,17 @@ tr.selected {
 }
 
 .context-menu .context-menu-item:hover {
-  background: #f0f6ff;
+  background: var(--qb-blue-soft);
 }
 
 .context-menu .context-menu-item.text-danger:hover {
-  background: #fff0f1;
+  background: var(--qb-red-soft);
 }
 
 /* ============ 统计卡片 ============ */
 .stat-card {
-  background: #fff;
-  border: 1px solid #e3e6ec;
+  background: var(--qb-panel);
+  border: 1px solid var(--qb-hair);
   border-radius: 10px;
   padding: 20px;
   text-align: center;
@@ -288,17 +325,17 @@ tr.selected {
 .stat-card .stat-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #0d6efd;
+  color: var(--qb-blue);
 }
 
 .stat-card .stat-label {
-  color: #6c757d;
+  color: var(--qb-ink-soft);
   font-size: 0.9rem;
 }
 
 /* ============ CodeMirror ============ */
 .CodeMirror {
-  border: 1px solid #ced4da;
+  border: 1px solid var(--qb-hair);
   border-radius: 6px;
   height: auto;
   min-height: 120px;
@@ -309,13 +346,13 @@ tr.selected {
 .image-preview-thumb {
   max-width: 200px;
   max-height: 150px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--qb-hair);
   border-radius: 6px;
   cursor: pointer;
 }
 
 .question-detail-image {
   max-width: 100%;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--qb-hair);
   border-radius: 6px;
 }

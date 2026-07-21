@@ -276,7 +276,8 @@
       rows.push('<div class="r"><span>科目</span><span>' + esc(q.subject) +
                 (q.chapter ? ' · ' + esc(q.chapter) : '') + '</span></div>');
     }
-    if (rows.length) parts.push('<div class="qd-srcbox">' + rows.join('') + '</div>');
+    // 信息盒是中文界面文案(出典/科目),题面容器为 lang=ja,这里标回中文取中文字形
+    if (rows.length) parts.push('<div class="qd-srcbox" lang="zh-CN">' + rows.join('') + '</div>');
     // 原题图片
     if (q.question_image_url) {
       if (/\.pdf$/i.test(q.question_image || q.question_image_url)) {

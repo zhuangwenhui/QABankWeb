@@ -14,8 +14,18 @@
   --red:#A83744; --red-soft:#F8ECEE; --red-ink:#6C1F27; --red-line:#EACFD3;
   --green:#2C7355; --green-soft:#E8F1EC; --green-ink:#1A4632;
   --shadow:0 1px 2px rgba(20,24,31,.03), 0 3px 14px rgba(20,24,31,.05);
-  --font-ui:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans CJK JP","Microsoft YaHei",sans-serif;
-  --font-read:"Charter","Georgia","Songti SC","Noto Serif CJK JP","Yu Mincho",serif;
+  /* 字体按语言分栈(修 Mac 中日字形互串,详见 style.css 顶部说明)。
+     旧值把 Songti SC(中文宋)排在日文衬线前、Hiragino(日文)排在中文黑体前,
+     macOS 上两种语言互相套用了对方的汉字字形。 */
+  --font-latin-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-latin-read:"Charter","Iowan Old Style","Georgia",serif;
+  --font-zh-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --font-zh-read:"Songti SC","Source Han Serif SC","Noto Serif CJK SC",serif;
+  --font-ja-ui:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP",sans-serif;
+  --font-ja-read:"Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",serif;
+  /* 默认按中文;标了 lang=ja 的子树下面会覆盖 */
+  --font-ui:var(--font-latin-ui),var(--font-zh-ui);
+  --font-read:var(--font-latin-read),var(--font-zh-read);
   --font-mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,monospace;
   --radius:10px;
 }
@@ -51,6 +61,13 @@
   --green:#6BC096; --green-soft:#12241B; --green-ink:#A2D8BC;
   --shadow:0 1px 2px rgba(0,0,0,.3), 0 5px 18px rgba(0,0,0,.3);
 }
+
+/* 语言分派:题面与日本語轨标 lang="ja",中文轨标 lang="zh-CN"(见 question_detail.js)。
+   CJK 行高比拉丁文更需要留白;日文标点(、。)本身带右侧空隙,字距不再另加。 */
+.qd-page :lang(ja){ --font-ui:var(--font-latin-ui),var(--font-ja-ui);
+                    --font-read:var(--font-latin-read),var(--font-ja-read); }
+.qd-page :lang(zh),.qd-page :lang(zh-CN){ --font-ui:var(--font-latin-ui),var(--font-zh-ui);
+                    --font-read:var(--font-latin-read),var(--font-zh-read); }
 
 /* ---------- 容器 ---------- */
 .qd-page{

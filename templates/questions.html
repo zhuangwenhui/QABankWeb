@@ -7,30 +7,31 @@
 <style>
   /* 题目管理页局部样式(公共样式见 style.css) */
   .card-latex-clip { max-height: 170px; overflow: hidden; cursor: pointer; }
-  .filter-label { display: block; font-size: .8rem; color: #6c757d; margin-bottom: 2px; }
+  .filter-label { display: block; font-size: .8rem; color: var(--qb-ink-soft); margin-bottom: 2px; }
   /* 窄屏(手机)卡片视图单列,避免 minmax(420px) 撑出整页横向滚动 */
   @media (max-width: 480px) { .question-card-view { grid-template-columns: 1fr; } }
   .history-menu, .preset-menu { min-width: 330px; max-width: 420px; max-height: 380px; overflow-y: auto; }
   .history-item { cursor: pointer; white-space: normal; }
-  .history-item small { color: #adb5bd; }
+  .history-item small { color: var(--qb-ink-faint); }
   .preset-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 6px; }
-  .preset-row:hover { background: #f0f6ff; }
+  .preset-row:hover { background: var(--qb-blue-soft); }
   .preset-row .preset-load { cursor: pointer; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .detail-section-title { font-weight: 600; border-left: 4px solid #0d6efd; padding-left: 8px; margin: 18px 0 10px; }
+  .detail-section-title { font-weight: 600; border-left: 4px solid var(--qb-blue); padding-left: 8px; margin: 18px 0 10px; }
   .detail-info-item { margin-bottom: 6px; }
   .image-upload-preview { margin-top: 8px; display: flex; align-items: flex-start; gap: 8px; }
-  .empty-hint { text-align: center; color: #6c757d; padding: 40px 0; }
+  .empty-hint { text-align: center; color: var(--qb-ink-soft); padding: 40px 0; }
   #cardView .bookmark-btn, .question-table .bookmark-btn { font-size: 1.05rem; }
   .source-hint { font-size: .8rem; margin-top: 4px; min-height: 1.1em; }
-  .advanced-panel-body { background: #f8f9fb; border: 1px solid #e3e6ec; border-radius: 8px; padding: 12px; margin-top: 12px; }
+  .advanced-panel-body { background: var(--qb-panel-2); border: 1px solid var(--qb-hair); border-radius: 8px; padding: 12px; margin-top: 12px; }
   #cardView .empty-hint, #cardView > .w-100 { grid-column: 1 / -1; }
   /* 院試定位筛选条 */
   .locator-bar { display: flex; align-items: flex-start; gap: 12px; }
-  .locator-title { flex: 0 0 auto; font-size: .82rem; font-weight: 600; color: #0d6efd;
-                   background: #eaf2ff; border-radius: 6px; padding: 26px 10px 0; align-self: stretch;
-                   display: flex; align-items: center; white-space: nowrap; }
-  .locator-sep { margin: 10px 0 8px; border-top: 1px dashed #dde2ea; opacity: 1; }
-  .filter-active { border-color: #0d6efd; box-shadow: 0 0 0 1px #0d6efd33; }
+  .locator-title { flex: 0 0 auto; font-size: .82rem; font-weight: 600; color: var(--qb-brand-ink);
+                   background: var(--qb-brand-soft); border-radius: 6px; padding: 26px 10px 0; align-self: stretch;
+                   display: flex; align-items: center; white-space: nowrap; letter-spacing: .02em; }
+  .locator-sep { margin: 10px 0 8px; border-top: 1px dashed var(--qb-hair); opacity: 1; }
+  /* 已生效的筛选项描边加重,一眼看出当前限定了哪些维度 */
+  .filter-active { border-color: var(--qb-brand); box-shadow: 0 0 0 1px var(--qb-brand) inset; }
   @media (max-width: 767px) {
     .locator-bar { flex-direction: column; gap: 4px; }
     .locator-title { align-self: flex-start; padding: 4px 10px; }
@@ -127,16 +128,11 @@
     <hr class="locator-sep">
     <div class="row g-2">
       <div class="col-6 col-md-2">
-        <label class="filter-label" for="filterSubject">课程</label>
+        <!-- 原标签"课程":实为科目细类(线性代数/微积分…),与定位条的"学科范围"是粗细两级 -->
+        <label class="filter-label" for="filterSubject">科目(细分)</label>
         <select id="filterSubject" class="form-select form-select-sm">
-          <option value="">全部课程</option>
+          <option value="">全部科目</option>
           {% for s in SUBJECTS %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label class="filter-label" for="filterChapter">章节</label>
-        <select id="filterChapter" class="form-select form-select-sm">
-          <option value="">全部章节</option>
         </select>
       </div>
       <div class="col-6 col-md-2">
@@ -152,7 +148,7 @@
       </div>
       <div class="col-12 col-md-3">
         <label class="filter-label" for="filterSearch">关键词</label>
-        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="题目/解答/来源/章节">
+        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="题目/解答/出处">
       </div>
     </div>
     <!-- 高级搜索(可折叠) -->
@@ -168,12 +164,20 @@
             <input type="text" id="advTags" class="form-control form-control-sm" placeholder="如:固有值,对角化">
           </div>
           <div class="col-6 col-md-2">
-            <label class="filter-label" for="advDateFrom">创建起始</label>
-            <input type="date" id="advDateFrom" class="form-control form-control-sm">
+            <!-- chapter 列对院試题存的是年份(已由定位条的"年份"筛选覆盖),
+                 仅旧知识点题库用它存真章节,故降级到此处、并写明适用范围 -->
+            <label class="filter-label" for="filterChapter">知识点章节(旧题库)</label>
+            <select id="filterChapter" class="form-select form-select-sm">
+              <option value="">全部章节</option>
+            </select>
           </div>
           <div class="col-6 col-md-2">
-            <label class="filter-label" for="advDateTo">创建截止</label>
-            <input type="date" id="advDateTo" class="form-control form-control-sm">
+            <label class="filter-label" for="advDateFrom">入库起始</label>
+            <input type="date" id="advDateFrom" class="form-control form-control-sm" title="按题目导入题库的日期筛选,不是考试年份">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="filter-label" for="advDateTo">入库截止</label>
+            <input type="date" id="advDateTo" class="form-control form-control-sm" title="按题目导入题库的日期筛选,不是考试年份">
           </div>
           <div class="col-12 col-md-3 d-flex gap-2">
             <button class="btn btn-primary btn-sm flex-fill" id="btnAdvSearch">
@@ -209,10 +213,10 @@
         <tr>
           <th style="width:36px"><input type="checkbox" class="form-check-input" id="checkAll"></th>
           <th>编号</th>
-          <th>课程</th>
-          <th>章节</th>
+          <th>科目</th>
+          <th>年份</th>
           <th>难度</th>
-          <th>来源</th>
+          <th>出处</th>
           <th>标签</th>
           <th>题目预览</th>
           <th>操作</th>

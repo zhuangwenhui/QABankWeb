@@ -35,8 +35,9 @@
   const HISTORY_LIMIT = 20;
 
   const FILTER_LABELS = {
-    subject: '课程', chapter: '章节', difficulty: '难度', source: '来源',
-    search: '关键词', questionId: 'ID', tagFilter: '标签', dateFrom: '从', dateTo: '至',
+    school: '院校', major: '専攻', year: '年份', subjectGroup: '学科',
+    subject: '科目', chapter: '章节', difficulty: '难度', source: '出处',
+    search: '关键词', questionId: 'ID', tagFilter: '标签', dateFrom: '入库从', dateTo: '入库至',
   };
 
   const state = {
@@ -913,10 +914,10 @@
     if (openPageLink) openPageLink.href = `/questions/${question.id}`;
     el.detailInfo.innerHTML = `
       <div class="col-md-4 detail-info-item"><span class="text-muted">编号:</span>#${question.id}</div>
-      <div class="col-md-4 detail-info-item"><span class="text-muted">课程:</span>${escapeHtml(question.subject)}</div>
+      <div class="col-md-4 detail-info-item"><span class="text-muted">科目:</span>${escapeHtml(question.subject)}</div>
       <div class="col-md-4 detail-info-item"><span class="text-muted">难度:</span>${difficultyBadge(question.difficulty)}</div>
-      <div class="col-md-4 detail-info-item"><span class="text-muted">章节:</span>${escapeHtml(question.chapter || '-')}</div>
-      <div class="col-md-4 detail-info-item"><span class="text-muted">来源:</span>${escapeHtml(question.source || '-')}</div>
+      <div class="col-md-4 detail-info-item"><span class="text-muted">年份/章节:</span>${escapeHtml(question.chapter || '-')}</div>
+      <div class="col-md-4 detail-info-item"><span class="text-muted">出处:</span>${escapeHtml(question.source || '-')}</div>
       <div class="col-md-4 detail-info-item"><span class="text-muted">创建时间:</span>${escapeHtml(question.created_at || '-')}</div>
       <div class="col-12 detail-info-item"><span class="text-muted">标签:</span>${tagBadges(question.tags) || '<span class="text-muted">无</span>'}</div>`;
 
