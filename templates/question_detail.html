@@ -62,6 +62,23 @@
     </section>
   </div>
 
+  <!-- 我的作答:上传手写作答照片 → 采点评分(由 question_detail.js 驱动) -->
+  <section class="qd-answer" id="qdAnswer" aria-label="我的作答">
+    <div class="qd-answer-head"><span class="qd-answer-ic">✍️</span>我的作答 · 採点</div>
+    <p class="qd-answer-intro" lang="zh-CN">上传手写作答的照片,系统按本题「采点标准」逐项批改给分,并指出得分点与失分处。</p>
+    <div class="qd-upload" id="qdUpload">
+      <input type="file" id="qdFileInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+      <div class="qd-upload-row">
+        <button type="button" class="qd-upbtn" id="qdPickBtn"><i class="fa-solid fa-camera"></i> 选择作答照片</button>
+        <button type="button" class="qd-upbtn primary" id="qdSubmitBtn" disabled>提交批改</button>
+        <span class="qd-upload-hint">最多 4 张 · 总计 ≤ 20MB</span>
+      </div>
+      <div class="qd-thumbs" id="qdThumbs"></div>
+    </div>
+    <div class="qd-grade" id="qdGrade" hidden></div>
+    <div class="qd-subhistory" id="qdSubHistory" hidden></div>
+  </section>
+
   <!-- 相关题:同知识点/同科目推荐,顺藤摸瓜(由 question_detail.js 填充,空则隐藏) -->
   <section class="qd-related" id="qdRelated" hidden aria-label="相关题">
     <div class="qd-related-head"><span class="qd-related-ic">🔗</span>相关题 · 関連問題</div>

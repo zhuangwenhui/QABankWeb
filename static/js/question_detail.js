@@ -421,6 +421,151 @@
     }).catch(function () { wrap.hidden = true; });
   }
 
+  // ---------------------------------------------------------------- 我的作答(采点评分)
+  var answerFiles = [];   // 待提交 File(≤4)
+  function initAnswer() {
+    var sec = document.getElementById('qdAnswer');
+    if (!sec) return;
+    var fileInput = document.getElementById('qdFileInput');
+    var pickBtn = document.getElementById('qdPickBtn');
+    var submitBtn = document.getElementById('qdSubmitBtn');
+    var thumbs = document.getElementById('qdThumbs');
+
+    function renderThumbs() {
+      thumbs.innerHTML = '';
+      answerFiles.forEach(function (f, i) {
+        var cell = document.createElement('div');
+        cell.className = 'qd-thumb';
+        var img = document.createElement('img');
+        img.alt = '作答预览'; img.src = URL.createObjectURL(f);
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'qd-thumb-x'; x.dataset.i = i;
+        x.setAttribute('aria-label', '移除'); x.textContent = '×';
+        cell.appendChild(img); cell.appendChild(x);
+        thumbs.appendChild(cell);
+      });
+      submitBtn.disabled = answerFiles.length === 0;
+    }
+    pickBtn.addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () {
+      Array.prototype.slice.call(fileInput.files || []).forEach(function (f) {
+        if (answerFiles.length < 4) answerFiles.push(f);
+      });
+      if (answerFiles.length >= 4 && window.showToast) window.showToast('最多 4 张', 'warning');
+      fileInput.value = '';
+      renderThumbs();
+    });
+    thumbs.addEventListener('click', function (e) {
+      var x = e.target.closest && e.target.closest('.qd-thumb-x');
+      if (!x) return;
+      answerFiles.splice(Number(x.dataset.i), 1);
+      renderThumbs();
+    });
+    submitBtn.addEventListener('click', function () {
+      if (!answerFiles.length) return;
+      var grade = document.getElementById('qdGrade');
+      submitBtn.disabled = true;
+      grade.hidden = false;
+      grade.innerHTML = '<div class="qd-grading"><span class="qd-spin"></span>' +
+        '批改中…(手写识别与采点可能需十几秒)</div>';
+      var fd = new FormData();
+      answerFiles.forEach(function (f) { fd.append('images', f); });
+      apiFetch('/api/questions/' + qid + '/submissions', { method: 'POST', body: fd })
+        .then(function (resp) {
+          answerFiles = []; renderThumbs();
+          renderGrade(resp.data.submission);
+          loadHistory();
+        }).catch(function (err) {
+          grade.innerHTML = '<div class="qd-grade-err">提交失败:' +
+            (window.escapeHtml ? window.escapeHtml(err.message) : err.message) + '</div>';
+          submitBtn.disabled = false;
+        });
+    });
+    loadHistory();
+  }
+
+  // 渲染一份评分结果:总分环 + 采点逐项进度条 + 作答转写(折叠)+ 综合反馈。
+  function renderGrade(sub) {
+    var grade = document.getElementById('qdGrade');
+    if (!grade || !sub) return;
+    var esc = window.escapeHtml || function (x) { return x; };
+    grade.hidden = false;
+    if (sub.status === 'failed') {
+      grade.innerHTML = '<div class="qd-grade-err">批改失败:' + esc(sub.error || '未知错误') + '</div>';
+      return;
+    }
+    var isStub = sub.grader === 'stub';
+    var pct = sub.max_score > 0 ? Math.round((sub.total_score / sub.max_score) * 100) : 0;
+    var html = '';
+    if (isStub) {
+      html += '<div class="qd-grade-stub">⚠️ AI 阅卷引擎尚未配置,以下为占位。你的作答已保存,配置后可重新批改。</div>';
+    }
+    html += '<div class="qd-grade-score">' +
+      '<div class="qd-grade-num"><b>' + (sub.total_score != null ? sub.total_score : '—') +
+      '</b><span>/ ' + (sub.max_score || 0) + '</span></div>' +
+      '<div class="qd-grade-ring" style="--pct:' + pct + '"><span>' + pct + '%</span></div></div>';
+    var bd = sub.rubric_breakdown || [];
+    if (bd.length) {
+      html += '<div class="qd-grade-bd">';
+      bd.forEach(function (it) {
+        var w = it.max > 0 ? Math.round((it.awarded / it.max) * 100) : 0;
+        html += '<div class="qd-bd-item"><div class="qd-bd-top">' +
+          '<span class="qd-bd-label">' + esc(it.label) + '</span>' +
+          '<span class="qd-bd-pts">' + it.awarded + ' / ' + it.max + '</span></div>' +
+          '<div class="qd-bd-bar"><i style="width:' + w + '%"></i></div>' +
+          (it.comment ? '<div class="qd-bd-comment">' + esc(it.comment) + '</div>' : '') + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<details class="qd-grade-trans"><summary>我们读到的作答</summary>' +
+      '<div class="qd-trans-body solbody" id="qdTransBody"></div></details>';
+    html += '<div class="qd-grade-fb"><div class="qd-fb-h">综合反馈</div>' +
+      '<div class="qd-fb-body solbody" id="qdFbBody"></div></div>';
+    grade.innerHTML = html;
+    var tb = document.getElementById('qdTransBody');
+    if (tb) { renderInto(tb, sub.transcription || '(无转写)', 'ja'); typeset(tb); }
+    var fb = document.getElementById('qdFbBody');
+    if (fb) { renderInto(fb, sub.feedback || '', 'ja'); typeset(fb); }
+  }
+
+  function loadHistory() {
+    var box = document.getElementById('qdSubHistory');
+    if (!box) return;
+    apiFetch('/api/questions/' + qid + '/submissions').then(function (resp) {
+      var subs = (resp.data && resp.data.submissions) || [];
+      if (!subs.length) { box.hidden = true; return; }
+      var esc = window.escapeHtml || function (x) { return x; };
+      box.hidden = false;
+      box.innerHTML = '<div class="qd-subhist-h">历史作答(' + subs.length + ')</div>' +
+        subs.map(function (s) {
+          var score = s.status === 'graded' ? (s.total_score + ' / ' + s.max_score) :
+            (s.status === 'failed' ? '失败' : '处理中');
+          return '<div class="qd-subhist-row">' +
+            '<span class="qd-subhist-date">' + esc(s.created_at || '') + '</span>' +
+            '<span class="qd-subhist-score">' + esc(String(score)) + '</span>' +
+            '<button type="button" class="qd-subhist-view" data-id="' + s.id + '">查看</button>' +
+            '<button type="button" class="qd-subhist-del" data-id="' + s.id + '" aria-label="删除">🗑</button>' +
+            '</div>';
+        }).join('');
+      box.querySelectorAll('.qd-subhist-view').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var s = subs.filter(function (x) { return x.id === Number(b.dataset.id); })[0];
+          if (s) {
+            renderGrade(s);
+            document.getElementById('qdGrade').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        });
+      });
+      box.querySelectorAll('.qd-subhist-del').forEach(function (b) {
+        b.addEventListener('click', function () {
+          apiFetch('/api/submissions/' + b.dataset.id, { method: 'DELETE' })
+            .then(function () { loadHistory(); if (window.showToast) window.showToast('已删除', 'success'); })
+            .catch(function (e) { if (window.showToast) window.showToast(e.message, 'danger'); });
+        });
+      });
+    }).catch(function () { box.hidden = true; });
+  }
+
   // ---------------------------------------------------------------- 装载
   function load() {
     apiFetch('/api/questions/' + qid).then(function (resp) {
@@ -433,6 +578,7 @@
       renderHints(q.hints);                   // 渐进提示(逐层揭示,惰性)
       initMastery();   // 回填并高亮当前掌握状态
       renderRelated(); // 相关题(独立异步拉取,不阻塞正文)
+      initAnswer();    // 我的作答:上传批改 + 历史(独立异步)
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
       var ja = (q.solution_ja || '').trim();
