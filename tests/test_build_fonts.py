@@ -114,6 +114,29 @@ def test_emit_fontface_css_applies_metrics():
     assert "descent-override:23.0%" in css
 
 
+def test_select_subset_drops_glyphs_font_lacks():
+    # 字体只被要求编码它 cmap 里真有的字形;缺的字被剔除,不再触发致命失败
+    charset = set("A中あ")
+    font_cps = {ord("A"), ord("中")}      # 假 cmap:没有 'あ'
+    picked = bf.select_subset(charset, font_cps)
+    assert picked == {"A", "中"}
+    assert "あ" not in picked
+
+
+def test_global_missing_passes_when_union_covers_corpus():
+    # 并集覆盖全语料(含跨脚本:中文由某字体、日文由另一字体覆盖)→ 无缺失
+    corpus = set("A中あ")
+    covered = {ord("A"), ord("中"), ord("あ")}
+    assert bf.global_missing(corpus, covered) == set()
+
+
+def test_global_missing_detects_uncovered_corpus_char():
+    # 语料里 'あ' 不在任何 cmap → 检出;控制符 '\n' 不计
+    corpus = set("A中あ\n")
+    covered = {ord("A"), ord("中")}
+    assert bf.global_missing(corpus, covered) == {"あ"}
+
+
 def test_verify_coverage_reports_missing():
     cmap = {ord("a"), ord("b")}
     missing = bf.verify_coverage(cmap, set("abc"))

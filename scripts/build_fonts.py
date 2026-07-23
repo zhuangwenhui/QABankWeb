@@ -94,8 +94,24 @@ def subset_font(src, chars, out):
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
+def font_codepoints(src):
+    """源/子集字体的 cmap 码点集(该字体实际能编码的字形)。"""
+    from fontTools.ttLib import TTFont
+    return set(TTFont(src).getBestCmap())
+
+
+def select_subset(charset, font_cps):
+    """只保留该字体真有的字形——字体永远不会被要求编码它没有的字。"""
+    return {c for c in charset if ord(c) in font_cps}
+
+
 def verify_coverage(cmap_codepoints, required):
     return {c for c in required if ord(c) not in cmap_codepoints}
+
+
+def global_missing(corpus, covered_codepoints):
+    """全局覆盖门:语料里某字若在任何已建字体里都无字形则算缺失(控制符除外)。"""
+    return {c for c in corpus if not _is_control(c) and ord(c) not in covered_codepoints}
 
 
 def fallback_metrics(src):
@@ -131,18 +147,23 @@ def main():
     cn_fb = set((ROOT/"scripts/charset_cn.txt").read_text("utf-8"))
     jp_fb = set((ROOT/"scripts/charset_jp.txt").read_text("utf-8"))
     corpus = set(pathlib.Path(a.corpus_file).read_text("utf-8")) if a.corpus_file else extract_corpus(a.db)
-    from fontTools.ttLib import TTFont
     metrics = {}
+    built_cmaps = []
     for fam, prefix, script, weights, fbs in FONT_TABLE:
-        chars = charset_for_font(script, corpus, cn_fb, jp_fb)
+        charset = charset_for_font(script, corpus, cn_fb, jp_fb)
         for w, srcname, suf in weights:
             src = ROOT/f"fonts_src/{srcname}"
             out = ROOT/f"static/fonts/{prefix}-{suf}.subset.woff2"
-            subset_font(src, chars, out)
-            miss = verify_coverage(set(TTFont(out).getBestCmap()), chars)
-            if miss:
-                raise SystemExit(f"[missing glyphs] {out.name}: {''.join(sorted(miss))[:50]}")
+            # 只喂该字体真有的字形:日文字体缺的简体专用字、Shippori 缺的半角片假名等自然剔除
+            to_subset = select_subset(charset, font_codepoints(src))
+            subset_font(src, to_subset, out)
+            built_cmaps.append(font_codepoints(out))
         metrics[fam] = fallback_metrics(ROOT/f"fonts_src/{weights[0][1]}")
+    # 全局覆盖门:语料里每个字须被任意一款已建字体覆盖(跨脚本由并集天然通过)
+    union = set().union(*built_cmaps) if built_cmaps else set()
+    missing = global_missing(corpus, union)
+    if missing:
+        raise SystemExit(f"[global missing glyphs] {''.join(sorted(missing))[:80]}")
     (ROOT/"static/css/fonts.css").write_text(emit_fontface_css(metrics), "utf-8")
     print("build done")
 
