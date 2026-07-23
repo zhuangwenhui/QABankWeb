@@ -17,7 +17,7 @@ from sqlalchemy import or_
 import config
 from auth import login_required
 from logging_setup import audit
-from models import Question, ViewLog, db
+from models import Question, QuestionProgress, ViewLog, db
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
 
@@ -298,6 +298,22 @@ def list_questions():
         subs = dict(_SUBJECT_GROUPS).get(subject_group)
         if subs:
             query = query.filter(Question.subject.in_(subs))
+
+    # 掌握状态筛选(2026-07-23):按当前用户的 question_progress 过滤。
+    # user_id 条件必须放进 outerjoin 的 ON 子句,否则 outer join 退化为 inner join,
+    # new(无进度)一档就永远查不到题。仅在有值时才 join,不影响其他查询的计数/分页。
+    mastery_status = (args.get('masteryStatus') or '').strip()
+    if mastery_status in ('new', 'done', 'mastered'):
+        query = query.outerjoin(
+            QuestionProgress,
+            (QuestionProgress.question_id == Question.id)
+            & (QuestionProgress.user_id == g.user.id))
+        if mastery_status == 'new':
+            query = query.filter(QuestionProgress.id.is_(None))
+        elif mastery_status == 'done':
+            query = query.filter(QuestionProgress.status.in_(('done', 'mastered')))
+        else:  # mastered
+            query = query.filter(QuestionProgress.status == 'mastered')
 
     pagination = (query.order_by(Question.created_at.desc(), Question.id.desc())
                        .paginate(page=page, per_page=per_page, error_out=False))

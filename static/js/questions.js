@@ -36,7 +36,7 @@
 
   const FILTER_LABELS = {
     school: '院校', major: '専攻', year: '年份', subjectGroup: '学科',
-    subject: '科目', chapter: '章节', difficulty: '难度', source: '出处',
+    subject: '科目', chapter: '章节', difficulty: '难度', masteryStatus: '掌握状态', source: '出处',
     search: '关键词', questionId: 'ID', tagFilter: '标签', dateFrom: '入库从', dateTo: '入库至',
   };
 
@@ -48,6 +48,7 @@
     questions: [],              // 当前页题目
     selected: new Set(),        // 跨页保留的选中题目 id
     bookmarked: new Set(),      // 已在错题本中的题目 id(当前已知)
+    mastery: new Map(),         // 掌握状态回填:qid → 'done' | 'mastered'(无键=未做)
     viewMode: 'table',          // 'table' | 'card'
     editingId: null,            // 正在编辑的题目 id(null = 新建)
     editImages: { question_image: null, solution_image: null },
@@ -71,7 +72,7 @@
       'btnViewTable', 'btnViewCard', 'checkAllPage', 'checkAll',
       'historyMenu', 'btnPresetDropdown', 'presetNameInput', 'btnSavePreset', 'presetList',
       'btnNewQuestion', 'filterSubject', 'filterChapter', 'filterDifficulty',
-      'filterSchool', 'filterMajor', 'filterYear', 'filterSubjectGroup',
+      'filterMastery', 'filterSchool', 'filterMajor', 'filterYear', 'filterSubjectGroup',
       'filterSource', 'filterSearch', 'sourceOptions', 'editChapterOptions',
       'advancedPanel', 'advQuestionId', 'advTags', 'advDateFrom', 'advDateTo',
       'btnAdvSearch', 'btnAdvReset',
@@ -130,6 +131,7 @@
     });
     el.filterChapter.addEventListener('change', resetAndLoad);
     el.filterDifficulty.addEventListener('change', resetAndLoad);
+    el.filterMastery.addEventListener('change', resetAndLoad);
 
     // 院試定位:院校变→重建専攻级联;任一变更→高亮 + 重新加载
     el.filterSchool.addEventListener('change', () => {
@@ -277,6 +279,7 @@
       subject: el.filterSubject.value,
       chapter: el.filterChapter.value,
       difficulty: el.filterDifficulty.value,
+      masteryStatus: el.filterMastery.value,
       source: el.filterSource.value.trim(),
       search: el.filterSearch.value.trim(),
       questionId: el.advQuestionId.value.trim(),
@@ -299,6 +302,7 @@
     el.filterSubject.value = f.subject || '';
     await loadChapterOptions(f.chapter || '');
     el.filterDifficulty.value = f.difficulty || '';
+    el.filterMastery.value = f.masteryStatus || '';
     el.filterSource.value = f.source || '';
     el.filterSearch.value = f.search || '';
     el.advQuestionId.value = f.questionId || '';
@@ -517,6 +521,7 @@
       renderQuestions();
       renderPagination();
       refreshBookmarks();
+      refreshProgress();
       if (options.record !== false) recordHistory(filters);
     } catch (e) {
       if (seq !== loadSeq) return;
@@ -552,7 +557,7 @@
     return `
       <tr data-id="${q.id}" class="${selected ? 'selected' : ''}">
         <td><input type="checkbox" class="form-check-input row-check" data-id="${q.id}" ${selected ? 'checked' : ''}></td>
-        <td class="text-nowrap">#${q.id}</td>
+        <td class="text-nowrap"><span class="mastery-dot" data-id="${q.id}" title="做题状态"></span>#${q.id}</td>
         <td class="text-nowrap">${escapeHtml(q.subject)}</td>
         <td>${escapeHtml(q.chapter || '-')}</td>
         <td>${difficultyBadge(q.difficulty)}</td>
@@ -578,7 +583,7 @@
       <div class="question-card-item${selected ? ' selected' : ''}" data-id="${q.id}">
         <div class="d-flex align-items-center gap-2 mb-2">
           <input type="checkbox" class="form-check-input row-check m-0" data-id="${q.id}" ${selected ? 'checked' : ''}>
-          <span class="fw-semibold">#${q.id}</span>
+          <span class="fw-semibold"><span class="mastery-dot" data-id="${q.id}" title="做题状态"></span>#${q.id}</span>
           <span class="badge bg-light text-dark border">${escapeHtml(q.subject)}</span>
           ${difficultyBadge(q.difficulty)}
           <i class="fa-solid fa-bookmark bookmark-btn${marked ? ' bookmarked' : ''} ms-auto" data-id="${q.id}" title="加入/移出错题本"></i>
@@ -664,6 +669,9 @@
 
   /** 列表点击(事件委托,表格/卡片共用) */
   function onListClick(e) {
+    const dot = e.target.closest('.mastery-dot');
+    if (dot) { cycleMastery(Number(dot.dataset.id)); return; }
+
     const bookmark = e.target.closest('.bookmark-btn');
     if (bookmark) { toggleBookmark(Number(bookmark.dataset.id)); return; }
 
@@ -892,6 +900,52 @@
       .querySelectorAll(`#tableView .bookmark-btn[data-id="${id}"], #cardView .bookmark-btn[data-id="${id}"]`)
       .forEach((btn) => btn.classList.toggle('bookmarked', marked));
     if (state.detailId === id) updateDetailBookmarkBtn();
+  }
+
+  /* ==================================================== 9b. 掌握状态(做题进度) */
+
+  /** 渲染列表后批量回填做题状态色块(进度模块不可用时静默降级) */
+  async function refreshProgress() {
+    const ids = state.questions.map((q) => q.id);
+    if (!ids.length) return;
+    try {
+      const resp = await apiFetch('/api/progress/check_batch', {
+        method: 'POST', body: { question_ids: ids },
+      });
+      const statuses = (resp.data && resp.data.statuses) || {};
+      ids.forEach((id) => {
+        const st = statuses[String(id)];
+        if (st) state.mastery.set(id, st); else state.mastery.delete(id);
+        updateMasteryDom(id);
+      });
+    } catch (e) {
+      console.warn('做题状态查询失败:', e.message);
+    }
+  }
+
+  /** 同步某题在列表/卡片中的状态色块外观 */
+  function updateMasteryDom(id) {
+    const status = state.mastery.get(id);   // 'done' | 'mastered' | undefined(未做)
+    document
+      .querySelectorAll(`#tableView .mastery-dot[data-id="${id}"], #cardView .mastery-dot[data-id="${id}"]`)
+      .forEach((dot) => {
+        dot.classList.toggle('is-done', status === 'done');
+        dot.classList.toggle('is-mastered', status === 'mastered');
+        dot.classList.toggle('is-new', !status);
+      });
+  }
+
+  /** 点击色块循环切换 未做→做过→已掌握→未做,并写回后端 */
+  async function cycleMastery(id) {
+    const current = state.mastery.get(id);            // undefined | 'done' | 'mastered'
+    const next = current === 'done' ? 'mastered' : current === 'mastered' ? 'none' : 'done';
+    try {
+      await apiFetch('/api/progress/set', { method: 'POST', body: { question_id: id, status: next } });
+      if (next === 'none') state.mastery.delete(id); else state.mastery.set(id, next);
+      updateMasteryDom(id);
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
   }
 
   /* ============================================================ 10. 题目详情 Modal */

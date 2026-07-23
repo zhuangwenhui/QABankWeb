@@ -142,6 +142,15 @@
           {% for d in DIFFICULTIES %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
         </select>
       </div>
+      <div class="col-6 col-md-2">
+        <label class="filter-label" for="filterMastery">掌握状态</label>
+        <select id="filterMastery" class="form-select form-select-sm">
+          <option value="">全部状态</option>
+          <option value="new">未做</option>
+          <option value="done">做过</option>
+          <option value="mastered">已掌握</option>
+        </select>
+      </div>
       <div class="col-6 col-md-3">
         <label class="filter-label" for="filterSource">来源</label>
         <input type="text" id="filterSource" class="form-control form-control-sm" list="sourceOptions" placeholder="来源(模糊匹配)">

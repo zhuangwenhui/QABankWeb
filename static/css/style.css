@@ -362,3 +362,18 @@ tr.selected {
   border: 1px solid var(--qb-hair);
   border-radius: 6px;
 }
+
+/* ============ 做题状态色块(洛谷式小方块) ============ */
+.mastery-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 6px;
+  background: var(--qb-hair);   /* is-new:默认灰 */
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background .15s;
+}
+.mastery-dot.is-done { background: var(--qb-blue); }
+.mastery-dot.is-mastered { background: var(--qb-green); }
