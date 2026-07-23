@@ -51,10 +51,14 @@ def create_app(config_object=None):
     from api.error_book import bp as error_book_bp
     from api.feedback import bp as feedback_bp
     from api.overview import bp as overview_bp
+    from api.progress import bp as progress_bp
+    from api.review import bp as review_bp
     app.register_blueprint(questions_bp)
     app.register_blueprint(error_book_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(overview_bp)
+    app.register_blueprint(progress_bp)
+    app.register_blueprint(review_bp)
 
     setup_logging(app)  # 须先于 load_user_and_csrf 注册,保证 g.request_id 先于其他 hook 就绪
 
