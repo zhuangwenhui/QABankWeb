@@ -37,7 +37,8 @@
   const FILTER_LABELS = {
     school: '院校', major: '専攻', year: '年份', subjectGroup: '学科',
     subject: '科目', chapter: '章节', difficulty: '难度', masteryStatus: '掌握状态', source: '出处',
-    search: '关键词', questionId: 'ID', tagFilter: '标签', dateFrom: '入库从', dateTo: '入库至',
+    search: '关键词', questionId: 'ID', tagFilter: '标签', knowledgeTags: '知识点',
+    dateFrom: '入库从', dateTo: '入库至',
   };
 
   const state = {
@@ -48,6 +49,7 @@
     questions: [],              // 当前页题目
     selected: new Set(),        // 跨页保留的选中题目 id
     bookmarked: new Set(),      // 已在错题本中的题目 id(当前已知)
+    knowledgeTags: new Set(),   // 已选中的规范化知识点标签名(多维筛选)
     mastery: new Map(),         // 掌握状态回填:qid → 'done' | 'mastered'(无键=未做)
     viewMode: 'table',          // 'table' | 'card'
     editingId: null,            // 正在编辑的题目 id(null = 新建)
@@ -76,6 +78,7 @@
       'filterSource', 'filterSearch', 'sourceOptions', 'editChapterOptions',
       'advancedPanel', 'advQuestionId', 'advTags', 'advDateFrom', 'advDateTo',
       'btnAdvSearch', 'btnAdvReset',
+      'ktPanel', 'ktChips', 'ktEmpty', 'btnKtClear', 'ktModeAny', 'ktModeAll',
       'batchToolbar', 'batchCount', 'btnBatchDelete', 'btnBatchTags',
       'btnBatchSource', 'btnBatchErrorBook', 'btnBatchCancel',
       'tableView', 'questionTbody', 'cardView',
@@ -112,6 +115,7 @@
     renderPresetList();
     await loadChapterOptions('');
     await loadFacets();
+    await loadKnowledgeFacets();
     initProgressPanel();  // 顶部进度面板:与列表加载并行,失败静默降级,不阻塞
     await loadQuestions({ record: false });
   }
@@ -288,6 +292,14 @@
       loadQuestions({ record: false });
     });
 
+    // ---- 知识点标签多维筛选
+    if (el.ktChips) el.ktChips.addEventListener('click', onKnowledgeChipClick);
+    if (el.btnKtClear) el.btnKtClear.addEventListener('click', () => clearKnowledgeTags());
+    [el.ktModeAny, el.ktModeAll].forEach((r) => {
+      // 模式切换仅在已选标签时才影响结果,无选中时切换不必打扰列表
+      if (r) r.addEventListener('change', () => { if (state.knowledgeTags.size) resetAndLoad(); });
+    });
+
     // ---- 搜索历史 / 预设
     el.historyMenu.addEventListener('click', onHistoryMenuClick);
     el.btnSavePreset.addEventListener('click', saveCurrentPreset);
@@ -412,6 +424,9 @@
       search: el.filterSearch.value.trim(),
       questionId: el.advQuestionId.value.trim(),
       tagFilter: el.advTags.value.trim(),
+      knowledgeTags: [...state.knowledgeTags].join(','),
+      // tagMode 仅在有选中标签时才携带,避免默认 'any' 让空筛选被误判为"有值"进搜索历史
+      tagMode: state.knowledgeTags.size ? getTagMode() : '',
       dateFrom: el.advDateFrom.value,
       dateTo: el.advDateTo.value,
     };
@@ -435,6 +450,13 @@
     el.filterSearch.value = f.search || '';
     el.advQuestionId.value = f.questionId || '';
     el.advTags.value = f.tagFilter || '';
+    // 知识点标签回填:恢复选中集合与匹配模式,再重绘 chips 高亮
+    state.knowledgeTags = new Set(
+      String(f.knowledgeTags || '').split(',').map((s) => s.trim()).filter(Boolean));
+    const mode = f.tagMode === 'all' ? 'all' : 'any';
+    if (el.ktModeAny) el.ktModeAny.checked = mode === 'any';
+    if (el.ktModeAll) el.ktModeAll.checked = mode === 'all';
+    renderKnowledgeChips();
     el.advDateFrom.value = f.dateFrom || '';
     el.advDateTo.value = f.dateTo || '';
     state.page = 1;
@@ -499,6 +521,64 @@
     [['filterSchool'], ['filterMajor'], ['filterYear'], ['filterSubjectGroup']].forEach(([id]) => {
       el[id].classList.toggle('filter-active', !!el[id].value);
     });
+  }
+
+  // ---- 知识点标签多维筛选(数据来自 /api/questions/tag_facets) ----
+  let knowledgeFacets = [];   // [{category, tags:[{name, count}]}]
+
+  /** 拉取知识点标签字典并渲染 chips;空标签库则隐藏面板、显示占位提示。 */
+  async function loadKnowledgeFacets() {
+    try {
+      const resp = await apiFetch('/api/questions/tag_facets');
+      knowledgeFacets = (resp.data && resp.data.categories) || [];
+    } catch (e) {
+      console.warn('加载知识点标签字典失败:', e.message);
+      knowledgeFacets = [];
+    }
+    renderKnowledgeChips();
+  }
+
+  /** 渲染知识点 chips(按 category 分组);已选中项高亮。 */
+  function renderKnowledgeChips() {
+    if (!el.ktPanel) return;
+    const hasTags = knowledgeFacets.some((c) => (c.tags || []).length);
+    // 空标签库:整块隐藏,不干扰其他高级搜索项
+    el.ktPanel.hidden = !hasTags;
+    el.ktEmpty.hidden = hasTags;
+    if (!hasTags) { el.ktChips.innerHTML = ''; return; }
+    el.ktChips.innerHTML = knowledgeFacets.map((cat) => {
+      const chips = (cat.tags || []).map((t) => {
+        const active = state.knowledgeTags.has(t.name) ? ' is-active' : '';
+        return `<span class="kt-chip${active}" role="button" data-name="${escapeHtml(t.name)}">`
+          + `${escapeHtml(t.name)}<i class="kt-count">${t.count}</i></span>`;
+      }).join('');
+      return `<div class="kt-cat"><span class="kt-cat-name">${escapeHtml(cat.category)}</span>${chips}</div>`;
+    }).join('');
+  }
+
+  /** 当前知识点匹配模式(any / all)。 */
+  function getTagMode() {
+    return el.ktModeAll && el.ktModeAll.checked ? 'all' : 'any';
+  }
+
+  /** chip 点选:切换标签选中态并刷新列表。 */
+  function onKnowledgeChipClick(e) {
+    const chip = e.target.closest('.kt-chip');
+    if (!chip) return;
+    const name = chip.dataset.name;
+    if (!name) return;
+    if (state.knowledgeTags.has(name)) state.knowledgeTags.delete(name);
+    else state.knowledgeTags.add(name);
+    chip.classList.toggle('is-active', state.knowledgeTags.has(name));
+    resetAndLoad();
+  }
+
+  /** 清除全部选中的知识点标签。 */
+  function clearKnowledgeTags(reload = true) {
+    if (!state.knowledgeTags.size) return;
+    state.knowledgeTags.clear();
+    renderKnowledgeChips();
+    if (reload) resetAndLoad();
   }
 
   /** 重置到第一页并加载(筛选变更/执行搜索的统一入口) */

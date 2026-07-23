@@ -21,10 +21,11 @@ def test_upgrade_creates_schema(tmp_path):
         upgrade(directory=MIGRATIONS_DIR)  # 显式传目录,不依赖 CWD
         names = {row[0] for row in db.session.execute(
             db.text("SELECT name FROM sqlite_master WHERE type='table'"))}
-        # 覆盖全部三条迁移的产物:初始 5 表 + generated_files(Task8)
-        # + question_progress(学习闭环)
+        # 覆盖全部迁移的产物:初始 5 表 + generated_files(Task8)
+        # + question_progress(学习闭环)+ tags/question_tags(知识点标签)
         for table in ('users', 'questions', 'error_book', 'feedback',
-                      'view_logs', 'generated_files', 'question_progress'):
+                      'view_logs', 'generated_files', 'question_progress',
+                      'tags', 'question_tags'):
             assert table in names, f'缺表:{table}'
         # users 的新列(Task10 迁移):must_change_password / is_active
         user_cols = {row[1] for row in db.session.execute(
@@ -45,3 +46,13 @@ def test_upgrade_creates_schema(tmp_path):
             db.text("PRAGMA table_info(error_book)"))}
         for col in ('ease', 'interval_days', 'repetitions', 'due_at', 'last_reviewed_at'):
             assert col in error_book_cols, f'error_book 缺列:{col}'
+        # tags 的列(知识点标签迁移):name / category
+        tags_cols = {row[1] for row in db.session.execute(
+            db.text("PRAGMA table_info(tags)"))}
+        for col in ('name', 'category'):
+            assert col in tags_cols, f'tags 缺列:{col}'
+        # question_tags 的列(知识点标签迁移):question_id / tag_id
+        qt_cols = {row[1] for row in db.session.execute(
+            db.text("PRAGMA table_info(question_tags)"))}
+        for col in ('question_id', 'tag_id'):
+            assert col in qt_cols, f'question_tags 缺列:{col}'

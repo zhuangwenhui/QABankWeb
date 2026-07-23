@@ -178,6 +178,30 @@ class GeneratedFile(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now, index=True)
 
 
+class Tag(db.Model):
+    """规范化知识点标签:与 Question.tags(自由 JSON 标签)相互独立。
+
+    同名标签可归属不同 category(如「概率」既是知识点也是概率论章节),
+    故唯一性约束落在 (name, category) 组合上。
+    """
+    __tablename__ = 'tags'
+    __table_args__ = (db.UniqueConstraint('name', 'category', name='uq_tag_name_category'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False, index=True)
+    category = db.Column(db.String(32), nullable=False, default='知识点', index=True)
+
+
+class QuestionTag(db.Model):
+    """题目↔知识点标签的多对多关联(同一题不重复挂同一标签)。"""
+    __tablename__ = 'question_tags'
+    __table_args__ = (db.UniqueConstraint('question_id', 'tag_id', name='uq_question_tag'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('tags.id'), nullable=False, index=True)
+
+
 # --------------------------------------------------------------------- SQLite 加固
 from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _Engine

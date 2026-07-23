@@ -12,12 +12,12 @@ import uuid
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, g, jsonify, request
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 import config
 from auth import login_required
 from logging_setup import audit
-from models import Question, QuestionProgress, ViewLog, db
+from models import Question, QuestionProgress, QuestionTag, Tag, ViewLog, db
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
 
@@ -315,6 +315,24 @@ def list_questions():
         else:  # mastered
             query = query.filter(QuestionProgress.status == 'mastered')
 
+    # 规范化知识点标签筛选(2026-07-23):独立于 Question.tags 的自由 JSON 标签(tagFilter)。
+    # 仅当 knowledgeTags 非空才 join question_tags/tags,不影响其他查询的计数/分页。
+    # any(默认)→ 命中任一标签,distinct 去重;all → group by 题目、having 命中标签种数等于请求数。
+    knowledge_raw = (args.get('knowledgeTags') or '').strip()
+    if knowledge_raw:
+        names = [t.strip() for t in knowledge_raw.replace('，', ',').split(',') if t.strip()]
+        names = list(dict.fromkeys(names))  # 去重保序
+        if names:
+            tag_mode = (args.get('tagMode') or 'any').strip().lower()
+            query = (query.join(QuestionTag, QuestionTag.question_id == Question.id)
+                          .join(Tag, Tag.id == QuestionTag.tag_id)
+                          .filter(Tag.name.in_(names)))
+            if tag_mode == 'all':
+                query = (query.group_by(Question.id)
+                              .having(func.count(func.distinct(Tag.id)) == len(names)))
+            else:
+                query = query.distinct()
+
     pagination = (query.order_by(Question.created_at.desc(), Question.id.desc())
                        .paginate(page=page, per_page=per_page, error_out=False))
     return _ok({
@@ -579,6 +597,34 @@ def question_facets():
         'subjectGroups': [{'name': g, 'count': group_count.get(g, 0)}
                           for g, _ in _SUBJECT_GROUPS if group_count.get(g)],
     })
+
+
+@bp.route('/questions/tag_facets', methods=['GET'])
+@login_required
+def tag_facets():
+    """规范化知识点标签字典:按 category 分组,每标签带被引用题数(join question_tags 计数)。
+
+    只列出至少被一道题引用的标签(未挂题的孤儿标签点选无结果,不进 facet);
+    空标签库或全为孤儿标签时 categories 为空数组。
+    """
+    rows = (db.session.query(
+                Tag.category, Tag.name,
+                func.count(QuestionTag.question_id))
+            .join(QuestionTag, QuestionTag.tag_id == Tag.id)
+            .group_by(Tag.id)
+            .order_by(Tag.category, Tag.name)
+            .all())
+
+    grouped = {}  # category -> [{name, count}]
+    order = []    # 保持 category 首次出现顺序
+    for category, name, count in rows:
+        if category not in grouped:
+            grouped[category] = []
+            order.append(category)
+        grouped[category].append({'name': name, 'count': count})
+
+    categories = [{'category': c, 'tags': grouped[c]} for c in order]
+    return _ok({'categories': categories})
 
 
 # ================================================================ 来源判重

@@ -37,6 +37,23 @@
     .locator-bar { flex-direction: column; gap: 4px; }
     .locator-title { align-self: flex-start; padding: 4px 10px; }
   }
+  /* 知识点标签多选 chips(复用 .tag-badge 语义色) */
+  .kt-panel { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--qb-hair); }
+  .kt-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .kt-head .filter-label { margin-bottom: 0; }
+  .kt-clear { padding: 0 4px; color: var(--qb-ink-soft); text-decoration: none; }
+  .kt-chips { display: flex; flex-direction: column; gap: 8px; }
+  .kt-cat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .kt-cat-name { font-size: .78rem; font-weight: 600; color: var(--qb-brand-ink);
+                 background: var(--qb-brand-soft); border-radius: 6px; padding: 2px 8px; }
+  .kt-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;
+             background: var(--qb-blue-soft); color: var(--qb-blue-ink);
+             border: 1px solid transparent; border-radius: 12px; padding: 2px 10px; font-size: .78rem;
+             transition: background .12s, border-color .12s, color .12s; }
+  .kt-chip:hover { border-color: var(--qb-blue); }
+  .kt-chip .kt-count { font-style: normal; opacity: .65; font-size: .72rem; }
+  .kt-chip.is-active { background: var(--qb-brand); color: #fff; border-color: var(--qb-brand); }
+  .kt-chip.is-active .kt-count { opacity: .85; }
 </style>
 {% endblock %}
 
@@ -225,6 +242,25 @@
               <i class="fa-solid fa-rotate-left me-1"></i>重置全部
             </button>
           </div>
+        </div>
+        <!-- 知识点多维筛选:规范化标签 chips(点选高亮),独立于上方自由标签。
+             数据由 questions.js:loadKnowledgeFacets() 从 /api/questions/tag_facets 异步拉取;
+             空标签库时整块隐藏、仅显示"暂无知识点标签"。 -->
+        <div class="kt-panel" id="ktPanel" hidden>
+          <div class="kt-head">
+            <span class="filter-label mb-0"><i class="fa-solid fa-diagram-project me-1"></i>知识点标签</span>
+            <div class="btn-group btn-group-sm kt-mode" role="group" aria-label="知识点匹配模式">
+              <input type="radio" class="btn-check" name="ktMode" id="ktModeAny" value="any" autocomplete="off" checked>
+              <label class="btn btn-outline-secondary" for="ktModeAny" title="命中任一所选标签">任一</label>
+              <input type="radio" class="btn-check" name="ktMode" id="ktModeAll" value="all" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="ktModeAll" title="同时命中全部所选标签">全部</label>
+            </div>
+            <button type="button" class="btn btn-link btn-sm kt-clear" id="btnKtClear">
+              <i class="fa-solid fa-eraser me-1"></i>清除选中
+            </button>
+          </div>
+          <div class="kt-chips" id="ktChips"></div>
+          <div class="kt-empty text-muted small" id="ktEmpty" hidden>暂无知识点标签</div>
         </div>
       </div>
     </div>
