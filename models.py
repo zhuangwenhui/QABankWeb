@@ -105,6 +105,12 @@ class ErrorBook(db.Model):
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
     notes = db.Column(db.Text, default='')
     created_at = db.Column(db.DateTime, default=datetime.now)
+    # SM-2 复习排期(全部可空,NULL 视为"到期/未排期",无需 server_default)
+    ease = db.Column(db.Float, nullable=True)            # SM-2 easiness,默认视为 2.5
+    interval_days = db.Column(db.Integer, nullable=True)  # 当前间隔
+    repetitions = db.Column(db.Integer, nullable=True)   # 连续答对次数
+    due_at = db.Column(db.DateTime, nullable=True, index=True)   # 下次复习时刻;NULL=立即到期
+    last_reviewed_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {
@@ -114,6 +120,18 @@ class ErrorBook(db.Model):
             'created_at': _fmt(self.created_at),
             'question': self.question.to_dict() if self.question else None,
         }
+
+
+class QuestionProgress(db.Model):
+    """掌握状态轴:每个用户对每道题的做题进度(无行=未做)。"""
+    __tablename__ = 'question_progress'
+    __table_args__ = (db.UniqueConstraint('user_id', 'question_id', name='uq_progress_user_question'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False, default='done')  # done | mastered
+    updated_at = db.Column(db.DateTime, default=datetime.now, index=True)  # 兼作做题日历数据源
 
 
 class Feedback(db.Model):
