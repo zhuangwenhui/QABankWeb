@@ -191,6 +191,29 @@ class QuestionListItem(db.Model):
     position = db.Column(db.Integer, nullable=False, default=0)
 
 
+class QuestionNote(db.Model):
+    """每个用户对每题的私人笔记(1:1,upsert)。"""
+    __tablename__ = 'question_notes'
+    __table_args__ = (db.UniqueConstraint('user_id', 'question_id', name='uq_note_user_question'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    content = db.Column(db.Text, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class QuestionBookmark(db.Model):
+    """收藏/书签:用户星标题目(存在即已收藏)。"""
+    __tablename__ = 'question_bookmarks'
+    __table_args__ = (db.UniqueConstraint('user_id', 'question_id', name='uq_bookmark_user_question'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, index=True)
+
+
 class Feedback(db.Model):
     __tablename__ = 'feedback'
 

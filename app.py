@@ -55,6 +55,7 @@ def create_app(config_object=None):
     from api.review import bp as review_bp
     from api.lists import bp as lists_bp
     from api.submissions import bp as submissions_bp
+    from api.study import bp as study_bp
     app.register_blueprint(questions_bp)
     app.register_blueprint(error_book_bp)
     app.register_blueprint(feedback_bp)
@@ -63,6 +64,7 @@ def create_app(config_object=None):
     app.register_blueprint(review_bp)
     app.register_blueprint(lists_bp)
     app.register_blueprint(submissions_bp)
+    app.register_blueprint(study_bp)
 
     setup_logging(app)  # 须先于 load_user_and_csrf 注册,保证 g.request_id 先于其他 hook 就绪
 

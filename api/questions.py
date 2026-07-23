@@ -17,7 +17,8 @@ from sqlalchemy import func, or_
 import config
 from auth import login_required
 from logging_setup import audit
-from models import Question, QuestionProgress, QuestionTag, Tag, ViewLog, db
+from models import (Question, QuestionBookmark, QuestionProgress, QuestionTag,
+                    Tag, ViewLog, db)
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
 
@@ -341,6 +342,11 @@ def list_questions():
             query = query.filter(QuestionProgress.status.in_(('done', 'mastered')))
         else:  # mastered
             query = query.filter(QuestionProgress.status == 'mastered')
+
+    # 收藏筛选(2026-07-24):bookmarked=1 只看当前用户收藏。inner join 加过滤,与其它 join 可组合。
+    if (args.get('bookmarked') or '').strip() in ('1', 'true', 'yes'):
+        query = (query.join(QuestionBookmark, QuestionBookmark.question_id == Question.id)
+                      .filter(QuestionBookmark.user_id == g.user.id))
 
     # 规范化知识点标签筛选(2026-07-23):独立于 Question.tags 的自由 JSON 标签(tagFilter)。
     # 仅当 knowledgeTags 非空才 join question_tags/tags,不影响其他查询的计数/分页。
