@@ -74,7 +74,7 @@
       'btnViewTable', 'btnViewCard', 'checkAllPage', 'checkAll',
       'historyMenu', 'btnPresetDropdown', 'presetNameInput', 'btnSavePreset', 'presetList',
       'btnNewQuestion', 'filterSubject', 'filterChapter', 'filterDifficulty',
-      'filterMastery', 'filterSchool', 'filterMajor', 'filterYear', 'filterSubjectGroup',
+      'filterMastery', 'filterBookmarked', 'filterSchool', 'filterMajor', 'filterYear', 'filterSubjectGroup',
       'filterSource', 'filterSearch', 'sourceOptions', 'editChapterOptions',
       'advancedPanel', 'advQuestionId', 'advTags', 'advDateFrom', 'advDateTo',
       'btnAdvSearch', 'btnAdvReset',
@@ -265,6 +265,7 @@
     el.filterChapter.addEventListener('change', resetAndLoad);
     el.filterDifficulty.addEventListener('change', resetAndLoad);
     el.filterMastery.addEventListener('change', resetAndLoad);
+    el.filterBookmarked.addEventListener('change', resetAndLoad);
 
     // 院試定位:院校变→重建専攻级联;任一变更→高亮 + 重新加载
     el.filterSchool.addEventListener('change', () => {
@@ -421,6 +422,7 @@
       chapter: el.filterChapter.value,
       difficulty: el.filterDifficulty.value,
       masteryStatus: el.filterMastery.value,
+      bookmarked: el.filterBookmarked.checked ? '1' : '',
       source: el.filterSource.value.trim(),
       search: el.filterSearch.value.trim(),
       questionId: el.advQuestionId.value.trim(),
@@ -447,6 +449,7 @@
     await loadChapterOptions(f.chapter || '');
     el.filterDifficulty.value = f.difficulty || '';
     el.filterMastery.value = f.masteryStatus || '';
+    el.filterBookmarked.checked = f.bookmarked === '1' || f.bookmarked === true;
     el.filterSource.value = f.source || '';
     el.filterSearch.value = f.search || '';
     el.advQuestionId.value = f.questionId || '';

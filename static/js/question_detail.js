@@ -566,6 +566,51 @@
     }).catch(function () { box.hidden = true; });
   }
 
+  // ---------------------------------------------------------------- 收藏 + 笔记
+  function initBookmark() {
+    var btn = document.getElementById('qdBookmark');
+    if (!btn) return;
+    function paint(on) {
+      btn.textContent = on ? '★' : '☆';
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', String(on));
+      btn.title = on ? '已收藏(点击取消)' : '收藏';
+    }
+    apiFetch('/api/questions/' + qid + '/bookmark')
+      .then(function (r) { paint(!!(r.data && r.data.bookmarked)); }).catch(function () {});
+    btn.addEventListener('click', function () {
+      apiFetch('/api/questions/' + qid + '/bookmark', { method: 'POST' })
+        .then(function (r) {
+          var on = !!(r.data && r.data.bookmarked);
+          paint(on);
+          if (window.showToast) window.showToast(on ? '已收藏' : '已取消收藏', 'success');
+        }).catch(function (e) { if (window.showToast) window.showToast(e.message, 'danger'); });
+    });
+  }
+
+  function initNotes() {
+    var ta = document.getElementById('qdNoteText');
+    var status = document.getElementById('qdNoteStatus');
+    if (!ta) return;
+    apiFetch('/api/questions/' + qid + '/note')
+      .then(function (r) { ta.value = (r.data && r.data.content) || ''; }).catch(function () {});
+    var t = null, dirty = false;
+    function save() {
+      if (status) status.textContent = '保存中…';
+      apiFetch('/api/questions/' + qid + '/note', { method: 'PUT', body: { content: ta.value } })
+        .then(function () {
+          dirty = false;
+          if (status) { status.textContent = '已保存 ✓'; setTimeout(function () { status.textContent = ''; }, 1500); }
+        }).catch(function () { if (status) status.textContent = '保存失败'; });
+    }
+    ta.addEventListener('input', function () {
+      dirty = true;
+      if (status) status.textContent = '编辑中…';
+      clearTimeout(t); t = setTimeout(save, 800);
+    });
+    ta.addEventListener('blur', function () { if (dirty) { clearTimeout(t); save(); } });
+  }
+
   // ---------------------------------------------------------------- 装载
   function load() {
     apiFetch('/api/questions/' + qid).then(function (resp) {
@@ -579,6 +624,8 @@
       initMastery();   // 回填并高亮当前掌握状态
       renderRelated(); // 相关题(独立异步拉取,不阻塞正文)
       initAnswer();    // 我的作答:上传批改 + 历史(独立异步)
+      initBookmark();  // 收藏星标
+      initNotes();     // 私人笔记(自动保存)
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
       var ja = (q.solution_ja || '').trim();

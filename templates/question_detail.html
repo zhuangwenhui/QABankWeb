@@ -17,6 +17,7 @@
       <button type="button" data-status="mastered" aria-pressed="false">已掌握</button>
       <button type="button" data-status="none" aria-pressed="false">未做</button>
     </div>
+    <button type="button" class="qd-iconbtn" id="qdBookmark" aria-label="收藏本题" aria-pressed="false" title="收藏">☆</button>
     <button type="button" class="qd-iconbtn" id="qdThemeBtn" aria-label="切换明暗主题" title="切换明暗">◐</button>
   </div>
 
@@ -61,6 +62,15 @@
       </div>
     </section>
   </div>
+
+  <!-- 我的笔记:私人笔记,自动保存 -->
+  <section class="qd-notes" id="qdNotes" aria-label="我的笔记">
+    <details>
+      <summary><span class="qd-notes-ic">📝</span>我的笔记<span class="qd-note-status" id="qdNoteStatus"></span></summary>
+      <textarea id="qdNoteText" class="qd-note-text" lang="zh-CN"
+                placeholder="记录你的思路、易错点、公式…(自动保存,仅你可见)"></textarea>
+    </details>
+  </section>
 
   <!-- 我的作答:上传手写作答照片 → 采点评分(由 question_detail.js 驱动) -->
   <section class="qd-answer" id="qdAnswer" aria-label="我的作答">

@@ -417,3 +417,20 @@ a.qd-chip.ktag:hover{filter:brightness(.97); transform:translateY(-1px);}
   .qd-grade-num b{font-size:30px;}
   .qd-thumb{width:80px; height:80px;}
 }
+
+/* ============================================================ 收藏 + 笔记 */
+#qdBookmark{font-size:16px; line-height:1;}
+#qdBookmark.active{color:#E0A415;}   /* 金色星标 */
+.qd-notes{max-width:1180px; margin:20px auto 0; padding:0 4px;}
+.qd-notes details{border:1px solid var(--hair); border-radius:var(--radius); background:var(--panel); box-shadow:var(--shadow);}
+.qd-notes summary{cursor:pointer; padding:11px 14px; display:flex; align-items:center; gap:8px;
+  font-family:var(--font-ui); font-size:14px; font-weight:600; color:var(--ink); list-style:none;}
+.qd-notes summary::-webkit-details-marker{display:none;}
+.qd-notes-ic{font-size:15px;}
+.qd-note-status{margin-left:auto; font-size:11.5px; font-weight:400; color:var(--ink-faint);}
+.qd-note-text{display:block; width:100%; box-sizing:border-box; min-height:120px; resize:vertical;
+  border:none; border-top:1px solid var(--hair-soft); border-radius:0 0 var(--radius) var(--radius);
+  padding:12px 14px; font-family:var(--font-read); font-size:14px; line-height:1.7; color:var(--ink);
+  background:var(--panel-2); outline:none;}
+.qd-note-text:focus{background:var(--panel);}
+.qd-note-text::placeholder{color:var(--ink-faint);}
