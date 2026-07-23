@@ -112,10 +112,138 @@
     renderPresetList();
     await loadChapterOptions('');
     await loadFacets();
+    initProgressPanel();  // 顶部进度面板:与列表加载并行,失败静默降级,不阻塞
     await loadQuestions({ record: false });
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  /* ============================================================ 2b. 顶部学习进度面板 */
+
+  const PP_LS_COLLAPSED = 'qb_progress_collapsed';
+
+  /** 计数 → 热力图档位(5 档:0 / 1-2 / 3-4 / 5-6 / 7+) */
+  function ppHeatLevel(count) {
+    if (count <= 0) return 0;
+    if (count <= 2) return 1;
+    if (count <= 4) return 2;
+    if (count <= 6) return 3;
+    return 4;
+  }
+
+  /** 按预设顺序排列分组键,预设外的键(如后端新增学科)追加在后 */
+  function ppOrderedKeys(dataObj, presetOrder) {
+    const keys = [];
+    (presetOrder || []).forEach((k) => { if (k in dataObj) keys.push(k); });
+    Object.keys(dataObj).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
+    return keys;
+  }
+
+  /** 一组分组进度条(已掌握/总)HTML */
+  function ppGroupHtml(title, dataObj, presetOrder) {
+    dataObj = dataObj || {};
+    const rows = ppOrderedKeys(dataObj, presetOrder).map((k) => {
+      const v = dataObj[k] || {};
+      const total = v.total || 0;
+      const mastered = v.mastered || 0;
+      const pct = total ? Math.round((mastered / total) * 100) : 0;
+      return `
+        <div class="pp-bar-row">
+          <span class="pp-bar-label" title="${escapeHtml(k)}">${escapeHtml(k)}</span>
+          <span class="pp-bar-track"><span class="pp-bar-fill" style="width:${pct}%"></span></span>
+          <span class="pp-bar-num">${mastered}/${total}</span>
+        </div>`;
+    }).join('');
+    return `<div class="pp-group-title">${escapeHtml(title)}</div>${rows}`;
+  }
+
+  /** 渲染一行总进度摘要 + 待复习链接 */
+  function ppRenderSummary(summary, stats) {
+    const box = document.getElementById('ppSummary');
+    if (!box) return;
+    const o = (summary && summary.overall) || { total: 0, done: 0, mastered: 0 };
+    const total = o.total || 0;
+    const mastered = o.mastered || 0;
+    const pct = total ? Math.round((mastered / total) * 100) : 0;
+    const due = stats ? (stats.due_today || 0) : 0;
+    const dueCls = due > 0 ? '' : ' is-empty';
+    box.innerHTML =
+      `<span class="pp-stat">已掌握 <strong>${mastered}</strong> / 总 ${total} <span class="pp-pct">(${pct}%)</span></span>` +
+      `<a class="pp-due${dueCls}" href="/review">今日待复习 <strong>${due}</strong></a>`;
+  }
+
+  /** 渲染难度/学科两组进度条 */
+  function ppRenderGroups(summary) {
+    const diffEl = document.getElementById('ppByDifficulty');
+    const subjEl = document.getElementById('ppBySubject');
+    if (diffEl) diffEl.innerHTML = ppGroupHtml('难度', summary.by_difficulty, CFG.difficulties);
+    if (subjEl) subjEl.innerHTML = ppGroupHtml('学科', summary.by_subject, CFG.subjects);
+  }
+
+  /** 渲染 GitHub 式做题日历热力图(7 行=周几 × ~53 列=周) */
+  function ppRenderHeatmap(calendar) {
+    const grid = document.getElementById('ppCalGrid');
+    if (!grid) return;
+    const cells = [];
+    if (calendar.length) {
+      // 首日之前补占位格,使首日落在正确的周几行(周日=0 为首行)
+      const p = calendar[0].date.split('-').map(Number);
+      const firstWeekday = new Date(p[0], p[1] - 1, p[2]).getDay();
+      for (let i = 0; i < firstWeekday; i++) {
+        cells.push('<span class="pp-cell pp-cell-empty" aria-hidden="true"></span>');
+      }
+    }
+    calendar.forEach((d) => {
+      const count = d.count || 0;
+      cells.push(
+        `<span class="pp-cell l${ppHeatLevel(count)}" title="${escapeHtml(d.date)} · ${count} 题"></span>`);
+    });
+    grid.innerHTML = cells.join('');
+
+    const legend = document.getElementById('ppCalLegend');
+    if (legend) {
+      legend.innerHTML = '<span class="pp-legend-label">少</span>' +
+        [0, 1, 2, 3, 4].map((l) => `<span class="pp-cell l${l}"></span>`).join('') +
+        '<span class="pp-legend-label">多</span>';
+    }
+  }
+
+  /** 顶部进度面板入口:恢复折叠态、并发拉三接口、分块渲染,失败静默降级。 */
+  async function initProgressPanel() {
+    const panel = document.getElementById('progressPanel');
+    if (!panel) return;
+    const toggle = document.getElementById('ppToggle');
+
+    const applyCollapsed = (collapsed) => {
+      panel.classList.toggle('is-collapsed', collapsed);
+      if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
+    };
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(PP_LS_COLLAPSED) === '1'; } catch (e) { /* 无痕模式忽略 */ }
+    applyCollapsed(collapsed);
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const next = !panel.classList.contains('is-collapsed');
+        applyCollapsed(next);
+        try { localStorage.setItem(PP_LS_COLLAPSED, next ? '1' : '0'); } catch (e) { /* 忽略 */ }
+      });
+    }
+
+    const [summaryRes, calRes, statsRes] = await Promise.allSettled([
+      apiFetch('/api/progress/summary'),
+      apiFetch('/api/progress/calendar?days=365'),
+      apiFetch('/api/review/stats'),
+    ]);
+
+    const summary = summaryRes.status === 'fulfilled' ? summaryRes.value.data : null;
+    const stats = statsRes.status === 'fulfilled' ? statsRes.value.data : null;
+    const calendar = calRes.status === 'fulfilled' ? (calRes.value.data.calendar || []) : null;
+
+    let shown = false;
+    if (summary) { ppRenderSummary(summary, stats); ppRenderGroups(summary); shown = true; }
+    if (calendar) { ppRenderHeatmap(calendar); shown = true; }
+    if (shown) panel.hidden = false;  // 三接口全挂则保持隐藏,不打扰列表
+  }
 
   /* ============================================================ 3. 事件绑定 */
 

@@ -4,6 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}">
 <style>
   /* 题目管理页局部样式(公共样式见 style.css) */
   .card-latex-clip { max-height: 170px; overflow: hidden; cursor: pointer; }
@@ -47,6 +48,34 @@
     <span>题目管理</span>
   </div>
 </div>
+
+<!-- 学习进度面板:总进度 + 待复习 / 分组进度条 / 做题日历热力图。
+     默认展开、折叠态记 localStorage;数据由 questions.js:initProgressPanel() 异步填充,
+     三接口失败则静默降级(面板保持隐藏,不阻塞题目列表)。 -->
+<section id="progressPanel" class="progress-panel" hidden aria-label="学习进度概览">
+  <div class="pp-header">
+    <button type="button" class="pp-toggle" id="ppToggle" aria-expanded="true" aria-controls="ppBody">
+      <i class="fa-solid fa-chevron-down pp-caret" aria-hidden="true"></i>
+      <span class="pp-title"><i class="fa-solid fa-chart-simple me-1"></i>学习进度</span>
+    </button>
+    <div class="pp-summary" id="ppSummary"></div>
+  </div>
+  <div class="pp-body" id="ppBody">
+    <div class="pp-groups">
+      <div class="pp-group" id="ppByDifficulty"></div>
+      <div class="pp-group" id="ppBySubject"></div>
+    </div>
+    <div class="pp-cal">
+      <div class="pp-cal-head">
+        <span class="pp-cal-title">做题日历(近一年)</span>
+        <span class="pp-cal-legend" id="ppCalLegend"></span>
+      </div>
+      <div class="pp-cal-grid-wrap">
+        <div class="pp-cal-grid" id="ppCalGrid"></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- 工具行:视图切换 / 全选 / 历史 / 预设 / 高级搜索 / 新建 -->
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
