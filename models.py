@@ -134,6 +134,30 @@ class QuestionProgress(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.now, index=True)  # 兼作做题日历数据源
 
 
+class QuestionList(db.Model):
+    """题单(curated 学习路径):有序题目集合,可为官方精选或用户自建。"""
+    __tablename__ = 'question_lists'
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    title = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.Text, default='')
+    is_official = db.Column(db.Boolean, nullable=False, default=False, index=True)  # 官方精选
+    is_public = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+
+class QuestionListItem(db.Model):
+    """题单↔题目关联(同一题单不重复挂同一题,position 定序)。"""
+    __tablename__ = 'question_list_items'
+    __table_args__ = (db.UniqueConstraint('list_id', 'question_id', name='uq_list_question'),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    list_id = db.Column(db.Integer, db.ForeignKey('question_lists.id'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+
+
 class Feedback(db.Model):
     __tablename__ = 'feedback'
 

@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}题单 - 题库系统{% endblock %}
+
+{% block head %}
+<style>
+  .lists-wrap { max-width: 1100px; margin: 0 auto; padding: 8px 4px 40px; }
+  .lists-section-title { font-weight: 600; border-left: 4px solid var(--qb-blue, #2563eb); padding-left: 10px; margin: 22px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .lists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  @media (max-width: 480px) { .lists-grid { grid-template-columns: 1fr; } }
+  .list-card { display: block; border: 1px solid var(--qb-hair, #e5e7eb); border-radius: 10px; padding: 16px; background: var(--qb-panel, #fff); text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s; }
+  .list-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-2px); color: inherit; }
+  .list-card .lc-title { font-size: 1.05rem; font-weight: 600; margin: 0 0 6px; }
+  .list-card .lc-desc { font-size: .85rem; color: var(--qb-ink-soft, #6b7280); margin: 0 0 12px; min-height: 1.1em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .list-card .lc-meta { font-size: .8rem; color: var(--qb-ink-faint, #9ca3af); display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .lc-bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; display: flex; }
+  .lc-bar .seg-mastered { background: #16a34a; }
+  .lc-bar .seg-done { background: #93c5fd; }
+  .badge-official { background: #f59e0b; color: #1f2937; font-size: .7rem; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+  .lists-empty { color: var(--qb-ink-soft, #6b7280); padding: 24px 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lists-wrap" id="listsApp"
+     data-user-id="{{ current_user.id }}"
+     data-is-admin="{{ current_user.is_admin | tojson }}">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1 class="h4 mb-0"><i class="fa-solid fa-layer-group me-2"></i>题单</h1>
+    <button type="button" class="btn btn-primary btn-sm" id="btnCreateList">
+      <i class="fa-solid fa-plus me-1"></i>新建题单
+    </button>
+  </div>
+
+  <div class="lists-section-title"><i class="fa-solid fa-star" style="color:#f59e0b"></i>官方精选</div>
+  <div class="lists-grid" id="officialGrid"></div>
+  <p class="lists-empty" id="officialEmpty" hidden>暂无官方题单。</p>
+
+  <div class="lists-section-title"><i class="fa-solid fa-user"></i>我的题单</div>
+  <div class="lists-grid" id="mineGrid"></div>
+  <p class="lists-empty" id="mineEmpty" hidden>你还没有创建题单。点击右上角「新建题单」开始整理你的学习路径。</p>
+</div>
+
+<!-- 新建题单弹窗 -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">新建题单</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label" for="newListTitle">标题</label>
+          <input type="text" class="form-control" id="newListTitle" maxlength="128" placeholder="如:线性代数冲刺">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="newListDesc">简介(可选)</label>
+          <textarea class="form-control" id="newListDesc" rows="3" maxlength="2000"></textarea>
+        </div>
+        <div class="form-check" id="officialCheckWrap" hidden>
+          <input class="form-check-input" type="checkbox" id="newListOfficial">
+          <label class="form-check-label" for="newListOfficial">设为官方精选(仅管理员)</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btnCreateSubmit">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/lists.js') }}"></script>
+{% endblock %}

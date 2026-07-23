@@ -57,6 +57,11 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link {% if request.path.startswith('/lists') %}active{% endif %}" href="{{ url_for('lists_page') }}">
+              <i class="fa-solid fa-layer-group me-1"></i>题单
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {% if request.path == '/error_book' %}active{% endif %}" href="{{ url_for('error_book_page') }}">
               <i class="fa-solid fa-bookmark me-1"></i>错题本
             </a>

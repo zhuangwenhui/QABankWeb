@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}题单详情 - 题库系统{% endblock %}
+
+{% block head %}
+<style>
+  .ld-wrap { max-width: 900px; margin: 0 auto; padding: 8px 4px 40px; }
+  .ld-back { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--qb-ink-soft, #6b7280); font-size: .9rem; margin-bottom: 12px; }
+  .ld-head { margin-bottom: 18px; }
+  .ld-title { font-size: 1.6rem; font-weight: 700; margin: 0 0 6px; }
+  .ld-desc { color: var(--qb-ink-soft, #6b7280); margin: 0 0 14px; white-space: pre-wrap; }
+  .ld-progress-line { font-size: .9rem; color: var(--qb-ink-soft, #6b7280); margin-bottom: 6px; }
+  .ld-bar { height: 10px; border-radius: 5px; background: #e5e7eb; overflow: hidden; display: flex; }
+  .ld-bar .seg-mastered { background: #16a34a; }
+  .ld-bar .seg-done { background: #93c5fd; }
+  .ld-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--qb-hair, #eef0f2); }
+  .ld-item .ld-idx { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: #f3f4f6; color: #374151; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 600; }
+  .ld-item.is-mastered .ld-idx { background: #16a34a; color: #fff; }
+  .ld-item.is-done .ld-idx { background: #93c5fd; color: #1e3a8a; }
+  .ld-item .ld-body { flex: 1 1 auto; min-width: 0; }
+  .ld-item .ld-body a { text-decoration: none; color: inherit; font-weight: 500; }
+  .ld-item .ld-body a:hover { text-decoration: underline; }
+  .ld-item .ld-latex { color: var(--qb-ink-soft, #6b7280); font-size: .82rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ld-item .ld-meta { font-size: .75rem; color: var(--qb-ink-faint, #9ca3af); margin-top: 3px; }
+  .ld-rm { flex: 0 0 auto; border: none; background: transparent; color: #ef4444; cursor: pointer; padding: 2px 6px; }
+  .ld-empty { color: var(--qb-ink-soft, #6b7280); padding: 24px 4px; }
+  .ld-add { display: flex; gap: 8px; margin: 16px 0; }
+  .ld-badge-official { background: #f59e0b; color: #1f2937; font-size: .72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ld-wrap" id="listDetailApp"
+     data-lid="{{ lid }}"
+     data-user-id="{{ current_user.id }}"
+     data-is-admin="{{ current_user.is_admin | tojson }}">
+  <a class="ld-back" href="{{ url_for('lists_page') }}"><i class="fa-solid fa-arrow-left"></i>返回题单广场</a>
+
+  <div class="ld-head">
+    <div class="ld-title" id="ldTitle">加载中…</div>
+    <div class="ld-desc" id="ldDesc"></div>
+    <div class="ld-progress-line" id="ldProgressLine"></div>
+    <div class="ld-bar" id="ldBar"><span class="seg-mastered" style="width:0"></span><span class="seg-done" style="width:0"></span></div>
+  </div>
+
+  <div class="ld-add" id="ldAdd" hidden>
+    <input type="number" min="1" class="form-control form-control-sm" id="ldAddInput" placeholder="按题目 ID 加题">
+    <button type="button" class="btn btn-sm btn-outline-primary" id="ldAddBtn">加入</button>
+  </div>
+
+  <div id="ldItems">
+    <p class="ld-empty">加载中…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/list_detail.js') }}"></script>
+{% endblock %}

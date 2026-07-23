@@ -53,12 +53,14 @@ def create_app(config_object=None):
     from api.overview import bp as overview_bp
     from api.progress import bp as progress_bp
     from api.review import bp as review_bp
+    from api.lists import bp as lists_bp
     app.register_blueprint(questions_bp)
     app.register_blueprint(error_book_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(overview_bp)
     app.register_blueprint(progress_bp)
     app.register_blueprint(review_bp)
+    app.register_blueprint(lists_bp)
 
     setup_logging(app)  # 须先于 load_user_and_csrf 注册,保证 g.request_id 先于其他 hook 就绪
 
@@ -276,6 +278,25 @@ def create_app(config_object=None):
         if db.session.get(Question, qid) is None:
             abort(404)
         return render_template('question_detail.html', qid=qid)
+
+    @app.route('/lists')
+    @login_required
+    def lists_page():
+        """题单广场:官方精选区 + 我的题单区。"""
+        return render_template('lists.html')
+
+    @app.route('/lists/<int:lid>')
+    @login_required
+    def list_detail_page(lid):
+        """题单详情:有序题目 + 顶部进度(数据经 /api/lists/<id>)。"""
+        from models import QuestionList
+        lst = db.session.get(QuestionList, lid)
+        if lst is None:
+            abort(404)
+        # 私有单仅 owner/admin 可直接开页;其余按 404
+        if not lst.is_public and not (g.user.is_admin or lst.owner_id == g.user.id):
+            abort(404)
+        return render_template('list_detail.html', lid=lid)
 
     @app.route('/review')
     @login_required
