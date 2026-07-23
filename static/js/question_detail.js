@@ -65,32 +65,13 @@
   // ---------------------------------------------------------------- 数学占位
   function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
 
-  // MathJax 的文本模式(\text/\texttt/…)不认 \_ 与 \&(实测 \{ \} 正常),会把反斜杠
-  // 原样画出来,题面里的 C 代码就显示成 compare\_swap、\&a[i]。这里在文本组内把它们
-  // 还原成字面字符。**必须限定在文本组内**:数学模式下 _ 是下标运算符、& 是对齐分隔符,
-  // 全局替换会直接毁掉公式。扫描时对 \X 整体跳过,使 \{ \} 不干扰花括号配平。
-  var TEXT_CMD = /\\(?:text|texttt|textrm|textbf|textit|textsf|mathtt|mathrm)\s*\{/g;
-
+  // MathJax v4 原生正确渲染文本模式(\text/\texttt/…)里的转义 \_ 与 \&,无需改写。
+  // 历史上为 MathJax v3 做的「文本组内 \_→_ 还原」在 v4 下反而会触发
+  // "'_' allowed only in math mode"(裸 _ 在文本模式非法)——源码本就用转义 \_,
+  // 被改写成裸 _ 后 v4 报错。实测 v4 下 \texttt{compare\_swap} 正常、compare_swap 报错,
+  // 故彻底移除该改写,保持原样交给 MathJax v4。
   function fixTextModeEscapes(tex) {
-    if (tex.indexOf('\\_') < 0 && tex.indexOf('\\&') < 0) return tex;   // 快路径
-    var out = '', last = 0, m;
-    TEXT_CMD.lastIndex = 0;
-    while ((m = TEXT_CMD.exec(tex)) !== null) {
-      var open = m.index + m[0].length;     // 组内首字符下标
-      var depth = 1, i = open;
-      while (i < tex.length && depth > 0) {
-        var ch = tex.charAt(i);
-        if (ch === '\\') { i += 2; continue; }        // 跳过 \X,不计入配平
-        if (ch === '{') depth++;
-        else if (ch === '}') depth--;
-        i++;
-      }
-      var close = i - 1;                    // 收尾 } 的下标(未配平时退化为串尾)
-      out += tex.slice(last, open) + tex.slice(open, close).replace(/\\([_&])/g, '$1');
-      last = close;
-      TEXT_CMD.lastIndex = i;               // 从组尾继续:嵌套组已随整体 body 一并处理
-    }
-    return out + tex.slice(last);
+    return tex;
   }
 
   /** ① 抽出 $$…$$ 与 $…$,替换为纯字母数字占位符(防 markdown 吞掉 _ / *)。 */
