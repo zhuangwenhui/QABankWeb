@@ -116,6 +116,7 @@
     await loadChapterOptions('');
     await loadFacets();
     await loadKnowledgeFacets();
+    await applyUrlParams();  // 详情页知识点 chip 跳转的预筛(标签联动)
     initProgressPanel();  // 顶部进度面板:与列表加载并行,失败静默降级,不阻塞
     await loadQuestions({ record: false });
   }
@@ -460,6 +461,24 @@
     el.advDateFrom.value = f.dateFrom || '';
     el.advDateTo.value = f.dateTo || '';
     state.page = 1;
+  }
+
+  /** URL 带筛选参数时预置(详情页知识点 chip 跳 ?knowledgeTags= 的标签联动闭环)。
+   *  仅在确有相关参数时套用,否则不打扰默认加载。须在 loadKnowledgeFacets 之后调用,
+   *  chips 才能被高亮。 */
+  async function applyUrlParams() {
+    const p = new URLSearchParams(window.location.search);
+    const kt = p.get('knowledgeTags');
+    const search = p.get('search');
+    const subject = p.get('subject');
+    if (!kt && !search && !subject) return false;
+    await applyFilterState({
+      knowledgeTags: kt || '',
+      tagMode: p.get('tagMode') === 'all' ? 'all' : 'any',
+      search: search || '',
+      subject: subject || '',
+    });
+    return true;
   }
 
   /**

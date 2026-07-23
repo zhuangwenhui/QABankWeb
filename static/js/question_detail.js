@@ -282,6 +282,11 @@
     (q.tags || []).forEach(function (t) {
       out.push('<span class="qd-chip">' + esc(t) + '</span>');
     });
+    // 规范化知识点标签:可点,跳到列表页并预筛该知识点(标签联动)
+    (q.knowledge_tags || []).forEach(function (t) {
+      out.push('<a class="qd-chip ktag" href="/questions?knowledgeTags=' +
+               encodeURIComponent(t) + '" title="按此知识点筛选题库">' + esc(t) + '</a>');
+    });
     return out.join('');
   }
 
@@ -389,6 +394,33 @@
     });
   }
 
+  // ---------------------------------------------------------------- 相关题(顺藤摸瓜)
+  // 拉 /related,渲染轻量卡片(链到详情页)。纯元信息,无需 MathJax;空则整块隐藏。
+  function renderRelated() {
+    var wrap = document.getElementById('qdRelated');
+    var grid = document.getElementById('qdRelatedGrid');
+    if (!wrap || !grid) return;
+    apiFetch('/api/questions/' + qid + '/related?limit=6').then(function (resp) {
+      var list = (resp.data && resp.data.related) || [];
+      if (!list.length) { wrap.hidden = true; return; }
+      var esc = window.escapeHtml || function (x) { return x; };
+      grid.innerHTML = list.map(function (c) {
+        var meta = [];
+        if (c.subject) meta.push('<span class="qd-rel-chip subject">' + esc(c.subject) + '</span>');
+        if (c.difficulty) meta.push('<span class="qd-rel-chip">' + esc(c.difficulty) + '</span>');
+        var shared = (c.shared_tags || []).slice(0, 3).map(function (t) {
+          return '<span class="qd-rel-tag">同 · ' + esc(t) + '</span>';
+        }).join('');
+        return '<a class="qd-rel-card" href="/questions/' + c.id + '">' +
+               '<div class="qd-rel-title">' + esc(c.source || ('题目 #' + c.id)) + '</div>' +
+               '<div class="qd-rel-meta">' + meta.join('') + '</div>' +
+               (shared ? '<div class="qd-rel-tags">' + shared + '</div>' : '') +
+               '</a>';
+      }).join('');
+      wrap.hidden = false;
+    }).catch(function () { wrap.hidden = true; });
+  }
+
   // ---------------------------------------------------------------- 装载
   function load() {
     apiFetch('/api/questions/' + qid).then(function (resp) {
@@ -400,6 +432,7 @@
       typeset(el.problem);
       renderHints(q.hints);                   // 渐进提示(逐层揭示,惰性)
       initMastery();   // 回填并高亮当前掌握状态
+      renderRelated(); // 相关题(独立异步拉取,不阻塞正文)
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
       var ja = (q.solution_ja || '').trim();
