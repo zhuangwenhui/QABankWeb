@@ -38,6 +38,9 @@ def test_upgrade_creates_schema(tmp_path):
         question_cols = {row[1] for row in db.session.execute(
             db.text("PRAGMA table_info(questions)"))}
         assert 'solution_ja' in question_cols, 'questions 缺列:solution_ja'
+        # questions 的新列(渐进提示 + 采点结构化题解迁移):hints / solution_structured
+        for col in ('hints', 'solution_structured'):
+            assert col in question_cols, f'questions 缺列:{col}'
         # question_progress 的列(学习闭环迁移):status / updated_at / user_id / question_id
         progress_cols = {row[1] for row in db.session.execute(
             db.text("PRAGMA table_info(question_progress)"))}

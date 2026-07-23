@@ -168,6 +168,8 @@
     title: document.getElementById('qdTitle'),
     chips: document.getElementById('qdChips'),
     problem: document.getElementById('qdProblemBody'),
+    hints: document.getElementById('qdHints'),
+    structured: document.getElementById('qdStructured'),
     trackJa: document.getElementById('qdTrackJa'),
     trackZh: document.getElementById('qdTrackZh'),
     navpills: document.getElementById('qdNavpills'),
@@ -310,6 +312,83 @@
     return parts.join('');
   }
 
+  // ---------------------------------------------------------------- 渐进提示(逐层揭示)
+  // 初始只显示「提示 1」,点「再看一条」展开下一条,直到全部;每条走渲染管线 + typeset。
+  // 用户先想再看,契合开放题自学。内容为空则整块不显示(旧题照常)。
+  function renderHints(hints) {
+    var wrap = el.hints;
+    if (!wrap) return;
+    hints = (hints || []).filter(function (h) { return (h || '').trim(); });
+    if (!hints.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    wrap.innerHTML =
+      '<div class="qd-hints-head"><span class="qd-hints-ic">💡</span>提示 · ヒント</div>' +
+      '<div class="qd-hints-list" id="qdHintsList"></div>' +
+      '<button type="button" class="qd-hints-more" id="qdHintsMore"></button>';
+    var listEl = wrap.querySelector('#qdHintsList');
+    var moreBtn = wrap.querySelector('#qdHintsMore');
+    var shown = 0;
+    function updateBtn() {
+      var left = hints.length - shown;
+      moreBtn.hidden = left <= 0;
+      if (left > 0) moreBtn.textContent = '再看一条(还剩 ' + left + ' 条)';
+    }
+    function revealNext() {
+      if (shown >= hints.length) return;
+      var item = document.createElement('div');
+      item.className = 'qd-hint';
+      var badge = document.createElement('span');
+      badge.className = 'qd-hint-n';
+      badge.textContent = '提示 ' + (shown + 1);
+      var body = document.createElement('div');
+      body.className = 'qd-hint-body solbody';
+      item.appendChild(badge);
+      item.appendChild(body);
+      listEl.appendChild(item);
+      renderInto(body, hints[shown], 'ja');   // 复用管线(protectMath/renderMarkdown)
+      typeset(body);                            // MathJax v4 正确渲染 $公式$
+      shown++;
+      updateBtn();
+    }
+    moreBtn.addEventListener('click', revealNext);
+    revealNext();   // 初始揭示「提示 1」
+  }
+
+  // ---------------------------------------------------------------- 采点结构化题解(四段卡片)
+  // 方針=蓝(insight)/ 答案例=橙(brand)/ 失点=红(warn)/ 部分点=绿(conclusion),
+  // 复用既有 callout 色板。各段 md 走渲染管线 + typeset;整块空则不显示。
+  var STRUCT_SECTIONS = [
+    { key: 'houshin', label: '解答方針', kind: 'houshin' },
+    { key: 'model',   label: '答案例',   kind: 'model' },
+    { key: 'shitten', label: '典型失点', kind: 'shitten' },
+    { key: 'haiten',  label: '部分点分布', kind: 'haiten' }
+  ];
+  function renderStructured(s) {
+    var wrap = el.structured;
+    if (!wrap) return;
+    s = s || {};
+    var has = STRUCT_SECTIONS.some(function (sec) { return (s[sec.key] || '').trim(); });
+    if (!has) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    wrap.innerHTML = '<div class="qd-struct-head">採点ポイント · 采点结构化</div>' +
+                     '<div class="qd-struct-grid" id="qdStructGrid"></div>';
+    var grid = wrap.querySelector('#qdStructGrid');
+    var esc = window.escapeHtml || function (x) { return x; };
+    STRUCT_SECTIONS.forEach(function (sec) {
+      var raw = (s[sec.key] || '').trim();
+      if (!raw) return;
+      var card = document.createElement('div');
+      card.className = 'qd-struct-card ' + sec.kind;
+      card.innerHTML = '<div class="qd-struct-card-h"><span class="qd-struct-bar"></span>' +
+                       '<span class="qd-struct-t">' + esc(sec.label) + '</span></div>' +
+                       '<div class="qd-struct-b solbody"></div>';
+      grid.appendChild(card);
+      var body = card.querySelector('.qd-struct-b');
+      renderInto(body, raw, 'ja');   // 复用管线
+      typeset(body);
+    });
+  }
+
   // ---------------------------------------------------------------- 装载
   function load() {
     apiFetch('/api/questions/' + qid).then(function (resp) {
@@ -319,8 +398,10 @@
       el.chips.innerHTML = chipsHtml(q);
       el.problem.innerHTML = problemHtml(q);
       typeset(el.problem);
+      renderHints(q.hints);                   // 渐进提示(逐层揭示,惰性)
       initMastery();   // 回填并高亮当前掌握状态
 
+      renderStructured(q.solution_structured); // 采点四段(惰性)
       var ja = (q.solution_ja || '').trim();
       var zh = (q.solution_latex || '').trim();
       renderInto(el.trackJa, ja, 'ja');

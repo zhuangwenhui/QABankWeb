@@ -261,6 +261,49 @@
 .qd-page .aside{color:var(--ink-faint); font-size:13px; font-style:italic; margin:11px 0 4px; padding-left:12px;
   border-left:2px solid var(--hair);}
 
+/* ---------- 渐进提示(逐层揭示) ---------- */
+.qd-page .qd-hints{margin:20px 0 4px; border:1px solid var(--blue-line); border-radius:var(--radius);
+  background:var(--blue-soft); padding:13px 16px 15px;}
+.qd-page .qd-hints-head{font-family:var(--font-ui); font-weight:600; font-size:11.5px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--blue-ink); margin-bottom:9px; display:flex; align-items:center; gap:7px;}
+.qd-page .qd-hints-ic{font-size:14px; line-height:1;}
+.qd-page .qd-hint{display:flex; gap:10px; padding:9px 0; border-top:1px solid var(--blue-line);}
+.qd-page .qd-hint:first-child{border-top:none; padding-top:2px;}
+.qd-page .qd-hint-n{flex:none; align-self:flex-start; margin-top:2px; font-family:var(--font-ui); font-weight:600;
+  font-size:10.5px; letter-spacing:.03em; color:#fff; background:var(--blue); border-radius:20px; padding:2px 9px; white-space:nowrap;}
+.qd-page .qd-hint-body{flex:1 1 auto; min-width:0; font-size:14.5px; line-height:1.78;}
+.qd-page .qd-hint-body p{margin:0 0 6px;} .qd-page .qd-hint-body p:last-child{margin-bottom:0;}
+.qd-page .qd-hints-more{margin-top:11px; font-family:var(--font-ui); font-size:12.5px; font-weight:600;
+  color:var(--blue-ink); background:transparent; border:1px solid var(--blue-line); border-radius:20px;
+  padding:6px 15px; cursor:pointer; transition:background .15s;}
+.qd-page .qd-hints-more:hover{background:var(--panel);}
+
+/* ---------- 采点结构化题解(四段卡片) ---------- */
+.qd-page .qd-structured{margin:0 0 20px;}
+.qd-page .qd-struct-head{font-family:var(--font-ui); font-weight:600; font-size:11.5px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--ink-faint); margin:0 0 11px;}
+.qd-page .qd-struct-grid{display:flex; flex-direction:column; gap:13px;}
+.qd-page .qd-struct-card{border:1px solid var(--hair); border-left:3px solid var(--brand); border-radius:var(--radius);
+  background:var(--panel-2); padding:13px 16px 6px; overflow:hidden;}
+.qd-page .qd-struct-card-h{font-family:var(--font-ui); font-weight:600; font-size:11.5px; letter-spacing:.05em;
+  text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:8px; color:var(--brand-ink);}
+.qd-page .qd-struct-bar{width:8px; height:8px; border-radius:2px; background:var(--brand); flex:none;}
+.qd-page .qd-struct-b{font-size:14.5px; line-height:1.78;}
+.qd-page .qd-struct-b p:first-child{margin-top:0;}
+/* 四段配色:方針=蓝 / 答案例=橙(brand,默认)/ 失点=红 / 部分点=绿 */
+.qd-page .qd-struct-card.houshin{border-left-color:var(--blue); background:var(--blue-soft); border-color:var(--blue-line);}
+.qd-page .qd-struct-card.houshin .qd-struct-card-h{color:var(--blue-ink);}
+.qd-page .qd-struct-card.houshin .qd-struct-bar{background:var(--blue);}
+.qd-page .qd-struct-card.model{border-left-color:var(--brand); background:var(--brand-soft); border-color:var(--brand-line);}
+.qd-page .qd-struct-card.model .qd-struct-card-h{color:var(--brand-ink);}
+.qd-page .qd-struct-card.model .qd-struct-bar{background:var(--brand);}
+.qd-page .qd-struct-card.shitten{border-left-color:var(--red); background:var(--red-soft); border-color:var(--red-line);}
+.qd-page .qd-struct-card.shitten .qd-struct-card-h{color:var(--red-ink);}
+.qd-page .qd-struct-card.shitten .qd-struct-bar{background:var(--red);}
+.qd-page .qd-struct-card.haiten{border-left-color:var(--green); background:var(--green-soft); border-color:var(--green);}
+.qd-page .qd-struct-card.haiten .qd-struct-card-h{color:var(--green-ink);}
+.qd-page .qd-struct-card.haiten .qd-struct-bar{background:var(--green);}
+
 /* ---------- 窄屏 ---------- */
 @media (max-width:920px){
   .qd-split{grid-template-columns:1fr;}

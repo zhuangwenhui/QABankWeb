@@ -53,6 +53,11 @@ class Question(db.Model):
     question_image = db.Column(db.String(256))  # uploads/ 下的文件名
     solution_latex = db.Column(db.Text, default='')  # 中文·速览轨(既有)
     solution_ja = db.Column(db.Text, nullable=True)   # 日本語·詳解轨(新增,可空;旧题为 NULL)
+    # 渐进提示:由浅入深的提示序列 JSON 数组 ["提示1","提示2",...](可空,旧题为 NULL)
+    hints = db.Column(db.Text, nullable=True)
+    # 采点结构化题解:JSON 对象 {"houshin":..,"model":..,"shitten":..,"haiten":..}(可空,旧题为 NULL)
+    #   houshin=解答方針  model=答案例  shitten=典型失点  haiten=部分点分布(各段为 md 字符串)
+    solution_structured = db.Column(db.Text, nullable=True)
     solution_image = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now, index=True)
 
@@ -73,6 +78,32 @@ class Question(db.Model):
     def tags_list(self, value):
         self.tags = json.dumps(list(value or []), ensure_ascii=False)
 
+    @property
+    def hints_list(self):
+        """渐进提示解析:JSON 数组→list;非数组或解析失败→[](仿 tags_list 容错)。"""
+        try:
+            data = json.loads(self.hints or '[]')
+            return data if isinstance(data, list) else []
+        except (ValueError, TypeError):
+            return []
+
+    @hints_list.setter
+    def hints_list(self, value):
+        self.hints = json.dumps(list(value or []), ensure_ascii=False)
+
+    @property
+    def solution_structured_dict(self):
+        """采点结构化题解解析:JSON 对象→dict;非对象或解析失败→{}(仿 tags_list 容错)。"""
+        try:
+            data = json.loads(self.solution_structured or '{}')
+            return data if isinstance(data, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+
+    @solution_structured_dict.setter
+    def solution_structured_dict(self, value):
+        self.solution_structured = json.dumps(dict(value or {}), ensure_ascii=False)
+
     def to_dict(self, with_solution=True):
         d = {
             'id': self.id,
@@ -92,6 +123,8 @@ class Question(db.Model):
                 'solution_ja': self.solution_ja or '',
                 'solution_image': self.solution_image,
                 'solution_image_url': f'/uploads/{self.solution_image}' if self.solution_image else None,
+                'hints': self.hints_list,                          # list;解析失败→[]
+                'solution_structured': self.solution_structured_dict,  # dict;解析失败→{}
             })
         return d
 

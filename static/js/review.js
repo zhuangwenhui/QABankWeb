@@ -145,6 +145,36 @@
     return typeset(node);
   }
 
+  // 采点结构化题解四段(与详情页同款卡片:方針蓝/答案例橙/失点红/部分点绿)。
+  var STRUCT_SECTIONS = [
+    { key: 'houshin', label: '解答方針', kind: 'houshin' },
+    { key: 'model',   label: '答案例',   kind: 'model' },
+    { key: 'shitten', label: '典型失点', kind: 'shitten' },
+    { key: 'haiten',  label: '部分点分布', kind: 'haiten' }
+  ];
+  /** 把采点四段渲染进 node;整块空则隐藏(旧题照常)。复用 renderMd 管线 + MathJax。 */
+  function renderStructuredInto(node, s) {
+    if (!node) return;
+    s = s || {};
+    var has = STRUCT_SECTIONS.some(function (sec) { return (s[sec.key] || '').trim(); });
+    if (!has) { node.hidden = true; return; }
+    node.hidden = false;
+    node.innerHTML = '<div class="qd-struct-head">採点ポイント · 采点结构化</div>' +
+                     '<div class="qd-struct-grid"></div>';
+    var grid = node.querySelector('.qd-struct-grid');
+    STRUCT_SECTIONS.forEach(function (sec) {
+      var raw = (s[sec.key] || '').trim();
+      if (!raw) return;
+      var card = document.createElement('div');
+      card.className = 'qd-struct-card ' + sec.kind;
+      card.innerHTML = '<div class="qd-struct-card-h"><span class="qd-struct-bar"></span>' +
+                       '<span class="qd-struct-t">' + esc(sec.label) + '</span></div>' +
+                       '<div class="qd-struct-b solbody"></div>';
+      grid.appendChild(card);
+      renderMd(raw, 'ja', card.querySelector('.qd-struct-b'));
+    });
+  }
+
   // ============================================================ 复习流程
   var esc = window.escapeHtml || function (s) { return s; };
   var el = {
@@ -213,6 +243,7 @@
           '<button type="button" class="rv-reveal-btn" id="rvReveal">揭示题解</button></div>' +
         '<section class="rv-panel rv-solution" id="rvSolWrap" hidden>' +
           '<p class="qd-kicker">題解</p>' +
+          '<div class="qd-structured" id="rvStructured" hidden></div>' +
           '<div class="solbody"><div class="qd-track on" id="rvSolution" lang="' +
             (solTrack === 'ja' ? 'ja' : 'zh-CN') + '"></div></div>' +
           '<div class="rv-rate">' +
@@ -235,6 +266,7 @@
     document.getElementById('rvReveal').addEventListener('click', function () {
       revealWrap.hidden = true;
       solWrap.hidden = false;
+      renderStructuredInto(document.getElementById('rvStructured'), q.solution_structured);
       var solEl = document.getElementById('rvSolution');
       if (solRaw) renderMd(solRaw, solTrack, solEl);
       else solEl.innerHTML = '<p class="rv-empty">(暂无题解)</p>';

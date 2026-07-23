@@ -33,6 +33,8 @@
       <div class="qd-prob" id="qdProblemBody" lang="ja">
         <p class="qd-empty" lang="zh-CN">加载中…</p>
       </div>
+      <!-- 渐进提示:逐层揭示,有数据才显示(由 question_detail.js 填充) -->
+      <div class="qd-hints" id="qdHints" lang="ja" hidden></div>
     </section>
 
     <div class="qd-gutter" id="qdGutter" role="separator" aria-label="调整栏宽"></div>
@@ -40,6 +42,8 @@
     <!-- ===== 题解栏 ===== -->
     <section class="qd-panel" id="qdSolutionPanel">
       <p class="qd-kicker">題解</p>
+      <!-- 采点结构化题解:方針/答案例/失点/部分点 四段卡片,有数据才显示 -->
+      <div class="qd-structured" id="qdStructured" hidden></div>
       <div class="qd-solwrap">
         <div class="qd-soltool">
           <div class="qd-seg" role="tablist" aria-label="解答语言切换">
