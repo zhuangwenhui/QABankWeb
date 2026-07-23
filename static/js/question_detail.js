@@ -174,11 +174,48 @@
     seg: document.querySelectorAll('.qd-seg button'),
     segJa: document.querySelector('.qd-seg button[data-track="ja"]'),
     segZh: document.querySelector('.qd-seg button[data-track="zh"]'),
-    confidence: document.getElementById('qdConfidence')
+    confidence: document.getElementById('qdConfidence'),
+    masteryBtns: document.querySelectorAll('#qdMastery button')
   };
   var tracks = { ja: el.trackJa, zh: el.trackZh };
   var typesetDone = {};   // 惰性排版:轨首次显示时才 typeset
   var spy = [];           // scrollspy:[{h2, link}]
+
+  // ---------------------------------------------------------------- 掌握状态(做题进度)
+  // 与列表页同轴:done/mastered 落库,none 删行(未做)。仅读写进度,不触渲染管线。
+  var masteryStatus = null;   // null(未做)| 'done' | 'mastered'
+  function paintMastery() {
+    el.masteryBtns.forEach(function (b) {
+      var s = b.dataset.status;
+      var on = (s === 'none') ? (masteryStatus === null) : (s === masteryStatus);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  function initMastery() {
+    apiFetch('/api/progress/check_batch', { method: 'POST', body: { question_ids: [Number(qid)] } })
+      .then(function (resp) {
+        var statuses = (resp.data && resp.data.statuses) || {};
+        masteryStatus = statuses[String(qid)] || null;
+        paintMastery();
+      }).catch(function () { paintMastery(); });
+  }
+  el.masteryBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var status = b.dataset.status;   // done | mastered | none
+      apiFetch('/api/progress/set', { method: 'POST', body: { question_id: Number(qid), status: status } })
+        .then(function () {
+          masteryStatus = (status === 'none') ? null : status;
+          paintMastery();
+          if (window.showToast) {
+            window.showToast(status === 'none' ? '已标记为未做'
+              : (status === 'mastered' ? '已标记为掌握' : '已标记为做过'), 'success');
+          }
+        }).catch(function (e) {
+          if (window.showToast) window.showToast(e.message, 'danger');
+        });
+    });
+  });
 
   // ---------------------------------------------------------------- 语言切换 + 章节导航
   function buildNav(track) {
@@ -282,6 +319,7 @@
       el.chips.innerHTML = chipsHtml(q);
       el.problem.innerHTML = problemHtml(q);
       typeset(el.problem);
+      initMastery();   // 回填并高亮当前掌握状态
 
       var ja = (q.solution_ja || '').trim();
       var zh = (q.solution_latex || '').trim();

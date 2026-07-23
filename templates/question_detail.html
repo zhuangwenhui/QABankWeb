@@ -12,6 +12,11 @@
   <div class="qd-topbar">
     <a class="qd-back" href="{{ url_for('questions_page') }}"><i class="fa-solid fa-arrow-left"></i>返回题库</a>
     <span class="spacer"></span>
+    <div class="qd-mastery" id="qdMastery" role="group" aria-label="掌握状态">
+      <button type="button" data-status="done" aria-pressed="false">做过</button>
+      <button type="button" data-status="mastered" aria-pressed="false">已掌握</button>
+      <button type="button" data-status="none" aria-pressed="false">未做</button>
+    </div>
     <button type="button" class="qd-iconbtn" id="qdThemeBtn" aria-label="切换明暗主题" title="切换明暗">◐</button>
   </div>
 

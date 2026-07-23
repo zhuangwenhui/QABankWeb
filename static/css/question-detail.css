@@ -94,6 +94,15 @@
   width:32px;height:32px;border-radius:8px; cursor:pointer; font-size:14px;
   display:grid; place-items:center; transition:.15s;}
 .qd-iconbtn:hover{border-color:var(--brand); color:var(--brand);}
+/* 掌握状态切换(做过 / 已掌握 / 未做):分段控件,复用题解语言切换的视觉语言 */
+.qd-mastery{display:inline-flex; gap:2px; background:var(--hair-soft); border-radius:9px; padding:3px;}
+.qd-mastery button{border:0; background:transparent; color:var(--ink-soft); font-family:var(--font-ui);
+  font-size:12.5px; padding:5px 12px; border-radius:7px; cursor:pointer; transition:.15s; white-space:nowrap;}
+.qd-mastery button:hover{color:var(--ink);}
+.qd-mastery button.active{background:var(--panel); box-shadow:var(--shadow); font-weight:500;}
+.qd-mastery button[data-status="done"].active{color:var(--blue-ink);}
+.qd-mastery button[data-status="mastered"].active{color:var(--green-ink);}
+.qd-mastery button[data-status="none"].active{color:var(--ink);}
 
 /* ---------- 标题条 ---------- */
 .qd-titlestrip{padding:16px 20px 13px; border-bottom:1px solid var(--hair); background:var(--panel);}

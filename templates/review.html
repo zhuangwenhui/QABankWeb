@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}间隔复习 · 题库系统{% endblock %}
+
+{% block head %}
+<link href="{{ url_for('static', filename='css/question-detail.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/review.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="qd-page rv-page" id="rvApp">
+  <div class="qd-topbar">
+    <a class="qd-back" href="{{ url_for('questions_page') }}"><i class="fa-solid fa-arrow-left"></i>返回题库</a>
+    <span class="spacer"></span>
+    <span class="rv-progress" id="rvProgress" hidden>第 <b id="rvIndex">0</b> / <span id="rvTotal">0</span> 题</span>
+  </div>
+
+  <div class="rv-bar" id="rvBar" hidden><span class="rv-bar-fill" id="rvBarFill"></span></div>
+
+  <div class="qd-titlestrip">
+    <h1 id="rvTitle">间隔复习</h1>
+    <div class="qd-chips" id="rvChips"></div>
+  </div>
+
+  <div class="rv-body" id="rvBody">
+    <p class="rv-empty">加载中…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/markdown-it-container@4.0.0/dist/markdown-it-container.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
+<script src="{{ url_for('static', filename='js/review.js') }}"></script>
+{% endblock %}

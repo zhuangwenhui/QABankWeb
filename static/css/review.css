@@ -1,0 +1,57 @@
+/* ============================================================================
+   间隔复习页样式。挂在 .qd-page 之下,复用其主题变量(--brand/--blue/--green/--red…)
+   与题面/题解排版(.qd-prob / .solbody / callout / conclusion)。此处只补复习专属件:
+   进度条、揭示题解、四键自评、完成态。全部作用域限定 .rv-page。
+   ========================================================================== */
+
+/* 进度条 */
+.rv-page .rv-progress{font-size:12.5px; color:var(--ink-soft); font-family:var(--font-ui); white-space:nowrap;}
+.rv-page .rv-progress b{color:var(--brand-ink); font-weight:600;}
+.rv-page .rv-bar{height:3px; background:var(--hair-soft); overflow:hidden;}
+.rv-page .rv-bar-fill{display:block; height:100%; width:0; background:var(--brand);
+  border-radius:0 3px 3px 0; transition:width .3s ease;}
+
+/* 题面 / 题解面板 */
+.rv-page .rv-body{background:var(--paper); min-height:200px;}
+.rv-page .rv-panel{padding:20px 26px;}
+.rv-page .rv-panel .qd-prob{font-family:var(--font-read); font-size:16px; color:var(--ink); line-height:1.82;}
+.rv-page .rv-solution{border-top:1px solid var(--hair);}
+.rv-page .rv-solution .solbody{padding:6px 0 8px;}
+.rv-page .rv-empty{padding:26px; color:var(--ink-faint); font-family:var(--font-ui); font-size:14px; text-align:center;}
+
+/* 揭示题解 */
+.rv-page .rv-reveal{padding:8px 26px 22px; display:flex; justify-content:center;}
+.rv-page .rv-reveal-btn{border:1px solid var(--brand-line); background:var(--brand-soft); color:var(--brand-ink);
+  font-family:var(--font-ui); font-size:14px; font-weight:600; padding:11px 30px; border-radius:var(--radius);
+  cursor:pointer; transition:.15s;}
+.rv-page .rv-reveal-btn:hover{background:var(--brand); color:#fff; border-color:var(--brand);}
+
+/* 四键自评 */
+.rv-page .rv-rate{margin-top:18px; padding-top:16px; border-top:1px dashed var(--hair);}
+.rv-page .rv-rate-hint{margin:0 0 10px; font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink-faint); font-weight:600; font-family:var(--font-ui);}
+.rv-page .rv-rate-btns{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+.rv-page .rv-r{border:1px solid var(--hair); background:var(--panel); color:var(--ink-soft);
+  font-family:var(--font-ui); font-size:14px; font-weight:500; padding:12px 6px; border-radius:var(--radius);
+  cursor:pointer; transition:.15s; text-align:center;}
+.rv-page .rv-r:hover:not(:disabled){transform:translateY(-1px); box-shadow:var(--shadow);}
+.rv-page .rv-r:disabled{opacity:.5; cursor:default;}
+.rv-page .rv-r.again:hover:not(:disabled){border-color:var(--red); color:var(--red-ink); background:var(--red-soft);}
+.rv-page .rv-r.hard:hover:not(:disabled){border-color:var(--brand); color:var(--brand-ink); background:var(--brand-soft);}
+.rv-page .rv-r.good:hover:not(:disabled){border-color:var(--blue); color:var(--blue-ink); background:var(--blue-soft);}
+.rv-page .rv-r.easy:hover:not(:disabled){border-color:var(--green); color:var(--green-ink); background:var(--green-soft);}
+
+/* 完成态 */
+.rv-page .rv-done{padding:60px 26px; text-align:center; font-family:var(--font-ui);}
+.rv-page .rv-done-emoji{font-size:44px; line-height:1; margin-bottom:14px;}
+.rv-page .rv-done h2{margin:0 0 8px; font-size:19px; font-weight:600; color:var(--ink);}
+.rv-page .rv-done p{margin:0 0 20px; font-size:14px; color:var(--ink-soft);}
+.rv-page .rv-link{display:inline-block; border:1px solid var(--hair); border-radius:var(--radius);
+  padding:9px 22px; font-size:13.5px; color:var(--ink); text-decoration:none; background:var(--panel); transition:.15s;}
+.rv-page .rv-link:hover{border-color:var(--brand); color:var(--brand);}
+
+@media (max-width:640px){
+  .rv-page .rv-panel{padding:16px 16px;}
+  .rv-page .rv-reveal{padding:6px 16px 18px;}
+  .rv-page .rv-rate-btns{grid-template-columns:repeat(2,1fr);}
+}

@@ -277,6 +277,12 @@ def create_app(config_object=None):
             abort(404)
         return render_template('question_detail.html', qid=qid)
 
+    @app.route('/review')
+    @login_required
+    def review_page():
+        """间隔复习页:到期错题逐题揭示题解 + 四键自评(SM-2 排期)。"""
+        return render_template('review.html')
+
     @app.route('/error_book')
     @login_required
     def error_book_page():
