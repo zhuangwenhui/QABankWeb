@@ -203,6 +203,21 @@ def _remove_image_files(filenames):
 
 # ================================================================ 题目查询
 
+def _knowledge_tag_names(question_ids):
+    """批量取题目的知识点标签名:{question_id: [name, ...]}。一次查询避免逐题 N+1。"""
+    ids = list(question_ids)
+    if not ids:
+        return {}
+    rows = (db.session.query(QuestionTag.question_id, Tag.name)
+            .join(Tag, Tag.id == QuestionTag.tag_id)
+            .filter(QuestionTag.question_id.in_(ids), Tag.category == '知识点')
+            .all())
+    out = {}
+    for qid, name in rows:
+        out.setdefault(qid, []).append(name)
+    return out
+
+
 @bp.route('/questions', methods=['GET'])
 @login_required
 def list_questions():
@@ -240,13 +255,25 @@ def list_questions():
 
     search = (args.get('search') or '').strip()
     if search:
-        pattern = f'%{_escape_like(search)}%'
-        query = query.filter(or_(
-            Question.question_latex.like(pattern, escape='\\'),
-            Question.solution_latex.like(pattern, escape='\\'),
-            Question.source.like(pattern, escape='\\'),
-            Question.chapter.like(pattern, escape='\\'),
-        ))
+        # 检索强化(2026-07-24):多词按 AND(词间与),每词命中 = 出现在任一正文/元信息
+        # 字段(含日本語詳解轨 solution_ja),或该题挂名称含此词的知识点标签。标签名命中走
+        # 子查询 id IN(...),不与既有 knowledgeTags 的 join/distinct/group_by 冲突。
+        # 上限 6 词防滥用;单词查询是旧行为的超集(多覆盖 solution_ja 与标签名)。
+        terms = [t for t in search.split() if t][:6]
+        for term in terms:
+            pattern = f'%{_escape_like(term)}%'
+            tag_match = (db.session.query(QuestionTag.question_id)
+                         .join(Tag, Tag.id == QuestionTag.tag_id)
+                         .filter(Tag.category == '知识点',
+                                 Tag.name.like(pattern, escape='\\')))
+            query = query.filter(or_(
+                Question.question_latex.like(pattern, escape='\\'),
+                Question.solution_latex.like(pattern, escape='\\'),
+                Question.solution_ja.like(pattern, escape='\\'),
+                Question.source.like(pattern, escape='\\'),
+                Question.chapter.like(pattern, escape='\\'),
+                Question.id.in_(tag_match),
+            ))
 
     question_id = (args.get('questionId') or '').strip()
     if question_id:
@@ -347,11 +374,89 @@ def list_questions():
 @bp.route('/questions/<int:qid>', methods=['GET'])
 @login_required
 def get_question(qid):
-    """单题详情。"""
+    """单题详情。附 knowledge_tags(规范化知识点标签名),供详情页出可点标签。"""
     question = db.session.get(Question, qid)
     if question is None:
         return _fail('题目不存在', code='NOT_FOUND', status=404)
-    return _ok({'question': question.to_dict()})
+    d = question.to_dict()
+    d['knowledge_tags'] = _knowledge_tag_names([qid]).get(qid, [])
+    return _ok({'question': d})
+
+
+@bp.route('/questions/<int:qid>/related', methods=['GET'])
+@login_required
+def related_questions(qid):
+    """相关题:按共享知识点标签数排序,不足 limit 时以同科目最新题兜底。
+
+    卡片为轻量元信息(不含题解正文):id/source/subject/difficulty/chapter/
+    shared_tags(候选∩目标 的知识点标签名)/shared_count/has_solution。
+    basis:tags(全靠标签)| subject(全靠兜底)| mixed(两者)。
+    """
+    target = db.session.get(Question, qid)
+    if target is None:
+        return _fail('题目不存在', code='NOT_FOUND', status=404)
+    try:
+        limit = int(request.args.get('limit', 6))
+    except (TypeError, ValueError):
+        limit = 6
+    limit = max(1, min(limit, 12))
+
+    # 目标题的知识点 tag_id 集合
+    target_tag_ids = [tid for (tid,) in (
+        db.session.query(QuestionTag.tag_id)
+        .join(Tag, Tag.id == QuestionTag.tag_id)
+        .filter(QuestionTag.question_id == qid, Tag.category == '知识点').all())]
+
+    # 共享标签命中:{question_id: shared_count}
+    shared_map = {}
+    if target_tag_ids:
+        rows = (db.session.query(QuestionTag.question_id,
+                                 func.count(func.distinct(QuestionTag.tag_id)))
+                .filter(QuestionTag.tag_id.in_(target_tag_ids),
+                        QuestionTag.question_id != qid)
+                .group_by(QuestionTag.question_id).all())
+        shared_map = {q: c for (q, c) in rows}
+
+    hit_questions = (Question.query.filter(Question.id.in_(list(shared_map)))
+                     .all() if shared_map else [])
+    hit_questions.sort(
+        key=lambda q: (shared_map.get(q.id, 0),
+                       1 if q.subject == target.subject else 0,
+                       q.created_at or datetime.min),
+        reverse=True)
+    chosen = hit_questions[:limit]
+    used_tags = bool(chosen)
+
+    # 兜底:同科目最新题补足
+    used_subject = False
+    if len(chosen) < limit:
+        exclude = {qid} | {q.id for q in chosen}
+        fillers = (Question.query
+                   .filter(Question.subject == target.subject,
+                           Question.id.notin_(exclude))
+                   .order_by(Question.created_at.desc(), Question.id.desc())
+                   .limit(limit - len(chosen)).all())
+        used_subject = bool(fillers)
+        chosen.extend(fillers)
+
+    names_map = _knowledge_tag_names([q.id for q in chosen])
+    target_names = set(_knowledge_tag_names([qid]).get(qid, []))
+
+    def _card(q):
+        return {
+            'id': q.id,
+            'source': q.source or '',
+            'subject': q.subject,
+            'difficulty': q.difficulty,
+            'chapter': q.chapter or '',
+            'shared_tags': [n for n in names_map.get(q.id, []) if n in target_names],
+            'shared_count': shared_map.get(q.id, 0),
+            'has_solution': bool((q.solution_ja or '').strip()
+                                 or (q.solution_latex or '').strip()),
+        }
+
+    basis = 'mixed' if (used_tags and used_subject) else ('tags' if used_tags else 'subject')
+    return _ok({'related': [_card(q) for q in chosen], 'basis': basis})
 
 
 # ================================================================ 题目增删改
