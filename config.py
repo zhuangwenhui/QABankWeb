@@ -29,6 +29,11 @@ class Config:
     TALISMAN_FORCE_HTTPS = False
     # 导入通道令牌:仅当环境变量注入时开启(缺省 None = 关闭,零行为变化)
     QB_IMPORT_TOKEN = os.environ.get('QB_IMPORT_TOKEN') or None
+    # 采点判题引擎:设 ANTHROPIC_API_KEY 即启用 Claude 多模态阅卷,否则走诚实占位 stub。
+    # 缺省全空 = 零行为变化、零外部调用。
+    ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY') or ''
+    ANTHROPIC_GRADER_MODEL = os.environ.get('ANTHROPIC_GRADER_MODEL') or 'claude-opus-4-8'
+    ANTHROPIC_BASE_URL = os.environ.get('ANTHROPIC_BASE_URL') or 'https://api.anthropic.com'
 
 
 class DevConfig(Config):

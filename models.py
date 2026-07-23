@@ -259,6 +259,76 @@ class QuestionTag(db.Model):
     tag_id = db.Column(db.Integer, db.ForeignKey('tags.id'), nullable=False, index=True)
 
 
+class AnswerSubmission(db.Model):
+    """学生手写作答提交 + 采点评分结果(1:1 内嵌,评分列 nullable 直到 graded)。
+
+    学生上传作答照片,多模态 LLM(或占位 stub)按题目采点 rubric 逐项给分。
+    image_paths / rubric_breakdown 存 JSON 字符串,容错解析同 Question.hints_list。
+    """
+    __tablename__ = 'answer_submissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, index=True)
+    image_paths = db.Column(db.Text, default='[]')  # uploads/ 下的文件名 JSON 数组
+    status = db.Column(db.String(16), nullable=False, default='pending', index=True)
+    # 采点评分结果(graded 后填充)
+    total_score = db.Column(db.Float, nullable=True)
+    max_score = db.Column(db.Float, nullable=True)
+    rubric_breakdown = db.Column(db.Text, nullable=True)   # JSON [{label,awarded,max,comment}]
+    transcription = db.Column(db.Text, nullable=True)      # 模型读到的作答转写
+    feedback = db.Column(db.Text, nullable=True)           # 综合反馈
+    grader = db.Column(db.String(16), nullable=True)       # claude | stub
+    model = db.Column(db.String(64), nullable=True)        # 具体模型名
+    error = db.Column(db.Text, nullable=True)              # 失败原因
+    created_at = db.Column(db.DateTime, default=datetime.now, index=True)
+    graded_at = db.Column(db.DateTime, nullable=True)
+
+    @property
+    def image_paths_list(self):
+        try:
+            data = json.loads(self.image_paths or '[]')
+            return data if isinstance(data, list) else []
+        except (ValueError, TypeError):
+            return []
+
+    @image_paths_list.setter
+    def image_paths_list(self, value):
+        self.image_paths = json.dumps(list(value or []), ensure_ascii=False)
+
+    @property
+    def rubric_breakdown_list(self):
+        try:
+            data = json.loads(self.rubric_breakdown or '[]')
+            return data if isinstance(data, list) else []
+        except (ValueError, TypeError):
+            return []
+
+    @rubric_breakdown_list.setter
+    def rubric_breakdown_list(self, value):
+        self.rubric_breakdown = json.dumps(list(value or []), ensure_ascii=False)
+
+    def to_dict(self):
+        imgs = self.image_paths_list
+        return {
+            'id': self.id,
+            'question_id': self.question_id,
+            'status': self.status,
+            'image_paths': imgs,
+            'image_urls': ['/uploads/' + n for n in imgs],
+            'total_score': self.total_score,
+            'max_score': self.max_score,
+            'rubric_breakdown': self.rubric_breakdown_list,
+            'transcription': self.transcription or '',
+            'feedback': self.feedback or '',
+            'grader': self.grader,
+            'model': self.model,
+            'error': self.error or '',
+            'created_at': _fmt(self.created_at),
+            'graded_at': _fmt(self.graded_at),
+        }
+
+
 # --------------------------------------------------------------------- SQLite 加固
 from sqlalchemy import event as _sa_event
 from sqlalchemy.engine import Engine as _Engine
