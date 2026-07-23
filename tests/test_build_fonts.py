@@ -157,6 +157,14 @@ def test_global_missing_detects_uncovered_corpus_char():
     assert bf.global_missing(corpus, covered) == {"あ"}
 
 
+def test_global_missing_ignores_math_symbols_and_emoji():
+    # 数学符号/箭头/几何/emoji 不由中日文字体覆盖($...$ 由 MathJax、emoji 由系统字体),
+    # 即便未被任何字体覆盖也不算构建缺失;但真未覆盖的 CJK/假名仍要检出。
+    corpus = set("中カ∎∘≺⌊⌋⟂⟶⟹⟺►✅✔✘❌↺")
+    covered = {ord("中")}                       # 只有 CJK 汉字被覆盖,假名 'カ' 未覆盖
+    assert bf.global_missing(corpus, covered) == {"カ"}
+
+
 def test_verify_coverage_reports_missing():
     cmap = {ord("a"), ord("b")}
     missing = bf.verify_coverage(cmap, set("abc"))

@@ -87,6 +87,19 @@ def _is_control(ch):
     return cp < 0x20 or 0x7f <= cp < 0xa0
 
 
+def _is_gated_glyph(ch):
+    """只有"中日文字体该管的文本字形"才纳入覆盖门:CJK 汉字/假名/CJK 与全角标点/半角全角形。
+       数学符号(∎∘≺⌊⌋⟂⟶… 多在 $...$ 内由 MathJax 渲染)、箭头、几何/技术符号、emoji
+       (✅❌… 由系统 emoji 字体渲染)本就不由中日文字体覆盖,不作为构建阻塞。"""
+    cp = ord(ch)
+    return (0x3000 <= cp <= 0x30ff or   # CJK 符号/标点 + 平/片假名
+            0x3400 <= cp <= 0x4dbf or   # CJK 扩展 A
+            0x4e00 <= cp <= 0x9fff or   # CJK 统一表意
+            0xf900 <= cp <= 0xfaff or   # CJK 兼容表意
+            0xff00 <= cp <= 0xffef or   # 半角/全角形
+            0x20000 <= cp <= 0x2fa1f)   # CJK 扩展 B..兼容补充
+
+
 def charset_for_font(tier, script, body_corpus, ui_corpus, cn_fallback, jp_fallback):
     """按层级组字集:
        body = body_corpus ∪ 脚本大兜底 ∪ ASCII ∪ 标点(懒加载,体积可接受);
@@ -126,8 +139,9 @@ def verify_coverage(cmap_codepoints, required):
 
 
 def global_missing(corpus, covered_codepoints):
-    """全局覆盖门:语料里某字若在任何已建字体里都无字形则算缺失(控制符除外)。"""
-    return {c for c in corpus if not _is_control(c) and ord(c) not in covered_codepoints}
+    """全局覆盖门:仅对中日文字体该管的文本字形(CJK/假名/全角)把关——
+       某字若在任何已建字体里都无字形则算缺失;数学/符号/emoji/控制符不纳入。"""
+    return {c for c in corpus if _is_gated_glyph(c) and ord(c) not in covered_codepoints}
 
 
 def fallback_metrics(src):
