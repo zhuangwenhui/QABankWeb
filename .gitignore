@@ -7,3 +7,5 @@ uploads/*
 generated_pdfs/*
 !generated_pdfs/.gitkeep
 .DS_Store
+# 源字体不入库(体积大;只提交 static/fonts/*.woff2 产物)
+/fonts_src/

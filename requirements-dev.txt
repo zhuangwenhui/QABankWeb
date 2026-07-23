@@ -36,3 +36,6 @@ wheel==0.47.0
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools
+
+# 字体子集化构建(离线,非运行时)
+fonttools[woff]==4.63.0

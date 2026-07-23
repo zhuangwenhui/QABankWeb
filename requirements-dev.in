@@ -1,3 +1,5 @@
 -c requirements.txt
 pytest>=8
 pip-tools>=7
+# 字体子集化构建(离线,非运行时)
+fonttools[woff]==4.63.0
