@@ -9,3 +9,5 @@ generated_pdfs/*
 .DS_Store
 # 源字体不入库(体积大;只提交 static/fonts/*.woff2 产物)
 /fonts_src/
+# 根目录参考资料 PDF(如 复变解答_Manning风格.pdf 排版参考)不入库
+/*.pdf
