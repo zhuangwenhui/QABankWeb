@@ -24,56 +24,76 @@ def test_gen_charsets_produces_expected_sets(tmp_path):
     assert 3000 <= len(set(jp_txt)) <= 8000
 
 
-def test_extract_corpus_gathers_cjk(monkeypatch):
-    """monkeypatch read_question_rows 返回含中日文的行,断言这些字都进 corpus。"""
+def test_extract_corpus_splits_body_and_ui(monkeypatch):
+    """extract_corpus 返回 (body, ui):body=题面题解,ui=元数据列。"""
     rows = [
         {
             "question_latex": r"求矩阵 $A$ 的特征值",
             "solution_latex": r"特征多项式 $\det(A-\lambda I)=0$ 的根即为特征值",
             "solution_ja": "行列の固有値を求めよ。カタカナ表記も確認する",
+            "source": "京都大学 院試",
+            "subject": "線形代数",
+            "tags": "特征值;対角化",
+            "chapter": "第三章",
         },
     ]
     monkeypatch.setattr(bf, "read_question_rows", lambda db_path: rows)
-    corpus = bf.extract_corpus("ignored.db")
-    # 中文题面/题解
+    body, ui = bf.extract_corpus("ignored.db")
+    # 正文:题面/题解的中日文字
     for ch in "求矩阵特征值多项式根":
-        assert ch in corpus, ch
-    # 日文汉字
-    for ch in "行列固有値表記確認":
-        assert ch in corpus, ch
-    # 平假名
-    for ch in "のをめよもする":
-        assert ch in corpus, ch
-    # 片假名
-    for ch in "カタナ":
-        assert ch in corpus, ch
+        assert ch in body, ch
+    for ch in "行列固有値表記確認のをめよカタナ":
+        assert ch in body, ch
+    # 界面:元数据列(校名/科目/标签/章节)的字
+    for ch in "京都大学院試":
+        assert ch in ui, ch
+    for ch in "線形代数対角化第三章":
+        assert ch in ui, ch
+    # 分层隔离:题解专有字不得混进 ui;元数据专有字不得混进 body
+    assert "矩" not in ui and "阵" not in ui
+    assert "線" not in body and "章" not in body
 
 
-def test_extract_corpus_includes_extra_ui_strings(monkeypatch):
+def test_extract_corpus_ui_includes_extra_ui_strings(monkeypatch):
     monkeypatch.setattr(bf, "read_question_rows", lambda db_path: [])
-    corpus = bf.extract_corpus("ignored.db", ui_strings=["設定を保存"])
+    body, ui = bf.extract_corpus("ignored.db", ui_strings=["設定を保存"])
     for ch in "設定を保存":
-        assert ch in corpus, ch
+        assert ch in ui, ch
 
 
-def test_charset_for_font_merges_fallback_and_ascii():
-    corpus = set("Xy")
+def test_charset_for_font_body_keeps_big_fallback():
+    body = set("Xy")
+    ui = set("按钮")
     cn_fb = set("中国汉")
     jp_fb = set("あアが")
-    cn = bf.charset_for_font("cn", corpus, cn_fb, jp_fb)
-    assert {"中", "国", "汉"} <= cn                 # 中文兜底进入 cn 字体
-    assert {"0", "9", "A", "z"} <= cn               # ASCII 数字/字母恒在
+    cn = bf.charset_for_font("body", "cn", body, ui, cn_fb, jp_fb)
+    assert {"中", "国", "汉"} <= cn                 # body cn 保留中文大兜底
+    assert {"0", "9", "A", "z"} <= cn               # ASCII 恒在
     assert "あ" not in cn                            # 日文兜底不得泄漏进 cn
-    jp = bf.charset_for_font("jp", corpus, cn_fb, jp_fb)
-    assert {"あ", "ア", "が"} <= jp                 # 日文兜底进入 jp 字体
-    assert "0" in jp                                 # ASCII 数字恒在
-    assert "中" not in jp                            # 中文兜底不得泄漏进 jp
+    assert "按" not in cn                            # body 不含 ui 语料
+    jp = bf.charset_for_font("body", "jp", body, ui, cn_fb, jp_fb)
+    assert {"あ", "ア", "が"} <= jp                 # body jp 保留日文大兜底
+    assert "0" in jp
+    assert "中" not in jp
+
+
+def test_charset_for_font_ui_is_minimal_closed_set():
+    body = set("题面正文")
+    ui = set("科目按钮")
+    cn_fb = set("中国汉" * 1)          # 假装的大兜底
+    jp_fb = set("あアが")
+    ui_set = bf.charset_for_font("ui", "cn", body, ui, cn_fb, jp_fb)
+    assert {"科", "目", "按", "钮"} <= ui_set        # ui 语料进入
+    assert {"0", "9", "A"} <= ui_set                 # ASCII 恒在
+    # 关键:ui 字体不加大兜底,不含正文语料
+    assert not (cn_fb & ui_set), "ui 字体不得含大兜底字表"
+    assert "题" not in ui_set and "正" not in ui_set  # ui 不含 body 语料
 
 
 def test_charset_for_font_excludes_control_chars():
     # 语料含换行/制表(LaTeX 常见),控制符无字形必须被排除,否则覆盖校验误判
-    corpus = set("A中\n\t\r")
-    cn = bf.charset_for_font("cn", corpus, set("国"), set("あ"))
+    body = set("A中\n\t\r")
+    cn = bf.charset_for_font("body", "cn", body, set(), set("国"), set("あ"))
     assert "A" in cn and "中" in cn
     assert "\n" not in cn and "\t" not in cn and "\r" not in cn
 
