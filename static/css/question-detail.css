@@ -19,10 +19,12 @@
      macOS 上两种语言互相套用了对方的汉字字形。 */
   --font-latin-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --font-latin-read:"Charter","Iowan Old Style","Georgia",serif;
-  --font-zh-ui:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
-  --font-zh-read:"Songti SC","Source Han Serif SC","Noto Serif CJK SC",serif;
-  --font-ja-ui:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP",sans-serif;
-  --font-ja-read:"Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",serif;
+  /* 界面(黑体/明朝)与正文(文楷/Klee)均前置自托管 web 字体(+度量面 Fallback 消 CLS),
+     系统字体栈原样保留作后备。 */
+  --font-zh-ui:"Noto Sans SC","Noto Sans SC Fallback","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --font-zh-read:"LXGW WenKai","LXGW WenKai Fallback","Songti SC","Source Han Serif SC","Noto Serif CJK SC",serif;
+  --font-ja-ui:"Shippori Mincho","Shippori Mincho Fallback","Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",serif;
+  --font-ja-read:"Klee One","Klee One Fallback","Hiragino Mincho ProN","Yu Mincho","Noto Serif CJK JP",serif;
   /* 默认按中文;标了 lang=ja 的子树下面会覆盖 */
   --font-ui:var(--font-latin-ui),var(--font-zh-ui);
   --font-read:var(--font-latin-read),var(--font-zh-read);
@@ -75,6 +77,9 @@
   line-height:1.6; -webkit-font-smoothing:antialiased;
   border-radius:14px; overflow:hidden; border:1px solid var(--hair);
   margin-top:8px;
+  /* 禁合成假粗体/斜体:文楷、Klee、Shippori 的粗字重有独立字面,
+     合成描边会糊掉 CJK 字形。整页(题面+双轨题解)继承。 */
+  font-synthesis:none;
 }
 .qd-page *{box-sizing:border-box;}
 .qd-page .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}

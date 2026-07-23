@@ -21,8 +21,11 @@
      macOS 两套字体齐全 → 中文用日文字形、日文用中文字形,双向串味。
      现按 :lang() 分派,浏览器据元素语言选对应字形。 */
   --qb-font-latin:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --qb-font-zh:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
-  --qb-font-ja:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP","Source Han Sans JP",sans-serif;
+  /* 中文界面·黑体:前置自托管 Noto Sans SC(+度量面 Fallback 消 CLS),回落系统黑体 */
+  --qb-font-zh:"Noto Sans SC","Noto Sans SC Fallback","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+  /* 日文界面·明朝(用户指定,原为黑体 Hiragino Sans…):前置 Shippori Mincho(+Fallback),
+     回落系统明朝 Hiragino Mincho/Yu Mincho,原黑体栈殿后兜底,末尾 serif */
+  --qb-font-ja:"Shippori Mincho","Shippori Mincho Fallback","Hiragino Mincho ProN","Yu Mincho","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans CJK JP","Source Han Sans JP",serif;
   --qb-font-mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
   /* 默认(文档语言 zh-CN):拉丁字形优先,汉字回落到中文字体 */
   --qb-font-ui:var(--qb-font-latin),var(--qb-font-zh);
@@ -37,6 +40,9 @@ body {
   font-family: var(--qb-font-ui);
   /* CJK 正文行高需高于拉丁文才透气(全角字面无上下留白) */
   line-height: 1.7;
+  /* 禁浏览器合成假粗体/斜体:文楷、Klee、Shippori 的粗重字重由独立字面提供,
+     合成描边会把 CJK 字形糊成一团。全站继承。 */
+  font-synthesis: none;
 }
 
 .main-content {
