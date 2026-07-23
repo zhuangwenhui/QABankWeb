@@ -17,6 +17,13 @@ def test_security_headers_present(client):
     assert "'nonce-" in csp  # script-src 含 nonce
 
 
+def test_font_src_allows_self_for_webfonts(client):
+    # 自托管字体依赖 CSP font-src 含 'self';字体排版期上线自托管 woff2 后必须保持,防回归
+    r = client.get('/login')
+    csp = r.headers.get('Content-Security-Policy', '')
+    assert 'font-src' in csp and "'self'" in csp
+
+
 def test_inline_scripts_carry_nonce(client):
     """登录页所有无 src 的 <script> 必须带 nonce 且与 CSP 头一致。"""
     r = client.get('/login')
