@@ -4,27 +4,16 @@
 """
 from datetime import datetime
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, request
+from sqlalchemy.exc import IntegrityError
 
 from auth import login_required
 from models import Question, QuestionBookmark, QuestionNote, db
+from api._helpers import ok as _ok, err as _err
 
 bp = Blueprint('api_study', __name__, url_prefix='/api')
 
 MAX_NOTE_LEN = 20000
-
-
-def _ok(data=None, message=None, status=200):
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _err(error, code='INVALID_INPUT', status=400):
-    return jsonify(success=False, error=error, code=code), status
 
 
 def _question_or_none(qid):
@@ -52,8 +41,15 @@ def put_note(qid):
         return _err(f'笔记过长(上限 {MAX_NOTE_LEN} 字)')
     note = QuestionNote.query.filter_by(user_id=g.user.id, question_id=qid).first()
     if note is None:
-        note = QuestionNote(user_id=g.user.id, question_id=qid, content=content)
-        db.session.add(note)
+        try:
+            with db.session.begin_nested():
+                note = QuestionNote(user_id=g.user.id, question_id=qid, content=content)
+                db.session.add(note)
+        except IntegrityError:
+            # 并发下另一请求已插入同一 (user,question):改为更新已存在行(幂等)
+            note = QuestionNote.query.filter_by(user_id=g.user.id, question_id=qid).first()
+            note.content = content
+            note.updated_at = datetime.now()
     else:
         note.content = content
         note.updated_at = datetime.now()
@@ -76,7 +72,11 @@ def toggle_bookmark(qid):
         return _err('题目不存在', code='NOT_FOUND', status=404)
     bm = QuestionBookmark.query.filter_by(user_id=g.user.id, question_id=qid).first()
     if bm is None:
-        db.session.add(QuestionBookmark(user_id=g.user.id, question_id=qid))
+        try:
+            with db.session.begin_nested():
+                db.session.add(QuestionBookmark(user_id=g.user.id, question_id=qid))
+        except IntegrityError:
+            pass  # 并发下已插入同一 (user,question):幂等视为已收藏
         db.session.commit()
         return _ok({'bookmarked': True}, message='已收藏')
     db.session.delete(bm)

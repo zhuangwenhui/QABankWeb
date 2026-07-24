@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +16,8 @@ import config
 from auth import login_required
 from models import ErrorBook, GeneratedFile, Question, db
 from pdf_gen import generate_pdf
+from api._helpers import (ok as _ok, err as _err, escape_like as _escape_like,
+                          apply_question_search)
 
 bp = Blueprint('api_error_book', __name__, url_prefix='/api/error_book')
 
@@ -30,20 +32,8 @@ DEFAULT_NOTICE = ('1. 请独立完成全部题目,不要提前翻看解答;'
 
 
 # ---------------------------------------------------------------- 工具函数
-
-def _ok(data=None, message=None, status=200):
-    """统一成功响应。"""
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _err(error, code='INVALID_INPUT', status=400):
-    """统一失败响应。"""
-    return jsonify(success=False, error=error, code=code), status
+# 响应信封 _ok/_err、LIKE 转义 _escape_like、多词搜索 apply_question_search 均来自
+# api/_helpers.py(见顶部别名导入),与 questions 共用,杜绝搜索覆盖面漂移。
 
 
 class _FieldError(ValueError):
@@ -82,13 +72,6 @@ def _parse_int_list(value, max_size=MAX_BATCH_SIZE):
             seen.add(n)
             result.append(n)
     return result
-
-
-def _escape_like(term):
-    """转义 LIKE 通配符,配合 like(..., escape='\\\\') 使用(与 api/questions.py 一致)。"""
-    return (term.replace('\\', '\\\\')
-                .replace('%', '\\%')
-                .replace('_', '\\_'))
 
 
 def _parse_question_id(data):
@@ -173,13 +156,8 @@ def list_entries():
         pattern = f'%{_escape_like(source)}%'
         query = query.filter(Question.source.like(pattern, escape='\\'))
     if search:
-        like = f'%{_escape_like(search)}%'
-        query = query.filter(db.or_(
-            Question.question_latex.like(like, escape='\\'),
-            Question.solution_latex.like(like, escape='\\'),
-            Question.source.like(like, escape='\\'),
-            Question.chapter.like(like, escape='\\'),
-        ))
+        # 与主列表共用同一多词全文搜索(补齐 solution_ja 与知识点标签命中,修复此前的搜索漂移)
+        query = apply_question_search(query, search)
 
     page = request.args.get('page', 1, type=int)
     if page < 1:

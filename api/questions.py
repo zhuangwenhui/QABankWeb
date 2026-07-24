@@ -11,7 +11,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, request
 from sqlalchemy import func, or_
 
 import config
@@ -19,6 +19,8 @@ from auth import login_required
 from logging_setup import audit
 from models import (Question, QuestionBookmark, QuestionProgress, QuestionTag,
                     Tag, ViewLog, db)
+from api._helpers import (ok as _ok, err as _fail, escape_like as _escape_like,
+                          apply_question_search, prune_view_logs)
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
 
@@ -47,28 +49,8 @@ def _parse_exam_label(source):
     return (m.group(1), m.group(2), m.group(3)) if m else None
 
 
-# ---------------------------------------------------------------- 响应辅助
-
-def _ok(data=None, message=None, status=200):
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _fail(error, code='INVALID_INPUT', status=400):
-    return jsonify(success=False, error=error, code=code), status
-
-
-# ---------------------------------------------------------------- 校验辅助
-
-def _escape_like(term):
-    """转义 LIKE 通配符,配合 like(..., escape='\\\\') 使用。"""
-    return (term.replace('\\', '\\\\')
-                .replace('%', '\\%')
-                .replace('_', '\\_'))
+# 响应信封(_ok/_fail)、LIKE 转义(_escape_like)、多词搜索(apply_question_search)、
+# view_logs 保留期清理(prune_view_logs)均已抽到 api/_helpers.py,此处经别名导入复用。
 
 
 def _parse_date(raw, field):
@@ -256,25 +238,9 @@ def list_questions():
 
     search = (args.get('search') or '').strip()
     if search:
-        # 检索强化(2026-07-24):多词按 AND(词间与),每词命中 = 出现在任一正文/元信息
-        # 字段(含日本語詳解轨 solution_ja),或该题挂名称含此词的知识点标签。标签名命中走
-        # 子查询 id IN(...),不与既有 knowledgeTags 的 join/distinct/group_by 冲突。
-        # 上限 6 词防滥用;单词查询是旧行为的超集(多覆盖 solution_ja 与标签名)。
-        terms = [t for t in search.split() if t][:6]
-        for term in terms:
-            pattern = f'%{_escape_like(term)}%'
-            tag_match = (db.session.query(QuestionTag.question_id)
-                         .join(Tag, Tag.id == QuestionTag.tag_id)
-                         .filter(Tag.category == '知识点',
-                                 Tag.name.like(pattern, escape='\\')))
-            query = query.filter(or_(
-                Question.question_latex.like(pattern, escape='\\'),
-                Question.solution_latex.like(pattern, escape='\\'),
-                Question.solution_ja.like(pattern, escape='\\'),
-                Question.source.like(pattern, escape='\\'),
-                Question.chapter.like(pattern, escape='\\'),
-                Question.id.in_(tag_match),
-            ))
+        # 多词 AND 全文搜索(双轨题解+出处+章节+知识点标签名),单一实现见 api/_helpers.py,
+        # 与错题本(error_book)共用同一函数,杜绝搜索覆盖面漂移。
+        query = apply_question_search(query, search)
 
     question_id = (args.get('questionId') or '').strip()
     if question_id:
@@ -779,12 +745,16 @@ def log_view_question():
         return _fail('题目不存在', code='NOT_FOUND', status=404)
 
     try:
-        db.session.add(ViewLog(user_id=g.user.id, question_id=question_id))
+        vl = ViewLog(user_id=g.user.id, question_id=question_id)
+        db.session.add(vl)
         db.session.commit()
     except Exception:
         db.session.rollback()
         current_app.logger.exception('写入查看日志失败 question_id=%s', question_id)
         return _fail('记录查看日志失败', code='SERVER_ERROR', status=500)
+    # 保留期清理:按 id 采样(约每 500 次写触发一次),删超期日志防 view_logs 无界增长(rank17)
+    if vl.id and vl.id % 500 == 0:
+        prune_view_logs(180)
     return _ok(message='ok')
 
 

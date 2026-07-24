@@ -10,6 +10,7 @@ from sqlalchemy import func
 import config
 from auth import admin_required, login_required
 from models import Feedback, db
+from api._helpers import err as _err
 
 bp = Blueprint('api_feedback', __name__, url_prefix='/api/feedback')
 
@@ -18,9 +19,7 @@ MAX_CONTENT_LEN = 5000
 MAX_REPLY_LEN = 5000
 
 
-def _err(message, code='INVALID_INPUT', status=400):
-    """统一错误响应。"""
-    return jsonify(success=False, error=message, code=code), status
+# 响应信封 _err 已抽到 api/_helpers.py(见顶部别名导入)。
 
 
 def _visible_query():

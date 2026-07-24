@@ -5,13 +5,14 @@
 """
 from datetime import date, datetime, time, timedelta
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, request
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 import config
 from auth import login_required
 from models import Question, QuestionProgress, db
+from api._helpers import ok as _ok, err as _err
 
 bp = Blueprint('api_progress', __name__, url_prefix='/api/progress')
 
@@ -22,17 +23,7 @@ MAX_CALENDAR_DAYS = 366
 
 # ---------------------------------------------------------------- 工具函数
 
-def _ok(data=None, message=None, status=200):
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _err(error, code='INVALID_INPUT', status=400):
-    return jsonify(success=False, error=error, code=code), status
+# 响应信封 _ok/_err 已抽到 api/_helpers.py(见顶部别名导入)。
 
 
 def _parse_question_id(data):

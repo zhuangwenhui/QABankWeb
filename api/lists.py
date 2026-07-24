@@ -6,11 +6,12 @@
 进度语义与 api/progress.py 对齐:有 QuestionProgress 行即计入 done(含 mastered),
 status=='mastered' 另计入 mastered。
 """
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, request
 from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 
 from auth import login_required
+from api._helpers import ok as _ok, err as _fail
 from models import (Question, QuestionList, QuestionListItem,
                     QuestionProgress, db)
 
@@ -23,17 +24,7 @@ _MAX_REORDER = 5000
 
 # ---------------------------------------------------------------- 响应辅助
 
-def _ok(data=None, message=None, status=200):
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _fail(error, code='INVALID_INPUT', status=400):
-    return jsonify(success=False, error=error, code=code), status
+# 响应信封 _ok/_fail 已抽到 api/_helpers.py(见顶部别名导入,err as _fail)。
 
 
 def _list_meta(lst, item_count, progress):
