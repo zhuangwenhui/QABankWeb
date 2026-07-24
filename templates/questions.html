@@ -136,7 +136,7 @@
     <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#advancedPanel" aria-expanded="false">
       <i class="fa-solid fa-sliders me-1"></i>高级搜索
     </button>
-    <button class="btn btn-primary btn-sm" type="button" id="btnNewQuestion">
+    <button class="btn btn-primary btn-sm admin-only" type="button" id="btnNewQuestion">
       <i class="fa-solid fa-plus me-1"></i>新建题目
     </button>
   </div>
@@ -283,9 +283,9 @@
 <!-- 批量操作工具栏 -->
 <div class="batch-toolbar d-none" id="batchToolbar">
   <span class="fw-semibold text-primary" id="batchCount">已选中 0 项</span>
-  <button class="btn btn-sm btn-outline-danger" id="btnBatchDelete"><i class="fa-solid fa-trash me-1"></i>批量删除</button>
-  <button class="btn btn-sm btn-outline-primary" id="btnBatchTags"><i class="fa-solid fa-tags me-1"></i>批量编辑标签</button>
-  <button class="btn btn-sm btn-outline-primary" id="btnBatchSource"><i class="fa-solid fa-pen me-1"></i>批量修改来源</button>
+  <button class="btn btn-sm btn-outline-danger admin-only" id="btnBatchDelete"><i class="fa-solid fa-trash me-1"></i>批量删除</button>
+  <button class="btn btn-sm btn-outline-primary admin-only" id="btnBatchTags"><i class="fa-solid fa-tags me-1"></i>批量编辑标签</button>
+  <button class="btn btn-sm btn-outline-primary admin-only" id="btnBatchSource"><i class="fa-solid fa-pen me-1"></i>批量修改来源</button>
   <button class="btn btn-sm btn-outline-warning" id="btnBatchErrorBook"><i class="fa-solid fa-bookmark me-1"></i>批量加入错题本</button>
   <button class="btn btn-sm btn-outline-secondary ms-auto" id="btnBatchCancel"><i class="fa-solid fa-xmark me-1"></i>取消选择</button>
 </div>
@@ -500,10 +500,14 @@
 <!-- 右键上下文菜单 -->
 <div class="context-menu" id="contextMenu">
   <div class="context-menu-item" data-action="detail"><i class="fa-solid fa-eye"></i>查看详情</div>
+  {% if current_user and current_user.is_admin %}
   <div class="context-menu-item" data-action="edit"><i class="fa-solid fa-pen"></i>编辑</div>
+  {% endif %}
   <div class="context-menu-item" data-action="bookmark"><i class="fa-solid fa-bookmark"></i><span id="ctxBookmarkText">加入错题本</span></div>
   <div class="context-menu-item" data-action="copy"><i class="fa-solid fa-copy"></i>复制题目 LaTeX</div>
+  {% if current_user and current_user.is_admin %}
   <div class="context-menu-item text-danger" data-action="delete"><i class="fa-solid fa-trash"></i>删除</div>
+  {% endif %}
 </div>
 {% endblock %}
 

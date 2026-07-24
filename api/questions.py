@@ -15,7 +15,7 @@ from flask import Blueprint, current_app, g, request
 from sqlalchemy import func, or_
 
 import config
-from auth import login_required
+from auth import admin_required, login_required
 from logging_setup import audit
 from models import (Question, QuestionBookmark, QuestionProgress, QuestionTag,
                     Tag, ViewLog, db)
@@ -434,7 +434,7 @@ def related_questions(qid):
 # ================================================================ 题目增删改
 
 @bp.route('/questions', methods=['POST'])
-@login_required
+@admin_required
 def create_question():
     """新建题目。"""
     data = request.get_json(silent=True)
@@ -458,7 +458,7 @@ def create_question():
 
 
 @bp.route('/questions/<int:qid>', methods=['PUT'])
-@login_required
+@admin_required
 def update_question(qid):
     """更新题目(部分字段可省略,省略则不改)。"""
     question = db.session.get(Question, qid)
@@ -493,7 +493,7 @@ def update_question(qid):
 
 
 @bp.route('/questions/<int:qid>', methods=['DELETE'])
-@login_required
+@admin_required
 def delete_question(qid):
     """删除题目(错题本关联、查看日志由级联清理;附件文件一并删除)。"""
     question = db.session.get(Question, qid)
@@ -517,7 +517,7 @@ def delete_question(qid):
 # ================================================================ 批量操作
 
 @bp.route('/questions/batch_delete', methods=['POST'])
-@login_required
+@admin_required
 def batch_delete():
     """批量删除题目。"""
     data = request.get_json(silent=True) or {}
@@ -548,7 +548,7 @@ def batch_delete():
 
 
 @bp.route('/questions/batch_update_tags', methods=['POST'])
-@login_required
+@admin_required
 def batch_update_tags():
     """批量编辑标签:replace 整体替换 / add 追加去重。"""
     data = request.get_json(silent=True) or {}
@@ -581,7 +581,7 @@ def batch_update_tags():
 
 
 @bp.route('/questions/batch_update_source', methods=['POST'])
-@login_required
+@admin_required
 def batch_update_source():
     """批量修改来源。"""
     data = request.get_json(silent=True) or {}
@@ -707,7 +707,7 @@ def tag_facets():
 # ================================================================ 来源判重
 
 @bp.route('/source_exists', methods=['GET'])
-@login_required
+@admin_required
 def source_exists():
     """来源判重(精确匹配;编辑时可用 exclude_id 排除自身)。"""
     source = (request.args.get('source') or '').strip()
@@ -761,7 +761,7 @@ def log_view_question():
 # ================================================================ 图片上传/删除
 
 @bp.route('/upload_question_image', methods=['POST'])
-@login_required
+@admin_required
 def upload_question_image():
     """上传题目/解答附件(image/* 与 PDF;uuid 重命名,扩展名白名单)。"""
     file = request.files.get('file')
@@ -789,7 +789,7 @@ def upload_question_image():
 
 
 @bp.route('/delete_question_image', methods=['POST'])
-@login_required
+@admin_required
 def delete_question_image():
     """删除上传的附件文件(basename 防路径穿越;文件不存在也视为成功)。
 

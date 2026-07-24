@@ -377,3 +377,7 @@ tr.selected {
 }
 .mastery-dot.is-done { background: var(--qb-blue); }
 .mastery-dot.is-mastered { background: var(--qb-green); }
+
+/* 权限双轨:非管理员隐藏管理员专属操作(新建/编辑/删除/批量内容管理)。
+   后端 admin_required 是真边界,此处仅避免学生看到会 403 的按钮。 */
+body:not(.is-admin) .admin-only { display: none !important; }

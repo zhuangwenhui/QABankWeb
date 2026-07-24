@@ -52,6 +52,7 @@
     knowledgeTags: new Set(),   // 已选中的规范化知识点标签名(多维筛选)
     mastery: new Map(),         // 掌握状态回填:qid → 'done' | 'mastered'(无键=未做)
     viewMode: 'table',          // 'table' | 'card'
+    isAdmin: document.body.classList.contains('is-admin'),  // 仅管理员渲染编辑/删除行动作
     editingId: null,            // 正在编辑的题目 id(null = 新建)
     editImages: { question_image: null, solution_image: null },
     tempUploads: new Set(),     // 本次编辑会话新上传、尚未保存的临时文件名
@@ -799,8 +800,8 @@
         <td class="text-nowrap">
           <i class="fa-solid fa-bookmark bookmark-btn${marked ? ' bookmarked' : ''} me-2" data-id="${q.id}" title="加入/移出错题本"></i>
           <a class="btn btn-sm btn-outline-secondary me-1" href="/questions/${q.id}" title="打开双语题解详情页"><i class="fa-solid fa-up-right-from-square"></i></a>
-          <button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}" title="编辑"><i class="fa-solid fa-pen"></i></button>
-          <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}" title="删除"><i class="fa-solid fa-trash"></i></button>
+          ${state.isAdmin ? `<button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}" title="编辑"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}" title="删除"><i class="fa-solid fa-trash"></i></button>` : ''}
         </td>
       </tr>`;
   }
@@ -826,8 +827,8 @@
         <div class="d-flex gap-2 mt-2 pt-2 border-top">
           <button type="button" class="btn btn-sm btn-outline-secondary js-open-detail" data-id="${q.id}"><i class="fa-solid fa-eye me-1"></i>详情</button>
           <a class="btn btn-sm btn-outline-secondary" href="/questions/${q.id}" title="打开双语题解详情页"><i class="fa-solid fa-up-right-from-square me-1"></i>详情页 ↗</a>
-          <button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}"><i class="fa-solid fa-pen me-1"></i>编辑</button>
-          <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}"><i class="fa-solid fa-trash me-1"></i>删除</button>
+          ${state.isAdmin ? `<button type="button" class="btn btn-sm btn-outline-primary js-edit" data-id="${q.id}"><i class="fa-solid fa-pen me-1"></i>编辑</button>
+          <button type="button" class="btn btn-sm btn-outline-danger js-delete" data-id="${q.id}"><i class="fa-solid fa-trash me-1"></i>删除</button>` : ''}
         </div>
       </div>`;
   }
