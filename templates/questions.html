@@ -3,7 +3,11 @@
 {% block title %}题目管理 - 题库系统{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+{# CodeMirror 供题目编辑器用。编辑当前是 @login_required(任何登录用户可建/编辑题),
+   故按 current_user 加载而非 is_admin —— 与实际编辑权限一致,避免非管理员误报"编辑器加载失败"。 #}
+{% if current_user %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/codemirror.min.css') }}">
+{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}">
 <style>
   /* 题目管理页局部样式(公共样式见 style.css) */
@@ -511,7 +515,9 @@
     perPageOptions: {{ PER_PAGE_OPTIONS | tojson }}
   };
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/stex/stex.min.js"></script>
+{% if current_user %}
+<script src="{{ url_for('static', filename='vendor/js/codemirror.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/codemirror-stex.min.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='js/questions.js') }}"></script>
 {% endblock %}

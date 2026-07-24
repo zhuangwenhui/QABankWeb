@@ -17,151 +17,12 @@
   if (!appEl) return;
   var qid = appEl.dataset.qid;
 
-  // 容器默认标题按轨取(显式标题仍优先)。防止中文轨渲出日文标签(反之亦然)——
-  // 即用户强调的"中日混搭"。渲染前置 activeTrack,容器 render 据此选默认标签。
-  var LABELS = {
-    ja: { def: '定義・定理', note: 'Note', warn: '注意', insight: '洞察', conclusion: '結論' },
-    zh: { def: '定义·定理', note: '提示', warn: '注意', insight: '洞察', conclusion: '结论' }
-  };
-  var activeTrack = 'ja';
-
-  // ---------------------------------------------------------------- markdown-it
-  var md = null;
-  if (window.markdownit) {
-    md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
-    if (window.markdownitContainer) {
-      registerContainer('def', '');            // 橙:定義/定理
-      registerContainer('note', 'note');       // 蓝:Note
-      registerContainer('warn', 'warn');       // 红:注意/陷阱
-      registerContainer('insight', 'note');    // 洞察 ≈ note
-      registerContainer('conclusion', '__concl__');
-    }
-  }
-
-  /** 注册一种 markdown-it-container,输出与 mockup 完全一致的 class 结构。
-   *  无显式标题时,按当前 activeTrack 取该轨默认标签(避免中日混搭)。 */
-  function registerContainer(name, klass) {
-    md.use(window.markdownitContainer, name, {
-      validate: function (params) {
-        return params.trim().split(' ', 1)[0] === name;
-      },
-      render: function (tokens, idx) {
-        var tok = tokens[idx];
-        if (tok.nesting !== 1) return '</div>\n';
-        var info = tok.info.trim();
-        var byTrack = (LABELS[activeTrack] || LABELS.ja)[name] || '';
-        var title = info.slice(name.length).trim() || byTrack;
-        if (klass === '__concl__') {
-          return '<div class="conclusion"><span class="t">' +
-                 md.utils.escapeHtml(title) + '</span>\n';
-        }
-        return '<div class="callout' + (klass ? ' ' + klass : '') + '">' +
-               '<div class="t"><span class="mk"></span>' +
-               md.utils.escapeHtml(title) + '</div>\n';
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------- 数学占位
-  function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
-
-  // MathJax v4 原生正确渲染文本模式(\text/\texttt/…)里的转义 \_ 与 \&,无需改写。
-  // 历史上为 MathJax v3 做的「文本组内 \_→_ 还原」在 v4 下反而会触发
-  // "'_' allowed only in math mode"(裸 _ 在文本模式非法)——源码本就用转义 \_,
-  // 被改写成裸 _ 后 v4 报错。实测 v4 下 \texttt{compare\_swap} 正常、compare_swap 报错,
-  // 故彻底移除该改写,保持原样交给 MathJax v4。
-  function fixTextModeEscapes(tex) {
-    return tex;
-  }
-
-  /** ① 抽出 $$…$$ 与 $…$,替换为纯字母数字占位符(防 markdown 吞掉 _ / *)。 */
-  function protectMath(src) {
-    var store = [];
-    function grab(m) { store.push(fixTextModeEscapes(m)); return ph(store.length - 1); }
-    src = src.replace(/\$\$([\s\S]+?)\$\$/g, grab);   // 先 display
-    src = src.replace(/\$((?:\\.|[^\$\\\n])+?)\$/g, grab); // 再 inline
-    return { src: src, store: store };
-  }
-
-  /** ③ 还原数学占位。数学内部的 < > & 做 HTML 转义,保证随后 sanitize 不吞公式,
-   *  MathJax 读取 textContent 时实体会被解码回原字符。分隔符 $ 保持原样。 */
-  function restoreMath(html, store) {
-    store.forEach(function (m, i) {
-      var safe = m.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      html = html.split(ph(i)).join(safe);
-    });
-    return html;
-  }
-
-  // ---------------------------------------------------------------- 渲染
-  var PURIFY_CFG = {
-    ADD_TAGS: ['math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn',
-               'msup', 'msub', 'msubsup', 'mfrac', 'munder', 'mover', 'munderover',
-               'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd'],
-    ADD_ATTR: ['class', 'display', 'aria-hidden']
-  };
-
-  /** raw markdown → 经消毒的 HTML 字符串。track 决定容器默认标签(ja/zh)。缺库时降级为转义分段。 */
-  function renderMarkdown(raw, track) {
-    raw = raw || '';
-    activeTrack = (track === 'zh') ? 'zh' : 'ja';
-    if (!md) {
-      // 降级:无 markdown-it 时,至少按空行分段并转义,避免"一坨"。
-      var esc = (window.escapeHtml || function (s) { return s; });
-      return raw.split(/\n{2,}/).map(function (p) {
-        return '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>';
-      }).join('');
-    }
-    var protectedSrc = protectMath(raw);
-    var html = md.render(protectedSrc.src);              // ②
-    html = restoreMath(html, protectedSrc.store);        // ③
-    if (window.DOMPurify) html = window.DOMPurify.sanitize(html, PURIFY_CFG); // ④
-    return html;
-  }
-
-  // ### 步骤标题:把"第N步/编号"前缀包成 .n 徽标。只动首个文本节点,保留标题内行内公式。
-  var STEP_RE = /^\s*(第[一二三四五六七八九十百千]+步|Step\s*\d+|\d+)\s*[:：.、)]?\s*/;
-  function enhanceSteps(node) {
-    node.querySelectorAll('h3').forEach(function (h) {
-      var tn = h.firstChild;
-      if (tn && tn.nodeType === 3) {
-        var m = tn.nodeValue.match(STEP_RE);
-        if (m) {
-          var chip = document.createElement('span');
-          chip.className = 'n';
-          chip.textContent = m[1];
-          tn.nodeValue = tn.nodeValue.slice(m[0].length);
-          h.insertBefore(chip, tn);
-          h.classList.add('qd-h3-chip');
-          return;
-        }
-      }
-      h.classList.add('qd-h3-plain');
-    });
-  }
-
-  /** 注入 HTML 到节点、强化步骤块,并等 MathJax 排版(⑤)。track 决定容器默认标签。 */
-  function renderInto(node, raw, track) {
-    node.innerHTML = renderMarkdown(raw, track);
-    enhanceSteps(node);
-  }
-
-  // ---------------------------------------------------------------- MathJax
-  function mathReady() {
-    if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-      return window.MathJax.startup.promise;
-    }
-    return new Promise(function (res) {
-      setTimeout(function () { mathReady().then(res); }, 50);
-    });
-  }
-  function typeset(node) {
-    return mathReady().then(function () {
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        return window.MathJax.typesetPromise([node]);
-      }
-    }).catch(function (e) { console.warn('MathJax 渲染失败:', e); });
-  }
+  // ---------------------------------------------------------------- 渲染管线(共享)
+  // 管线已抽到 qd_render.js(window.QDRender),与复习页共用同一实现,杜绝双份漂移副本。
+  var R = window.QDRender || {};
+  var renderMarkdown = R.renderMarkdown;
+  var renderInto = R.renderInto;
+  var typeset = R.typeset;
 
   // ---------------------------------------------------------------- DOM refs
   var el = {
@@ -360,38 +221,9 @@
   }
 
   // ---------------------------------------------------------------- 采点结构化题解(四段卡片)
-  // 方針=蓝(insight)/ 答案例=橙(brand)/ 失点=红(warn)/ 部分点=绿(conclusion),
-  // 复用既有 callout 色板。各段 md 走渲染管线 + typeset;整块空则不显示。
-  var STRUCT_SECTIONS = [
-    { key: 'houshin', label: '解答方針', kind: 'houshin' },
-    { key: 'model',   label: '答案例',   kind: 'model' },
-    { key: 'shitten', label: '典型失点', kind: 'shitten' },
-    { key: 'haiten',  label: '部分点分布', kind: 'haiten' }
-  ];
+  // 渲染委托共享 qd_render.js 的 renderStructuredInto(方針蓝/答案例橙/失点红/部分点绿;整块空则隐藏)。
   function renderStructured(s) {
-    var wrap = el.structured;
-    if (!wrap) return;
-    s = s || {};
-    var has = STRUCT_SECTIONS.some(function (sec) { return (s[sec.key] || '').trim(); });
-    if (!has) { wrap.hidden = true; return; }
-    wrap.hidden = false;
-    wrap.innerHTML = '<div class="qd-struct-head">採点ポイント · 采点结构化</div>' +
-                     '<div class="qd-struct-grid" id="qdStructGrid"></div>';
-    var grid = wrap.querySelector('#qdStructGrid');
-    var esc = window.escapeHtml || function (x) { return x; };
-    STRUCT_SECTIONS.forEach(function (sec) {
-      var raw = (s[sec.key] || '').trim();
-      if (!raw) return;
-      var card = document.createElement('div');
-      card.className = 'qd-struct-card ' + sec.kind;
-      card.innerHTML = '<div class="qd-struct-card-h"><span class="qd-struct-bar"></span>' +
-                       '<span class="qd-struct-t">' + esc(sec.label) + '</span></div>' +
-                       '<div class="qd-struct-b solbody"></div>';
-      grid.appendChild(card);
-      var body = card.querySelector('.qd-struct-b');
-      renderInto(body, raw, 'ja');   // 复用管线
-      typeset(body);
-    });
+    if (window.QDRender) window.QDRender.renderStructuredInto(el.structured, s);
   }
 
   // ---------------------------------------------------------------- 相关题(顺藤摸瓜)

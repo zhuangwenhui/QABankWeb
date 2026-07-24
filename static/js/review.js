@@ -3,13 +3,11 @@
  *
  * 依赖:
  *   - utils.js:apiFetch / escapeHtml / showToast(全站已加载)
- *   - markdown-it / markdown-it-container / DOMPurify(本页 CDN 加载)
+ *   - qd_render.js:window.QDRender 共享渲染管线(renderMd / renderStructuredInto)
+ *   - markdown-it / markdown-it-container / DOMPurify(模板自托管加载)
  *   - MathJax v4(base.html 已加载,tex-svg)
  *
- * 渲染管线 renderMd(raw, track, el) 为 question_detail.js 的精简自包含副本:
- *   raw md → ①保护 $$…$$/$…$ 占位 → ②markdown-it(+container) → ③还原数学
- *          → ④DOMPurify.sanitize → ⑤注入 DOM 后 MathJax.typesetPromise。
- * 与详情页一致:保留 MathJax v4 原生行为,不做「文本组内 \_→_ 还原」改写。
+ * 渲染管线不再自持副本,统一复用 qd_render.js(与详情页同一实现,杜绝漂移)。
  */
 (function () {
   'use strict';
@@ -17,163 +15,10 @@
   var appEl = document.getElementById('rvApp');
   if (!appEl) return;
 
-  // ============================================================ 渲染副本(renderMd)
-  var LABELS = {
-    ja: { def: '定義・定理', note: 'Note', warn: '注意', insight: '洞察', conclusion: '結論' },
-    zh: { def: '定义·定理', note: '提示', warn: '注意', insight: '洞察', conclusion: '结论' }
-  };
-  var activeTrack = 'ja';
-
-  var md = null;
-  if (window.markdownit) {
-    md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
-    if (window.markdownitContainer) {
-      registerContainer('def', '');
-      registerContainer('note', 'note');
-      registerContainer('warn', 'warn');
-      registerContainer('insight', 'note');
-      registerContainer('conclusion', '__concl__');
-    }
-  }
-
-  function registerContainer(name, klass) {
-    md.use(window.markdownitContainer, name, {
-      validate: function (params) {
-        return params.trim().split(' ', 1)[0] === name;
-      },
-      render: function (tokens, idx) {
-        var tok = tokens[idx];
-        if (tok.nesting !== 1) return '</div>\n';
-        var info = tok.info.trim();
-        var byTrack = (LABELS[activeTrack] || LABELS.ja)[name] || '';
-        var title = info.slice(name.length).trim() || byTrack;
-        if (klass === '__concl__') {
-          return '<div class="conclusion"><span class="t">' +
-                 md.utils.escapeHtml(title) + '</span>\n';
-        }
-        return '<div class="callout' + (klass ? ' ' + klass : '') + '">' +
-               '<div class="t"><span class="mk"></span>' +
-               md.utils.escapeHtml(title) + '</div>\n';
-      }
-    });
-  }
-
-  function ph(i) { return 'RVMATHPLACEHOLDER' + i + 'ENDRV'; }
-
-  // MathJax v4 原生正确渲染文本模式里的转义 \_ 与 \&,无需改写(详见 question_detail.js 注释)。
-  function fixTextModeEscapes(tex) { return tex; }
-
-  function protectMath(src) {
-    var store = [];
-    function grab(m) { store.push(fixTextModeEscapes(m)); return ph(store.length - 1); }
-    src = src.replace(/\$\$([\s\S]+?)\$\$/g, grab);        // 先 display
-    src = src.replace(/\$((?:\\.|[^\$\\\n])+?)\$/g, grab); // 再 inline
-    return { src: src, store: store };
-  }
-
-  function restoreMath(html, store) {
-    store.forEach(function (m, i) {
-      var safe = m.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      html = html.split(ph(i)).join(safe);
-    });
-    return html;
-  }
-
-  var PURIFY_CFG = {
-    ADD_TAGS: ['math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn',
-               'msup', 'msub', 'msubsup', 'mfrac', 'munder', 'mover', 'munderover',
-               'msqrt', 'mroot', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd'],
-    ADD_ATTR: ['class', 'display', 'aria-hidden']
-  };
-
-  function renderMarkdown(raw, track) {
-    raw = raw || '';
-    activeTrack = (track === 'zh') ? 'zh' : 'ja';
-    if (!md) {
-      var esc = (window.escapeHtml || function (s) { return s; });
-      return raw.split(/\n{2,}/).map(function (p) {
-        return '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>';
-      }).join('');
-    }
-    var protectedSrc = protectMath(raw);
-    var html = md.render(protectedSrc.src);
-    html = restoreMath(html, protectedSrc.store);
-    if (window.DOMPurify) html = window.DOMPurify.sanitize(html, PURIFY_CFG);
-    return html;
-  }
-
-  var STEP_RE = /^\s*(第[一二三四五六七八九十百千]+步|Step\s*\d+|\d+)\s*[:：.、)]?\s*/;
-  function enhanceSteps(node) {
-    node.querySelectorAll('h3').forEach(function (h) {
-      var tn = h.firstChild;
-      if (tn && tn.nodeType === 3) {
-        var m = tn.nodeValue.match(STEP_RE);
-        if (m) {
-          var chip = document.createElement('span');
-          chip.className = 'n';
-          chip.textContent = m[1];
-          tn.nodeValue = tn.nodeValue.slice(m[0].length);
-          h.insertBefore(chip, tn);
-          h.classList.add('qd-h3-chip');
-          return;
-        }
-      }
-      h.classList.add('qd-h3-plain');
-    });
-  }
-
-  function mathReady() {
-    if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-      return window.MathJax.startup.promise;
-    }
-    return new Promise(function (res) {
-      setTimeout(function () { mathReady().then(res); }, 50);
-    });
-  }
-  function typeset(node) {
-    return mathReady().then(function () {
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        return window.MathJax.typesetPromise([node]);
-      }
-    }).catch(function (e) { console.warn('MathJax 渲染失败:', e); });
-  }
-
-  /** raw markdown → 消毒 HTML 注入 node,强化步骤块,排版数学。track 决定容器默认标签。 */
-  function renderMd(raw, track, node) {
-    node.innerHTML = renderMarkdown(raw, track);
-    enhanceSteps(node);
-    return typeset(node);
-  }
-
-  // 采点结构化题解四段(与详情页同款卡片:方針蓝/答案例橙/失点红/部分点绿)。
-  var STRUCT_SECTIONS = [
-    { key: 'houshin', label: '解答方針', kind: 'houshin' },
-    { key: 'model',   label: '答案例',   kind: 'model' },
-    { key: 'shitten', label: '典型失点', kind: 'shitten' },
-    { key: 'haiten',  label: '部分点分布', kind: 'haiten' }
-  ];
-  /** 把采点四段渲染进 node;整块空则隐藏(旧题照常)。复用 renderMd 管线 + MathJax。 */
-  function renderStructuredInto(node, s) {
-    if (!node) return;
-    s = s || {};
-    var has = STRUCT_SECTIONS.some(function (sec) { return (s[sec.key] || '').trim(); });
-    if (!has) { node.hidden = true; return; }
-    node.hidden = false;
-    node.innerHTML = '<div class="qd-struct-head">採点ポイント · 采点结构化</div>' +
-                     '<div class="qd-struct-grid"></div>';
-    var grid = node.querySelector('.qd-struct-grid');
-    STRUCT_SECTIONS.forEach(function (sec) {
-      var raw = (s[sec.key] || '').trim();
-      if (!raw) return;
-      var card = document.createElement('div');
-      card.className = 'qd-struct-card ' + sec.kind;
-      card.innerHTML = '<div class="qd-struct-card-h"><span class="qd-struct-bar"></span>' +
-                       '<span class="qd-struct-t">' + esc(sec.label) + '</span></div>' +
-                       '<div class="qd-struct-b solbody"></div>';
-      grid.appendChild(card);
-      renderMd(raw, 'ja', card.querySelector('.qd-struct-b'));
-    });
-  }
+  // 渲染管线共享自 qd_render.js(此前为 question_detail.js 的自包含副本,已抽出统一)。
+  var R = window.QDRender || {};
+  var renderMd = R.renderMd;
+  var renderStructuredInto = R.renderStructuredInto;
 
   // ============================================================ 复习流程
   var esc = window.escapeHtml || function (s) { return s; };

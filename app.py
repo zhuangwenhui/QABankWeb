@@ -72,13 +72,14 @@ def create_app(config_object=None):
         # 仅生产启用:信任前置 Nginx 的 X-Forwarded-For/Proto 各一跳
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
+    # 自托管收敛(2026-07-24):Bootstrap/FontAwesome/markdown-it/DOMPurify/CodeMirror 已下到
+    # static/vendor/,cdnjs 彻底移除;jsdelivr 仅余 MathJax(tex-svg,惰性拉组件 .js,故留 script-src)。
     csp = {
         'default-src': "'self'",
-        'script-src': ["'self'", 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
-        # 样式放宽 unsafe-inline:模板 style 属性与 MathJax/Bootstrap 动态样式所需(spec §3.2)
-        'style-src': ["'self'", "'unsafe-inline'",
-                      'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
-        'font-src': ["'self'", 'data:', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com'],
+        'script-src': ["'self'", 'https://cdn.jsdelivr.net'],  # jsdelivr 仅供 MathJax
+        # 样式放宽 unsafe-inline:模板 style 属性与 MathJax/Bootstrap 动态内联样式所需(spec §3.2)
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'font-src': ["'self'", 'data:'],  # 自托管 CJK 字体 + FA webfonts
         'img-src': ["'self'", 'data:'],
         'connect-src': "'self'",
     }

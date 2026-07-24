@@ -9,8 +9,8 @@
         href="{{ url_for('static', filename='fonts/noto-sans-sc-regular.subset.woff2') }}">
   <link rel="preload" as="font" type="font/woff2" crossorigin
         href="{{ url_for('static', filename='fonts/shippori-mincho-regular.subset.woff2') }}">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='vendor/css/fontawesome.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/fonts.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
   <script nonce="{{ csp_nonce() }}">
@@ -29,7 +29,8 @@
       svg: { fontCache: 'global' }
     };
   </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-svg.js"></script>
+  <!-- MathJax 锁定精确版:@4 浮动会让上游任一 4.x 静默改全站数学渲染(如 v4 下划线 bug) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-svg.js"></script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -117,7 +118,7 @@
 
   <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
   <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
