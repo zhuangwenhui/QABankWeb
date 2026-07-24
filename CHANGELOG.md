@@ -3,6 +3,14 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
+## [v1.8.0] 权限收紧(2026-07-24)
+审计发现题库**内容管理**端点(create/update/delete_question、batch_delete/tags/source、upload/delete_image、
+source_exists)此前仅 `@login_required`,任何登录学生都能管理共享题库 —— admin 与 student 在内容域权限**等价**,
+双轨失效。修复:
+- 后端:9 端点 `@login_required`→`@admin_required`(学生 **403**);GET 读、记录查看、自有错题本/进度/复习/笔记/收藏/判题不受影响。
+- 前端:非管理员隐藏新建/编辑/删除/批量内容管理按钮与右键项(后端为真边界,前端仅避免学生见到会 403 的按钮)。
+- 其余域经彻查**已严格双轨**:overview/反馈处理=admin;反馈列表/删除、题单(owner+is_official)、其余个人数据按属主隔离。
+
 ## [v1.7.0] 技术债加固(2026-07-24)
 审计驱动的确定性优化(判题相关项按需暂缓)。
 - **后端 DRY/正确性**:新增 `api/_helpers.py` 统一响应信封(消 `_err`/`_fail` 分裂)、LIKE 转义、
