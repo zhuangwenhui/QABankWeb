@@ -330,11 +330,17 @@ curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 
 ### 5.2 回滚
 
+每次生产部署都打了轻量语义 tag(见 `CHANGELOG.md`),回滚即 checkout 上一个稳定 tag:
+
 ```bash
 cd /srv/question-bank
-sudo -u deploy git checkout <上一个 tag>
+sudo -u deploy git fetch --tags
+sudo -u deploy git tag --sort=-v:refname | head      # 列出发布 tag,挑上一个稳定版
+sudo -u deploy git describe --tags                   # 确认"当前生产是哪个 tag/提交"
+sudo -u deploy git checkout <上一个稳定 tag,如 v1.6.0>   # 对照 CHANGELOG.md 确认本次改了什么
 sudo -u deploy .venv/bin/pip-sync requirements.txt   # 或 pip install -r requirements.txt
 sudo systemctl restart question-bank
+curl -s http://127.0.0.1:8000/healthz                # 健康门禁:回滚后必须 200
 ```
 
 若本次发布包含数据库 schema 变更,仅回退代码不够,还需要处理数据库:

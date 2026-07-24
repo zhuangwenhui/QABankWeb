@@ -1,6 +1,6 @@
 # 题库系统
 
-面向大学院入学考试备考的理工科题库管理系统。以 LaTeX 存储和渲染数学公式,支持错题本管理与 LaTeX 试卷 PDF 生成。依据《题库系统技术文档.md》实现。
+面向大学院入学考试(院試)备考的理工科双语题库系统。以 LaTeX 存储和渲染数学公式,支持错题本、间隔复习、知识点标签、采点结构化题解与手写作答判题。初始设计依据《题库系统技术文档.md》,后续增量功能见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能
 
@@ -9,11 +9,15 @@
 - **意见反馈**(`/feedback`):提交工单;按状态筛选(全部/待处理/已处理);管理员处理与回复
 - **总览**(`/overview`,管理员):题库统计、查看趋势、Top 常看题目、错题分布(学生访问自动重定向到题目管理)
 - **登录安全**:图片验证码(服务端 Pillow 栅格化,点击刷新、大小写不敏感、一次性)+ 登录限流(同一 IP/用户名 5 分钟内失败 5 次锁定 15 分钟),抵御脚本爬取与暴力破解
+- **学习闭环**:做题状态/掌握色块;SM-2 间隔复习(`/review`);做题日历热力图;顶部进度面板
+- **内容发现**:知识点标签(多维筛选 + facet 计数);题单(`/lists`,官方 + 用户自建);详情页渐进提示与采点四段结构化题解;相关题推荐 + 双轨全文检索(覆盖日文詳解轨 + 知识点标签名)
+- **采点判题**(`/questions/<id>` 详情页):上传手写作答照片 → 可插拔 LLM 阅卷按采点逐项给分 + 作答转写 + 反馈(未配 `ANTHROPIC_API_KEY` 时走诚实占位 stub)
+- **个人工具**:每题私人笔记(自动保存);收藏书签 + 列表「只看收藏」筛选
 
 ## 技术栈
 
 - 后端:Python Flask + Flask-SQLAlchemy(SQLite),同源 Session 认证 + CSRF 保护
-- 前端:服务端渲染 MPA;Bootstrap 5.1.3、Font Awesome 6、MathJax 3(boldsymbol 扩展)、CodeMirror 5.65.2(stex),均走 CDN
+- 前端:服务端渲染 MPA;Bootstrap 5.1.3、Font Awesome 6、markdown-it/DOMPurify、CodeMirror 5.65.2(stex)均**自托管**于 `static/vendor/`(cdnjs 已移除、CSP 收回 `'self'`);MathJax **4.1.3**(tex-svg,New Computer Modern,锁定精确版)走 CDN;中日 web 字体自托管子集。详情/复习页共用 `static/js/qd_render.js` 单一渲染管线
 - 页面脚本按功能域拆分为独立模块文件(`static/js/questions.js` 等),非巨型内联脚本
 - PDF:服务端 LaTeX 编译(xelatex/pdflatex 自动探测)
 
@@ -67,13 +71,21 @@ Ubuntu 安装参考:`sudo apt install texlive-xetex texlive-lang-chinese fonts-n
 question-bank/
 ├── app.py               # 应用入口:页面路由、蓝图注册、CSRF、文件服务
 ├── config.py            # 配置与固定枚举(课程/难度/模板白名单)
-├── models.py            # User / Question / ErrorBook / Feedback / ViewLog
+├── models.py            # User/Question/ErrorBook/Feedback/ViewLog/QuestionProgress/
+│                         #   Tag/QuestionTag/QuestionList(+Item)/AnswerSubmission/QuestionNote/QuestionBookmark…
+├── grading.py           # 采点判题引擎(可插拔:ClaudeVisionGrader / StubGrader)
 ├── auth.py              # login_required / admin_required / CSRF 校验
 ├── seed.py              # 演示数据(7 门课程真实 LaTeX 例题)
 ├── pdf_gen.py           # LaTeX → PDF 编译(引擎探测、模板渲染、降级)
-├── api/                 # JSON 接口蓝图
-│   ├── questions.py     #   题目查询/CRUD/批量/筛选项/判重/图片上传
+├── api/                 # JSON 接口蓝图(响应信封/搜索共用 _helpers.py)
+│   ├── _helpers.py      #   共用 ok/err 信封、LIKE 转义、多词全文搜索(消漂移)
+│   ├── questions.py     #   题目查询/CRUD/批量/筛选/相关题/知识点标签/facet/图片上传
 │   ├── error_book.py    #   错题本增删查/备注/统计/PDF 生成
+│   ├── progress.py      #   做题状态/掌握(question_progress)
+│   ├── review.py        #   SM-2 间隔复习队列
+│   ├── lists.py         #   题单(官方/用户自建)
+│   ├── study.py         #   私人笔记 + 收藏书签
+│   ├── submissions.py   #   采点判题:手写作答上传 + 评分
 │   ├── feedback.py      #   反馈工单
 │   └── overview.py      #   管理统计
 ├── templates/           # Jinja2 页面模板

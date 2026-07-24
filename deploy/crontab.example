@@ -1,3 +1,15 @@
 # crontab -e(deploy 用户)
-# 每日 04:30 备份
+#
+# 异地备份/心跳的配置直接写在本 crontab 顶部:cron 会把这些 KEY=value 注入到下方任务的环境,
+# 无需 source 任何文件 —— 避开两个坑:(a) `. env` 不带 export 时变量不传子进程;
+# (b) /etc/question-bank.env 通常 chmod 600 root:deploy,deploy 用户根本读不到。
+# 取消注释并填入你的值即可启用(未设则备份仅本机、心跳跳过):
+# QB_OFFSITE_REMOTE=scp:user@host:/backups/qb        # 或 rclone 远端:remote:qb-backups
+# QB_HEARTBEAT_URL=https://hc-ping.com/your-uuid     # Healthchecks.io 等;健康 ping,异常 ping /fail
+# QB_ERROR_LOG=/srv/backups/question-bank/app.log    # 心跳扫描的日志文件(缺省回落 journald)
+
+# 每日 04:30 备份(含异地,若设了 QB_OFFSITE_REMOTE)
 30 4 * * * /srv/question-bank/deploy/backup.sh >> /srv/backups/question-bank/backup.log 2>&1
+
+# 每 10 分钟错误告警心跳(若设了 QB_HEARTBEAT_URL)
+*/10 * * * * /srv/question-bank/deploy/alert_heartbeat.sh >> /srv/backups/question-bank/alert.log 2>&1
