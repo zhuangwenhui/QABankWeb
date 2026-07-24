@@ -19,3 +19,24 @@ jobs:
         run: pip install -r requirements.txt -r requirements-dev.txt
       - name: 全量测试
         run: python -m pytest tests/ -q
+      - name: 依赖安全审计(pip-audit,仅告警不阻断)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+  jssyntax:
+    # 前端 4326 行 JS 无自动化测试,此为最低护栏:抓语法/引用错(如 qd_render 抽取类改动)。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: JS 语法检查(node --check)
+        run: |
+          set -e
+          for f in static/js/*.js; do
+            echo "check $f"
+            node --check "$f"
+          done

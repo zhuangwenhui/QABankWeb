@@ -39,8 +39,8 @@ def test_review_page_renders_key_elements(client, login):
     assert 'review.js' in html             # 流程/渲染脚本
     assert 'review.css' in html            # 复习专属样式
     assert 'question-detail.css' in html   # 复用题面/题解排版
-    assert 'markdown-it' in html           # 渲染依赖 CDN
-    assert 'dompurify' in html             # 消毒依赖 CDN
+    assert 'vendor/js/markdown-it' in html  # 渲染依赖(已自托管 static/vendor/)
+    assert 'vendor/js/purify' in html       # 消毒依赖 DOMPurify(已自托管)
 
 
 # ---------------------------------------------------------------- 导航徽标

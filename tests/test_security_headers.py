@@ -13,7 +13,10 @@ def test_security_headers_present(client):
     assert 'strict-origin-when-cross-origin' in r.headers.get('Referrer-Policy', '')
     csp = r.headers.get('Content-Security-Policy', '')
     assert "default-src 'self'" in csp
-    assert 'https://cdn.jsdelivr.net' in csp and 'https://cdnjs.cloudflare.com' in csp
+    # 自托管收敛(2026-07-24):Bootstrap/FA/markdown-it/DOMPurify/CodeMirror 已下到 static/vendor/,
+    # cdnjs 彻底移除;jsdelivr 仅余 MathJax。此断言兼作"别再回退到 CDN"的护栏。
+    assert 'https://cdn.jsdelivr.net' in csp         # 仅 MathJax(tex-svg 惰性拉组件)
+    assert 'https://cdnjs.cloudflare.com' not in csp  # cdnjs 已收回 'self'
     assert "'nonce-" in csp  # script-src 含 nonce
 
 

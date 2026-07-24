@@ -12,6 +12,14 @@ import config as config_module
 from app import create_app, login_throttle
 from models import User, db as _db
 
+# 测试提速(rank4):werkzeug 默认 scrypt 占单轮约 2/3 耗时(每测建 admin/student 各哈希一次)。
+# 全局改用廉价 pbkdf2:sha256:1;无任何测试锚定哈希算法,check_password_hash 按 hash 前缀自动识别,
+# 零正确性风险。仅在测试进程内生效(conftest 不进生产)。
+import models as _models_mod
+from werkzeug.security import generate_password_hash as _werkzeug_gph
+_models_mod.generate_password_hash = (
+    lambda pw, *a, **k: _werkzeug_gph(pw, method='pbkdf2:sha256:1'))
+
 
 @pytest.fixture()
 def app(tmp_path):
