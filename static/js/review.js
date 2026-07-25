@@ -71,8 +71,12 @@
 
   function renderCard(entry) {
     var q = entry.question || {};
-    var ja = (q.solution_ja || '').trim();
+    var jaFull = (q.solution_ja || '').trim();
     var zh = (q.solution_latex || '').trim();
+    // 题面区会显示「問題重述」,题解正文里去掉它以免重复
+    var pre = window.QDRender ? window.QDRender.splitRestatement(jaFull)
+                              : { restatement: '', body: jaFull };
+    var ja = pre.restatement ? pre.body : jaFull;
     var solTrack = ja ? 'ja' : 'zh';
     var solRaw = ja || zh;
 
@@ -103,8 +107,18 @@
       '</div>';
 
     var probEl = document.getElementById('rvProblem');
-    if ((q.question_latex || '').trim()) renderMd(q.question_latex, 'ja', probEl);
-    else probEl.innerHTML = '<p class="rv-empty">(无题目内容)</p>';
+    // 转载条件下题面在题解开头的「問題重述」里 —— 复习页同样要把它还给题面,
+    // 否则揭示答案前学生根本看不到题目。
+    var split = window.QDRender ? window.QDRender.splitRestatement(q.solution_ja || '')
+                                : { restatement: '', body: '' };
+    var qtext = (q.question_latex || '').trim();
+    if (split.restatement) {
+      renderMd((qtext ? qtext + '\n\n' : '') + split.restatement, 'ja', probEl);
+    } else if (qtext) {
+      renderMd(qtext, 'ja', probEl);
+    } else {
+      probEl.innerHTML = '<p class="rv-empty">(无题目内容)</p>';
+    }
 
     var revealWrap = document.getElementById('rvRevealWrap');
     var solWrap = document.getElementById('rvSolWrap');

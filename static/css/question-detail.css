@@ -441,3 +441,9 @@ a.qd-chip.ktag:hover{filter:brightness(.97); transform:translateY(-1px);}
 .qd-preview h2::before,.qd-preview h3 .n{display:none !important;}
 .qd-preview .callout,.qd-preview .conclusion{margin:.3em 0 !important; padding:.3em .5em !important;}
 .qd-preview p{margin:.25em 0 !important;}
+
+/* 转载声明:题面区里降为一条弱提示,真正的题目(問題重述)紧随其后 */
+.qd-page .qd-notice{font-size:12.5px; color:var(--ink-faint); background:var(--panel-2);
+  border:1px solid var(--hair-soft); border-radius:8px; padding:8px 12px; margin-bottom:14px;}
+.qd-page .qd-notice p{margin:0 0 .25em;}
+.qd-page .qd-notice a{color:var(--ink-soft);}

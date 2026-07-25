@@ -153,8 +153,17 @@
 
   function problemHtml(q) {
     var esc = window.escapeHtml;
-    var parts = [renderMarkdown(q.question_latex, 'ja') ||
-                 '<p class="qd-empty">(无题目内容)</p>'];
+    // 转载条件下不放原题面时,题目正文写在题解开头的「問題重述」里。把它还给题面区,
+    // 否则学生想读题就得先看答案 —— 做题这件事就不成立了。
+    var restate = (window.QDRender && window.QDRender.splitRestatement(q.solution_ja || '').restatement) || '';
+    var parts = [];
+    var own = renderMarkdown(q.question_latex, 'ja');
+    if (restate) {
+      if (own) parts.push('<div class="qd-notice" lang="zh-CN">' + own + '</div>');
+      parts.push(renderMarkdown(restate, 'ja'));
+    } else {
+      parts.push(own || '<p class="qd-empty">(无题目内容)</p>');
+    }
     // 出典/科目 信息盒
     var rows = [];
     if (q.source) rows.push('<div class="r"><span>出典</span><span>' + esc(q.source) + '</span></div>');
@@ -460,7 +469,11 @@
       initNotes();     // 私人笔记(自动保存)
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
-      var ja = (q.solution_ja || '').trim();
+      // 题面区已经显示了「問題重述」,题解里就不再重复一遍
+      var jaFull = (q.solution_ja || '').trim();
+      var split = window.QDRender ? window.QDRender.splitRestatement(jaFull)
+                                  : { restatement: '', body: jaFull };
+      var ja = split.restatement ? split.body : jaFull;
       var zh = (q.solution_latex || '').trim();
       renderInto(el.trackJa, ja, 'ja');
       renderInto(el.trackZh, zh, 'zh');

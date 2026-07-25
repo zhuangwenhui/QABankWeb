@@ -190,6 +190,27 @@
   }
 
   /**
+   * 从题解里切出开头的「問題重述」段。
+   *
+   * 126 道采集题因转载条件不放原题面,question_latex 只是一句声明,真正的题目写在
+   * 题解开头的 `## 問題重述` 里 —— 于是「想看题目就必须先看答案」,做题这件事直接没了。
+   * 这里把它切出来还给题面区,并从题解正文中移除以免重复。
+   * 返回 {restatement, body};题解不以重述开头时原样返回。
+   */
+  var RESTATE_RE = /^##[ \t]*(問題重述|题目重述|問題文)[ \t]*$/m;
+  function splitRestatement(mdSrc) {
+    var src = mdSrc || '';
+    var m = RESTATE_RE.exec(src);
+    if (!m || m.index > 60) return { restatement: '', body: src };
+    var rest = src.slice(m.index + m[0].length);
+    var next = /^##[ \t]+/m.exec(rest);
+    return {
+      restatement: (next ? rest.slice(0, next.index) : rest).trim(),
+      body: (next ? rest.slice(next.index) : '').trim()
+    };
+  }
+
+  /**
    * 列表/卡片里的预览格:先截断再渲染。
    *
    * 预览在视觉上被 CSS 裁到几行,但整篇题面照样会被 markdown 渲染并交给 MathJax ——
@@ -257,6 +278,7 @@
     renderMarkdown: renderMarkdown,
     renderInto: renderInto,
     renderPreviewInto: renderPreviewInto,
+    splitRestatement: splitRestatement,
     renderMd: renderMd,
     typeset: typeset,
     mathReady: mathReady,
