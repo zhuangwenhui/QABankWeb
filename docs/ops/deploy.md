@@ -318,6 +318,18 @@ curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 
 ### 5.1 部署更新
 
+> **`git pull` 之后必须重载,否则等于没部署。** 跑着的 gunicorn 仍是旧代码,模板也缓存在内存里
+> (生产 `debug=False`,Jinja 不自动重载)。2026-07-25 排查数学渲染故障时发现线上进程是 7 月 21 日
+> 启动的,此后几次发布全部没生效。deploy 无 sudo,用 SIGHUP 优雅重载:
+>
+> ```bash
+> /srv/question-bank/deploy/reload.sh
+> ```
+>
+> 上线后确认新代码真的在跑(静态资源指纹会变):
+> `curl -s https://co-enquestionbank.cc/login | grep -o 'style.css?v=[0-9]*'`
+
+
 ```bash
 cd /srv/question-bank
 sudo -u deploy git pull
