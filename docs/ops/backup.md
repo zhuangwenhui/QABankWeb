@@ -31,10 +31,16 @@ R2 免费额度为 10 GB 存储 / 100 万次 A 类操作 / 1000 万次 B 类操�
    - Permissions:**Object Read & Write**(不要给 Admin,备份不需要建/删桶以外的权限)
    - Specify bucket:只勾 `qb-backups`(最小权限:令牌泄露也碰不到别的桶)
    - TTL:Forever
-4. 创建后页面**只显示一次**这三样,立刻记下:
-   - **Access Key ID**
-   - **Secret Access Key**
-   - **Account ID**(即 endpoint `https://<Account ID>.r2.cloudflarestorage.com` 里那一段;R2 概览页也有)
+   - 令牌类型选 **Account API token**(账户级)而非 User API token:这是给 cron 用的服务凭证,
+     不该把备份的存活绑在某个人的账户角色上 —— 用户身份变更会让 User token 连带失效。
+4. 创建后页面**只显示一次** S3 客户端的两样,立刻记下:
+   - **Access Key ID** → `R2_ACCESS_KEY_ID`
+   - **Secret Access Key** → `R2_SECRET_ACCESS_KEY`
+5. **Account ID 不在令牌里**,要另外找 —— 它在同页给出的 S3 endpoint
+   `https://<Account ID>.r2.cloudflarestorage.com` 里(32 位十六进制),R2 概览页右侧
+   和浏览器地址栏 `dash.cloudflare.com/<account_id>/r2/...` 也都有。
+   下面的脚本对这一项很宽容:纯账户号、整条 endpoint、带桶路径的 endpoint 都认,
+   也可以改用 `R2_ENDPOINT` 显式指定。
 
 > 控制台文案可能随 Cloudflare 改版微调,认准"S3 兼容 API 令牌 + 单桶 Object Read & Write"即可。
 

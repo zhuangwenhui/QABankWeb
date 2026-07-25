@@ -9,6 +9,10 @@
 #   export R2_ACCOUNT_ID=xxxxx R2_ACCESS_KEY_ID=xxxxx R2_SECRET_ACCESS_KEY
 #   ./setup_offsite_r2.sh
 #
+# R2_ACCOUNT_ID 也可以直接粘令牌页给的整条 S3 endpoint(会自动剥出账户段),
+# 或改用 R2_ENDPOINT 显式指定 —— 令牌本身只含 Access Key ID / Secret,不含账户号,
+# 这一步最容易卡住,故两种写法都收。
+#
 # 可选环境变量:
 #   R2_BUCKET(默认 qb-backups)、QB_RCLONE_REMOTE(远端名,默认 r2)
 #   QB_OFFSITE_KEEP_DAYS(异地保留天数,默认 30)、QB_SETUP_NO_CRON=1(只配不动 crontab)
@@ -22,12 +26,30 @@ RCLONE="$HOME/bin/rclone"
 CONF="$HOME/.config/rclone/rclone.conf"
 BACKUP_SH="/srv/question-bank/deploy/backup.sh"
 
-for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+for v in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
     if [ -z "${!v:-}" ]; then
-        echo "✗ 缺少环境变量 $v(取值步骤见 docs/ops/backup.md §2)" >&2
+        echo "✗ 缺少环境变量 $v(取值步骤见 docs/ops/backup.md §1.1)" >&2
         exit 2
     fi
 done
+
+# endpoint 的解析:令牌只给 Access Key ID / Secret,账户号要另外找(在令牌页的 S3 endpoint
+# 或 R2 概览页)。这里既收纯账户号,也收整条 endpoint —— 粘错格式是这一步最常见的卡点。
+if [ -n "${R2_ENDPOINT:-}" ]; then
+    ENDPOINT="$R2_ENDPOINT"
+elif [ -n "${R2_ACCOUNT_ID:-}" ]; then
+    acct="${R2_ACCOUNT_ID#http://}"; acct="${acct#https://}"
+    acct="${acct%%/*}"; acct="${acct%%.*}"
+    if ! printf '%s' "$acct" | grep -qE '^[0-9a-f]{32}$'; then
+        echo "⚠ 账户号 '$acct' 不像 32 位十六进制,若下面验证失败请先核对这一项" >&2
+    fi
+    ENDPOINT="https://${acct}.r2.cloudflarestorage.com"
+else
+    echo "✗ 缺少 R2_ACCOUNT_ID(或 R2_ENDPOINT)。它不在令牌里,在令牌页的 S3 endpoint" >&2
+    echo "  https://<账户号>.r2.cloudflarestorage.com 或 R2 概览页的 Account ID" >&2
+    exit 2
+fi
+echo "endpoint: $ENDPOINT"
 
 # --- 1. rclone(deploy 无 sudo,用官方静态二进制装进 ~/bin)-------------------
 if [ ! -x "$RCLONE" ]; then
@@ -61,7 +83,7 @@ fi
     echo "provider = Cloudflare"
     echo "access_key_id = $R2_ACCESS_KEY_ID"
     echo "secret_access_key = $R2_SECRET_ACCESS_KEY"
-    echo "endpoint = https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    echo "endpoint = $ENDPOINT"
     echo "acl = private"
     # R2 令牌常只授单桶权限,没有 HeadBucket;不关掉每次操作都会先探桶而失败
     echo "no_check_bucket = true"
