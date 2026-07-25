@@ -169,8 +169,16 @@
         latexHtml +
         '</div>');
     }).join('');
-    // 动态插入的 LaTeX 内容必须重排 MathJax
-    typesetMath(container);
+    // 预览格就地重渲成 markdown,再统一排版数学(否则显示裸 ## / ** / :::)
+    if (window.QDRender) {
+      container.querySelectorAll('.latex-content').forEach(function (node) {
+        const raw = node.textContent;
+        if (raw) { node.classList.add('solbody'); window.QDRender.renderPreviewInto(node, raw, 'zh'); }
+      });
+      window.QDRender.typeset(container);
+    } else {
+      typesetMath(container);
+    }
   }
 
   // ============ 用户管理 ============

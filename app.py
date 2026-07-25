@@ -82,6 +82,13 @@ def create_app(config_object=None):
         'font-src': ["'self'", 'data:'],  # 自托管 CJK 字体 + FA webfonts
         'img-src': ["'self'", 'data:'],
         'connect-src': "'self'",
+        # MathJax v4 会用 blob: Worker(无障碍/语音)。default-src 'self' 不含 blob:,
+        # 于是 `new Worker(blob:…)` 被 CSP 拒绝、那个 Promise 未处理地 reject,
+        # 连带 startup.promise 与 typesetPromise 永久挂起 —— 表现就是全站题解退化成
+        # LaTeX 源码(2026-07-25 线上事故的真正根因)。blob Worker 继承本文档的源与 CSP,
+        # 放行它不扩大攻击面。child-src 是老浏览器的回退键名。
+        'worker-src': ["'self'", 'blob:'],
+        'child-src': ["'self'", 'blob:'],
     }
     Talisman(
         app,

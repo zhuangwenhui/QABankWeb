@@ -528,10 +528,6 @@
 <script src="{{ url_for('static', filename='vendor/js/codemirror.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/codemirror-stex.min.js') }}"></script>
 {% endif %}
-<!-- 详情弹窗与详情页共用同一套 markdown+数学渲染管线,否则弹窗里会显示裸 ## / ** / ::: -->
-<script src="{{ url_for('static', filename='vendor/js/markdown-it.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/js/markdown-it-container.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/js/purify.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/qd_render.js') }}?v={{ ASSET_V }}"></script>
+{% include '_render_pipeline.html' %}
 <script src="{{ url_for('static', filename='js/questions.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

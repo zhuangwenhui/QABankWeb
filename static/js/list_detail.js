@@ -70,6 +70,16 @@
       return;
     }
     ldItems.innerHTML = questions.map((q, i) => itemHtml(q, i)).join('');
+    // 题面预览就地重渲成 markdown(只做 escapeHtml 会显示裸 ## / ** / :::)
+    if (window.QDRender) {
+      ldItems.querySelectorAll('.ld-latex').forEach((node) => {
+        const raw = node.textContent;
+        if (raw) { node.classList.add('solbody'); window.QDRender.renderPreviewInto(node, raw, 'zh'); }
+      });
+      window.QDRender.typeset(ldItems);
+    } else {
+      typesetMath(ldItems);
+    }
   }
 
   async function load() {

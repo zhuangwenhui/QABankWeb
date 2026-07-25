@@ -1,0 +1,8 @@
+{# 题面/题解的 markdown + 数学渲染管线。
+   任何会把题目内容写进 DOM 的页面都必须 include 本文件,否则页面上会出现裸的
+   ## / ** / :::note 与未排版的 $…$(详情弹窗、错题本、总览、题单详情都曾这样漏网)。
+   护栏见 tests/test_math_render_wiring.py::test_all_content_pages_load_pipeline。 #}
+<script src="{{ url_for('static', filename='vendor/js/markdown-it.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/markdown-it-container.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/qd_render.js') }}?v={{ ASSET_V }}"></script>

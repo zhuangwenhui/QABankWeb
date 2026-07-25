@@ -42,3 +42,35 @@ def test_e2e_guard_script_exists_and_injects_latency():
     assert 'emulateNetworkConditions' in src
     assert 'Fetch.enable' in src and 'API_HOLD_SECONDS' in src
     assert 'JAM_SCRIPT' in src
+
+
+CONTENT_PAGES = ['questions', 'question_detail', 'review', 'error_book', 'overview', 'list_detail']
+CONTENT_JS = ['questions.js', 'question_detail.js', 'review.js', 'error_book.js',
+              'overview.js', 'list_detail.js']
+
+
+def test_all_content_pages_load_pipeline():
+    """凡是会把题目内容写进 DOM 的页面,都必须 include 渲染管线。
+
+    详情弹窗、错题本、总览、题单详情都曾各自漏网 —— 用户是靠肉眼一个个发现的。
+    """
+    for name in CONTENT_PAGES:
+        src = _read(f'templates/{name}.html')
+        assert "_render_pipeline.html" in src, f'{name}.html 未 include 渲染管线'
+
+
+def test_all_content_js_use_shared_pipeline():
+    """这些脚本必须把富文本交给 QDRender,而不是只做 escapeHtml。"""
+    for name in CONTENT_JS:
+        src = _read(f'static/js/{name}')
+        assert 'QDRender' in src, f'{name} 未使用共享渲染管线'
+
+
+def test_pipeline_include_is_single_source():
+    """管线只能有一份定义,避免再次出现"改了一处漏了另一处"。"""
+    inc = _read('templates/_render_pipeline.html')
+    assert 'qd_render.js' in inc and 'markdown-it' in inc and 'purify' in inc
+    for name in CONTENT_PAGES:
+        src = _read(f'templates/{name}.html')
+        assert 'vendor/js/markdown-it.min.js' not in src, \
+            f'{name}.html 又自己内联了管线脚本,应统一走 include'

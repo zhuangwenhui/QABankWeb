@@ -842,7 +842,7 @@
     if (!window.QDRender) return;
     root.querySelectorAll('.latex-content.js-open-detail').forEach((node) => {
       const raw = node.textContent;
-      if (raw) window.QDRender.renderInto(node, raw, 'zh');
+      if (raw) window.QDRender.renderPreviewInto(node, raw, 'zh');
     });
   }
 

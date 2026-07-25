@@ -3,6 +3,9 @@
 {% block title %}错题本 - 题库系统{% endblock %}
 
 {% block head %}
+{# 复用详情页题解版式(标题层级 / :::note 色块 / 列表 / 代码) #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/question-detail.css') }}?v={{ ASSET_V }}">
+
 <style>
   /* 错题本页面级样式 */
   .stat-subject-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -268,5 +271,6 @@
     pdfTemplates: {{ PDF_TEMPLATES | tojson }}
   };
 </script>
+{% include '_render_pipeline.html' %}
 <script src="{{ url_for('static', filename='js/error_book.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

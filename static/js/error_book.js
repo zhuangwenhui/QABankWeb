@@ -215,6 +215,7 @@
     const hasData = state.entries.length > 0;
     els.emptyState.style.display = hasData ? 'none' : '';
     els.entryList.innerHTML = hasData ? state.entries.map(entryCardHtml).join('') : '';
+    renderCardPreviews(els.entryList);
     if (hasData) {
       typesetMath(els.entryList);
     }
@@ -222,10 +223,34 @@
   }
 
   /** 单条错题卡片 HTML */
+
+  /**
+   * 富文本落位:走详情页同一套 markdown + 数学管线(window.QDRender)。
+   * 只做 escapeHtml 会让页面上出现裸的 ## / ** / :::note —— 弹窗、错题本、总览、
+   * 题单详情都曾这样漏网。缺库时降级为纯转义,至少不出错。
+   */
+  function renderRich(node, raw, emptyHtml) {
+    if (!raw) { node.innerHTML = emptyHtml || ''; return; }
+    node.classList.add('solbody');
+    if (window.QDRender) window.QDRender.renderInto(node, raw, 'zh');
+    else node.innerHTML = escapeHtml(raw);
+  }
+
+  /** 卡片里的题面预览就地重渲成 markdown,再统一排版数学。 */
+  function renderCardPreviews(root) {
+    if (!window.QDRender) { typesetMath(root); return; }
+    root.querySelectorAll('.latex-content').forEach(function (node) {
+      const raw = node.textContent;
+      if (raw) { node.classList.add('solbody'); window.QDRender.renderPreviewInto(node, raw, 'zh'); }
+    });
+    window.QDRender.typeset(root);
+  }
+
   function entryCardHtml(entry) {
     const q = entry.question || {};
     const qid = Number(q.id);
     const isSelected = state.selected.has(qid);
+    // 预览格先落转义文本,渲染进 DOM 后由 renderCardPreviews 就地重渲成 markdown
     const latex = q.question_latex
       ? escapeHtml(q.question_latex)
       : '<span class="text-muted fst-italic">(本题内容为图片,请打开预览查看)</span>';
@@ -473,14 +498,12 @@
       ${(q.tags && q.tags.length) ? `<div class="mb-1">${tagBadges(q.tags)}</div>` : ''}
       <div class="small text-muted">加入错题本:${escapeHtml(formatDate(entry.created_at, true))}</div>`;
 
-    els.previewQuestion.innerHTML = q.question_latex
-      ? escapeHtml(q.question_latex)
-      : '<span class="text-muted fst-italic">(无文字内容)</span>';
+    renderRich(els.previewQuestion, q.question_latex,
+               '<span class="text-muted fst-italic">(无文字内容)</span>');
     els.previewQuestionImage.innerHTML = mediaHtml(q.question_image_url, '题目');
 
-    els.previewSolution.innerHTML = q.solution_latex
-      ? escapeHtml(q.solution_latex)
-      : '<span class="text-muted fst-italic">(暂无文字解答)</span>';
+    renderRich(els.previewSolution, q.solution_latex,
+               '<span class="text-muted fst-italic">(暂无文字解答)</span>');
     els.previewSolutionImage.innerHTML = mediaHtml(q.solution_image_url, '解答');
 
     // 每次打开都先收起解答

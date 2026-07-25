@@ -434,3 +434,10 @@ a.qd-chip.ktag:hover{filter:brightness(.97); transform:translateY(-1px);}
   background:var(--panel-2); outline:none;}
 .qd-note-text:focus{background:var(--panel);}
 .qd-note-text::placeholder{color:var(--ink-faint);}
+
+/* 列表/卡片里的预览格:题解版式但压缩留白,避免一条预览占满整屏 */
+.qd-preview{padding:0 !important; font-size:14px; line-height:1.6;}
+.qd-preview h2,.qd-preview h3{font-size:14px !important; margin:.3em 0 .2em !important; padding:0 !important; border:0 !important;}
+.qd-preview h2::before,.qd-preview h3 .n{display:none !important;}
+.qd-preview .callout,.qd-preview .conclusion{margin:.3em 0 !important; padding:.3em .5em !important;}
+.qd-preview p{margin:.25em 0 !important;}

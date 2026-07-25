@@ -189,6 +189,25 @@
     }).catch(function (e) { console.warn('MathJax 排版失败:', e); });
   }
 
+  /**
+   * 列表/卡片里的预览格:先截断再渲染。
+   *
+   * 预览在视觉上被 CSS 裁到几行,但整篇题面照样会被 markdown 渲染并交给 MathJax ——
+   * 一页 20 题实测排了 1820 个公式,大部分根本看不见,列表因此要等十几秒才排完。
+   * 按字符数截到段落边界,渲染量降一个量级,可见部分完全不变。
+   */
+  function renderPreviewInto(node, raw, track, maxChars) {
+    var limit = maxChars || 420;
+    var text = String(raw || '');
+    if (text.length > limit) {
+      var cut = text.slice(0, limit);
+      var nl = cut.lastIndexOf('\n');
+      text = (nl > limit * 0.5 ? cut.slice(0, nl) : cut) + '\n\n…';
+    }
+    node.classList.add('qd-preview');
+    renderInto(node, text, track);
+  }
+
   /** 注入 HTML + 强化步骤块(不 typeset;调用方按需自行 typeset)。 */
   function renderInto(node, raw, track) {
     node.innerHTML = renderMarkdown(raw, track);
@@ -237,6 +256,7 @@
     PURIFY_CFG: PURIFY_CFG,
     renderMarkdown: renderMarkdown,
     renderInto: renderInto,
+    renderPreviewInto: renderPreviewInto,
     renderMd: renderMd,
     typeset: typeset,
     mathReady: mathReady,

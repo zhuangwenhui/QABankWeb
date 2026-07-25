@@ -22,11 +22,13 @@ def test_core_libs_self_hosted():
     assert 'vendor/css/bootstrap.min.css' in base
     assert 'vendor/js/bootstrap.bundle.min.js' in base
     assert 'vendor/css/fontawesome.min.css' in base
+    # 管线脚本已统一到 templates/_render_pipeline.html(见 test_math_render_wiring)
+    inc = _read('templates/_render_pipeline.html')
+    assert 'vendor/js/markdown-it.min.js' in inc
+    assert 'vendor/js/purify.min.js' in inc
+    assert 'js/qd_render.js' in inc   # 共享渲染管线(自研,static/js/)
     for tpl in ('templates/question_detail.html', 'templates/review.html'):
-        t = _read(tpl)
-        assert 'vendor/js/markdown-it.min.js' in t
-        assert 'vendor/js/purify.min.js' in t
-        assert 'js/qd_render.js' in t   # 共享渲染管线(自研,static/js/)
+        assert "_render_pipeline.html" in _read(tpl)
 
 
 def test_no_cdnjs_and_jsdelivr_only_mathjax():

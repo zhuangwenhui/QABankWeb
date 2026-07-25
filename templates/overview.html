@@ -3,6 +3,9 @@
 {% block title %}管理总览 - 题库系统{% endblock %}
 
 {% block head %}
+{# 复用详情页题解版式(标题层级 / :::note 色块 / 列表 / 代码) #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/question-detail.css') }}?v={{ ASSET_V }}">
+
 <style>
   .overview-card { background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; }
   .overview-card .card-header {
@@ -240,5 +243,6 @@
 {% endblock %}
 
 {% block scripts %}
+{% include '_render_pipeline.html' %}
 <script src="{{ url_for('static', filename='js/overview.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

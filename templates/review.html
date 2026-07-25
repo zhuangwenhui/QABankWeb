@@ -28,9 +28,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='vendor/js/markdown-it.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/js/markdown-it-container.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/js/purify.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/qd_render.js') }}?v={{ ASSET_V }}"></script>
+{% include '_render_pipeline.html' %}
 <script src="{{ url_for('static', filename='js/review.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}
