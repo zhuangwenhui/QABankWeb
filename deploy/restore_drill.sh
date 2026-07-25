@@ -31,8 +31,10 @@ echo "=== 恢复演练 $(date -Is) ==="
 
 # --- 取最新快照 -------------------------------------------------------------
 if [ "$SOURCE" = "local" ]; then
-    db_src="$(ls -1t "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | head -1 || true)"
-    up_src="$(ls -1t "$BACKUP_DIR"/uploads_*.tar.gz 2>/dev/null | head -1 || true)"
+    # 一律用 awk 取首行而非 `| head -1`:`set -o pipefail` 下 head 提前关管道会让上游收到
+    # SIGPIPE,整条流水线以 141 退出并中断脚本(这个坑真的踩过,且因输出量小而时灵时不灵)
+    db_src="$(ls -1t "$BACKUP_DIR"/db_*.sqlite3 2>/dev/null | awk 'NR==1')"
+    up_src="$(ls -1t "$BACKUP_DIR"/uploads_*.tar.gz 2>/dev/null | awk 'NR==1')"
     if [ -z "$db_src" ] || [ -z "$up_src" ]; then
         echo "✗ 本机 $BACKUP_DIR 里没有快照" >&2; exit 2
     fi
@@ -63,7 +65,7 @@ echo "快照:$db_name / $up_name"
 fail=0
 
 # --- 1. 数据库完整性 --------------------------------------------------------
-integrity="$(sqlite3 "$WORK/db.sqlite3" 'PRAGMA integrity_check;' 2>&1 | head -1)"
+integrity="$(sqlite3 "$WORK/db.sqlite3" 'PRAGMA integrity_check;' 2>&1 | awk 'NR==1')"
 if [ "$integrity" = "ok" ]; then
     echo "✓ SQLite 完整性检查:ok"
 else
@@ -100,7 +102,7 @@ if tar -tzf "$WORK/uploads.tar.gz" > "$WORK/list.txt" 2>"$WORK/tarerr.txt"; then
         echo "✗ 归档里没有文件" >&2; fail=1
     fi
     # 真解一个出来,证明不只是目录表可读、内容也没坏
-    first="$(grep -v '/$' "$WORK/list.txt" | head -1)"
+    first="$(awk '!/\/$/ && !seen {print; seen=1}' "$WORK/list.txt")"
     if [ -n "$first" ] && tar -xzf "$WORK/uploads.tar.gz" -C "$WORK" "$first" 2>/dev/null \
        && [ -s "$WORK/$first" ]; then
         echo "✓ 抽样解压成功:$first ($(stat -c %s "$WORK/$first")B)"

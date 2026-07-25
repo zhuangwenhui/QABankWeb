@@ -40,7 +40,8 @@ if [ ! -x "$RCLONE" ]; then
     install -m 0755 "$tmp"/rclone-*-linux-amd64/rclone "$RCLONE"
     rm -rf "$tmp"; trap - EXIT
 else
-    echo "[1/4] rclone 已就位:$("$RCLONE" version | head -1)"
+    # awk 而非 head:pipefail 下 head 提前关管道会让 rclone 收到 SIGPIPE 而中断脚本
+    echo "[1/4] rclone 已就位:$("$RCLONE" version | awk 'NR==1')"
 fi
 
 # --- 2. 写远端配置 ----------------------------------------------------------

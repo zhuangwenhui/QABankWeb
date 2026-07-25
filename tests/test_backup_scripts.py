@@ -27,6 +27,22 @@ def test_all_shell_scripts_parse():
         assert r.returncode == 0, f'{p.name} 语法错误:{r.stderr}'
 
 
+def test_no_head_in_pipeline_under_pipefail():
+    """`set -o pipefail` + `cmd | head -n` = 上游收 SIGPIPE、流水线以 141 退出、脚本被中断。
+
+    输出量小的时候常常侥幸不触发,所以是间歇性的 —— 恢复演练脚本上真踩过。取首行一律用 awk。
+    """
+    for p in SHELL_SCRIPTS:
+        src = p.read_text(encoding='utf-8')
+        if 'pipefail' not in src:
+            continue
+        for i, line in enumerate(src.splitlines(), 1):
+            if line.lstrip().startswith('#'):
+                continue
+            assert '| head' not in line.replace('|head', '| head'), \
+                f'{p.name}:{i} 在 pipefail 下用了 `| head`,改用 awk 取首行:{line.strip()}'
+
+
 def test_backup_fails_loudly_on_offsite_error():
     """异地推送失败必须非零退出 —— 静默成功的容灾等于没有容灾。"""
     s = _read('deploy/backup.sh')
