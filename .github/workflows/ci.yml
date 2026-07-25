@@ -41,6 +41,22 @@ jobs:
             node --check "$f"
           done
 
+  mathrender:
+    # 2026-07-25 线上事故:题解数学全部退化成 LaTeX 源码,而全部本地检查与 pytest 都通过 ——
+    # 因为 localhost 零延迟时题解能抢在 MathJax 开场排版之前落地。本 job 强制注入网络延迟
+    # 并把题解 API 压到开场排版之后,再验证页面上没有残留的 $…$ 源码。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: 安装依赖
+        run: pip install -r requirements.txt websocket-client
+      - name: 数学渲染端到端(含故障注入)
+        run: python scripts/e2e_math_render.py --both --wait 26
+
   shellcheck:
     # 备份/恢复/部署脚本出错的代价最高(数据没了才发现),而它们最没有测试覆盖。
     # shellcheck 能抓未引用变量、误吞退出码这类正是本仓踩过的坑。

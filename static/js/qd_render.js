@@ -119,20 +119,74 @@
     });
   }
 
-  function mathReady() {
-    if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
-      return window.MathJax.startup.promise;
-    }
+  // ---------------------------------------------------------------- MathJax 排版
+  // 2026-07-25 线上事故:题解整篇停在 LaTeX 源码态。实测结论(真实时间轴 + 生产数据):
+  //   · MathJax 4.1.3 在本页的 startup.promise 与 typesetPromise 都可能永不 settle,
+  //     且不在等任何网络请求 —— 拿它们当唯一路径,公式就永远排不出来;
+  //   · 同步版 MathJax.typeset 可用,但遇到需按需加载的内容(如 \mathbb 触发字体分片
+  //     mathjax-newcm-font/svg/dynamic/double-struck.js)会抛 "retry -- an asynchronous
+  //     action is required";
+  //   · 那个按需加载本身是会成功的 —— 所以"促发一次 → 等它落地 → 再同步排"必然收敛。
+  // 本机零延迟时,题解能赶在 MathJax 开场自动排版之前落地而被顺带排掉,故一直没暴露;
+  // 只要有真实网络延迟(≥300ms)就必现。护栏见 scripts/e2e_math_render.py。
+  var KICK_TIMEOUT_MS = 1500;   // 只用来促发按需加载,不指望它 resolve
+  var RETRY_WAIT_MS = 900;      // 等按需资源落地
+  var MAX_SYNC_TRIES = 4;
+
+  /** 等到排版 API 可用;超时返回 false 交由调用方降级(不再依赖 startup.promise)。 */
+  function mathReady(maxWaitMs) {
+    var deadline = Date.now() + (maxWaitMs || 20000);
     return new Promise(function (res) {
-      setTimeout(function () { mathReady().then(res); }, 50);
+      (function poll() {
+        if (window.MathJax && (window.MathJax.typesetPromise || window.MathJax.typeset)) {
+          return res(true);
+        }
+        if (Date.now() > deadline) return res(false);
+        setTimeout(poll, 50);
+      })();
     });
   }
-  function typeset(node) {
-    return mathReady().then(function () {
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        return window.MathJax.typesetPromise([node]);
+
+  /** 同步排版一次:成功 true;抛 retry 类错误 'retry';其它错误 false。 */
+  function trySync(node) {
+    if (!window.MathJax || !window.MathJax.typeset) return false;
+    try {
+      window.MathJax.typeset([node]);
+      return true;
+    } catch (e) {
+      if (String(e).indexOf('retry') >= 0) return 'retry';
+      console.warn('MathJax 同步排版失败:', e);
+      return false;
+    }
+  }
+
+  function typesetOne(node) {
+    if (!window.MathJax) return Promise.resolve();
+    return new Promise(function (done) {
+      var kicked = false;
+
+      function attempt(n) {
+        var r = trySync(node);
+        if (r === true || r === false || n >= MAX_SYNC_TRIES) return done();
+        // r === 'retry':需要异步资源。第一次先用 typesetPromise 促发加载(不等它 settle),
+        // 之后每轮等一小会儿再同步重试,资源到位即成功。
+        if (!kicked && window.MathJax.typesetPromise) {
+          kicked = true;
+          window.MathJax.typesetPromise([node]).then(done, function () {});
+          setTimeout(function () { attempt(n + 1); }, KICK_TIMEOUT_MS);
+        } else {
+          setTimeout(function () { attempt(n + 1); }, RETRY_WAIT_MS);
+        }
       }
-    }).catch(function (e) { console.warn('MathJax 渲染失败:', e); });
+      attempt(0);
+    });
+  }
+
+  function typeset(node) {
+    return mathReady().then(function (ok) {
+      if (!ok) { console.warn('MathJax 未就绪,公式保持源码'); return; }
+      return typesetOne(node);
+    }).catch(function (e) { console.warn('MathJax 排版失败:', e); });
   }
 
   /** 注入 HTML + 强化步骤块(不 typeset;调用方按需自行 typeset)。 */

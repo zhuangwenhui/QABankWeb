@@ -67,14 +67,41 @@ function debounce(fn, wait = 300) {
   };
 }
 
-/** 对指定元素(或整页)重新渲染 MathJax 公式 */
+/**
+ * 对指定元素(或整页)重新渲染 MathJax 公式。
+ *
+ * MathJax v4.1.3 的 typesetPromise 实测会永久挂起(不 settle,也不在等任何网络请求),
+ * 而同步版 MathJax.typeset 正常。只等 Promise 会让动态插入的公式永远停在 LaTeX 源码态 ——
+ * 2026-07-25 线上事故即此。故加超时 + 同步兜底,与 qd_render.js 同一策略。
+ */
 function typesetMath(el) {
-  if (window.MathJax && window.MathJax.typesetPromise) {
-    return MathJax.typesetPromise(el ? [el] : undefined).catch((e) => {
-      console.warn('MathJax 渲染失败:', e);
-    });
-  }
-  return Promise.resolve();
+  const nodes = el ? [el] : undefined;
+  const trySync = () => {
+    if (!(window.MathJax && window.MathJax.typeset)) return false;
+    try {
+      MathJax.typeset(nodes);
+      return true;
+    } catch (e) {
+      if (String(e).includes('retry')) return 'retry';
+      console.warn('MathJax 同步排版失败:', e);
+      return false;
+    }
+  };
+  return new Promise((done) => {
+    let kicked = false;
+    const attempt = (n) => {
+      const r = trySync();
+      if (r === true || r === false || n >= 4) return done();
+      if (!kicked && window.MathJax && window.MathJax.typesetPromise) {
+        kicked = true;   // 促发按需加载,不等它 settle(可能永不 settle)
+        MathJax.typesetPromise(nodes).then(done, () => {});
+        setTimeout(() => attempt(n + 1), 1500);
+      } else {
+        setTimeout(() => attempt(n + 1), 900);
+      }
+    };
+    attempt(0);
+  });
 }
 
 /** 难度 → 样式类(简单绿 / 中等黄 / 困难红) */
