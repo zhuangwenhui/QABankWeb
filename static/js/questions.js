@@ -833,20 +833,35 @@
       </div>`;
   }
 
+  /**
+   * 预览格先按转义文本落地(行/卡片模板统一走 escapeHtml),再就地重渲成 markdown。
+   * 从 textContent 取原文即可,不必把原文再存一份到 data 属性。
+   * 不这样做的话列表里会显示裸的 ## / ** / :::,与详情页观感割裂。
+   */
+  function renderPreviews(root) {
+    if (!window.QDRender) return;
+    root.querySelectorAll('.latex-content.js-open-detail').forEach((node) => {
+      const raw = node.textContent;
+      if (raw) window.QDRender.renderInto(node, raw, 'zh');
+    });
+  }
+
   /** 渲染当前激活视图并重排公式 */
   function renderQuestions() {
     const empty = '<div class="empty-hint"><i class="fa-regular fa-folder-open me-1"></i>暂无符合条件的题目</div>';
+    const target = state.viewMode === 'table' ? el.questionTbody : el.cardView;
     if (state.viewMode === 'table') {
       el.questionTbody.innerHTML = state.questions.length
         ? state.questions.map(questionRowHtml).join('')
         : `<tr><td colspan="9">${empty}</td></tr>`;
-      typesetMath(el.questionTbody);
     } else {
       el.cardView.innerHTML = state.questions.length
         ? state.questions.map(questionCardHtml).join('')
         : empty;
-      typesetMath(el.cardView);
     }
+    renderPreviews(target);
+    if (window.QDRender) window.QDRender.typeset(target);
+    else typesetMath(target);
     syncCheckAll();
     updateBatchToolbar();
   }
@@ -1182,6 +1197,21 @@
   /* ============================================================ 10. 题目详情 Modal */
 
   /** 打开题目详情弹窗(五区块;打开时记录查看日志) */
+  /**
+   * 详情弹窗里的正文渲染:走详情页同一套 markdown+数学管线。
+   * 早先这里只做 escapeHtml + 排版数学,于是弹窗里满是裸的 ## / ** / :::note,
+   * 且整段挤成一坨 —— 与详情页观感割裂。缺库时降级为纯转义,至少不出错。
+   */
+  function renderRich(node, raw, emptyText) {
+    if (!raw) {
+      node.innerHTML = `<span class="text-muted">${emptyText}</span>`;
+      return;
+    }
+    node.classList.add('solbody');
+    if (window.QDRender) window.QDRender.renderInto(node, raw, 'zh');
+    else node.innerHTML = escapeHtml(raw);
+  }
+
   async function openDetail(id) {
     let question;
     try {
@@ -1207,22 +1237,20 @@
       <div class="col-12 detail-info-item"><span class="text-muted">标签:</span>${tagBadges(question.tags) || '<span class="text-muted">无</span>'}</div>`;
 
     // 区块二/三:题目内容与图片
-    el.detailQuestionLatex.innerHTML = question.question_latex
-      ? escapeHtml(question.question_latex)
-      : '<span class="text-muted">(无题目内容)</span>';
+    renderRich(el.detailQuestionLatex, question.question_latex, '(无题目内容)');
     el.detailQuestionImage.innerHTML = imageBlockHtml(question.question_image_url, question.question_image);
 
     // 区块四/五:解答内容与图片(默认折叠)
-    el.detailSolutionLatex.innerHTML = question.solution_latex
-      ? escapeHtml(question.solution_latex)
-      : '<span class="text-muted">(无解答内容)</span>';
+    renderRich(el.detailSolutionLatex, question.solution_latex, '(无解答内容)');
     el.detailSolutionImage.innerHTML = imageBlockHtml(question.solution_image_url, question.solution_image);
     el.detailSolutionWrap.classList.add('d-none');
     el.btnToggleSolution.innerHTML = '<i class="fa-solid fa-eye me-1"></i>查看答案';
 
     updateDetailBookmarkBtn();
     modals.detail.show();
-    typesetMath(el.detailModal);
+    // 用共享管线的排版(带按需加载重试兜底),而非只走 Promise 版的 typesetMath
+    if (window.QDRender) window.QDRender.typeset(el.detailModal);
+    else typesetMath(el.detailModal);
 
     // 记录查看日志(静默,不打断浏览)
     apiFetch('/api/log_view_question', { method: 'POST', body: { question_id: id } })

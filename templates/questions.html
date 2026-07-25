@@ -9,12 +9,17 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/codemirror.min.css') }}">
 {% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}?v={{ ASSET_V }}">
+{# 详情弹窗复用详情页的题解排版(标题层级 / :::note 色块 / 列表 / 代码) #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/question-detail.css') }}?v={{ ASSET_V }}">
 <style>
   /* 题目管理页局部样式(公共样式见 style.css) */
   .card-latex-clip { max-height: 170px; overflow: hidden; cursor: pointer; }
   .filter-label { display: block; font-size: .8rem; color: var(--qb-ink-soft); margin-bottom: 2px; }
   /* 窄屏(手机)卡片视图单列,避免 minmax(420px) 撑出整页横向滚动 */
   @media (max-width: 480px) { .question-card-view { grid-template-columns: 1fr; } }
+  /* 详情弹窗复用 .qd-page 设计令牌以渲染题解版式,但去掉整卡外观 */
+  .qd-modal-body { background: transparent; border: 0; border-radius: 0; }
+  .qd-modal-body .solbody { padding: 4px 0 8px; }
   .history-menu, .preset-menu { min-width: 330px; max-width: 420px; max-height: 380px; overflow-y: auto; }
   .history-item { cursor: pointer; white-space: normal; }
   .history-item small { color: var(--qb-ink-faint); }
@@ -342,7 +347,7 @@
         <div class="detail-section-title"><i class="fa-solid fa-circle-info me-1"></i>题目信息</div>
         <div class="row" id="detailInfo"></div>
         <div class="detail-section-title"><i class="fa-solid fa-square-root-variable me-1"></i>题目内容</div>
-        <div id="detailQuestionLatex" class="latex-content"></div>
+        <div class="qd-page qd-modal-body"><div id="detailQuestionLatex" class="latex-content"></div></div>
         <div class="detail-section-title"><i class="fa-regular fa-image me-1"></i>题目图片</div>
         <div id="detailQuestionImage"></div>
         <div class="text-center my-3">
@@ -352,7 +357,7 @@
         </div>
         <div id="detailSolutionWrap" class="d-none">
           <div class="detail-section-title"><i class="fa-solid fa-lightbulb me-1"></i>解答内容</div>
-          <div id="detailSolutionLatex" class="latex-content"></div>
+          <div class="qd-page qd-modal-body"><div id="detailSolutionLatex" class="latex-content"></div></div>
           <div class="detail-section-title"><i class="fa-regular fa-image me-1"></i>解答图片</div>
           <div id="detailSolutionImage"></div>
         </div>
@@ -523,5 +528,10 @@
 <script src="{{ url_for('static', filename='vendor/js/codemirror.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/codemirror-stex.min.js') }}"></script>
 {% endif %}
+<!-- 详情弹窗与详情页共用同一套 markdown+数学渲染管线,否则弹窗里会显示裸 ## / ** / ::: -->
+<script src="{{ url_for('static', filename='vendor/js/markdown-it.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/markdown-it-container.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/js/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/qd_render.js') }}?v={{ ASSET_V }}"></script>
 <script src="{{ url_for('static', filename='js/questions.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}
