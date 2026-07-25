@@ -3,6 +3,17 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
+## [v1.9.2] 异地备份启用,脚本自读 crontab 配置(2026-07-25)
+**Cloudflare R2 异地备份已实际启用并验证**:推送 → 从 R2 拉回 → `integrity_check` +
+与生产行数逐表比对 + 归档抽样解压,全绿。
+- `backup.sh` / `restore_drill.sh` 改为在环境变量缺失时**自读 crontab 顶部的配置**。
+  之前手动补跑要自己 `export`,而 `VAR=x cmd1 && cmd2` 只对 `cmd1` 生效 —— 实际就在这里绊了一次,
+  演练误报"未设 QB_OFFSITE_REMOTE"。`-` 而非 `:-`,显式传空值仍表示"本次不走异地"。
+- `setup_offsite_r2.sh` 的 endpoint 解析容错:纯账户号 / 整条 endpoint / 带桶路径都认,
+  也可用 `R2_ENDPOINT`;格式可疑提前告警。R2 令牌只给 Access Key ID + Secret,账户号需另找,
+  这一步实际最容易卡。
+- 文档补令牌类型取舍:选 **Account API token** 而非 User API token,别把备份的存活绑在个人角色上。
+
 ## [v1.9.1] 修复 pipefail 下的 SIGPIPE(2026-07-25)
 恢复演练在"抽样解压"一步间歇性以 141 退出:`| head -1` 读满即关管道,上游收 SIGPIPE,
 `pipefail` 把 141 当流水线退出码,`set -e` 随即中断。输出行数少时常侥幸不触发,故时灵时不灵。

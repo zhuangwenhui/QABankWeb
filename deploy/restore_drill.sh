@@ -18,8 +18,18 @@ SOURCE="${QB_DRILL_SOURCE:-remote}"
 TABLES=(users questions error_book question_progress question_lists question_notes
         question_bookmarks tags question_tags answer_submissions feedback)
 
+# 异地配置的真源头是 crontab 顶部的 KEY=value(见 setup_offsite_r2.sh)。cron 会自动注入,
+# 但交互 shell 不会 —— 让脚本自己去读,省得每次手动 export(`VAR=x cmd1 && cmd2` 只对 cmd1
+# 生效这种坑,不该让使用者去记)。
+from_crontab() {
+    crontab -l 2>/dev/null | sed -n "s/^$1=//p" | awk 'NR==1'
+}
+
 find_rclone() {
-    if [ -n "${QB_RCLONE_BIN:-}" ]; then echo "$QB_RCLONE_BIN"
+    local v
+    if [ -n "${QB_RCLONE_BIN:-}" ]; then echo "$QB_RCLONE_BIN"; return; fi
+    v="$(from_crontab QB_RCLONE_BIN)"
+    if [ -n "$v" ]; then echo "$v"
     elif [ -x "${HOME:-/home/deploy}/bin/rclone" ]; then echo "${HOME:-/home/deploy}/bin/rclone"
     else command -v rclone 2>/dev/null || true; fi
 }
@@ -43,9 +53,12 @@ if [ "$SOURCE" = "local" ]; then
     cp "$up_src" "$WORK/uploads.tar.gz"
     db_name="$(basename "$db_src")"; up_name="$(basename "$up_src")"
 else
-    remote="${QB_OFFSITE_REMOTE:-}"
+    # 用 `-` 而非 `:-`:显式传空值表示"本次不走异地",不该被 crontab 里的配置盖回来
+    remote="${QB_OFFSITE_REMOTE-$(from_crontab QB_OFFSITE_REMOTE)}"
     if [ -z "$remote" ]; then
-        echo "✗ 未设 QB_OFFSITE_REMOTE(cron 环境里有,交互 shell 里需自己 export)" >&2; exit 2
+        echo "✗ 没有异地远端:环境变量 QB_OFFSITE_REMOTE 未设,crontab 顶部也没有。" >&2
+        echo "  先跑 deploy/setup_offsite_r2.sh 启用异地备份,或用 QB_DRILL_SOURCE=local 只演练本机副本。" >&2
+        exit 2
     fi
     remote="${remote%/}"
     RC="$(find_rclone)"

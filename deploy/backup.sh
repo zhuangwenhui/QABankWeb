@@ -30,10 +30,21 @@ find "$BACKUP_DIR" -type f -mtime +"$KEEP_DAYS" -delete
 #   或 scp 目标:                             QB_OFFSITE_REMOTE="scp:user@host:/backups/qb"
 # 首次配置见 deploy/setup_offsite_r2.sh,恢复演练见 deploy/restore_drill.sh。
 # ---------------------------------------------------------------------------
-OFFSITE_KEEP_DAYS="${QB_OFFSITE_KEEP_DAYS:-30}"
+# 异地配置的真源头是 crontab 顶部的 KEY=value。cron 会自动注入,交互 shell 不会 ——
+# 手动补跑一次备份时不该悄悄跳过异地,所以脚本自己去读。
+# 用 `-` 而非 `:-`:显式传空值表示"本次不走异地",不该被 crontab 里的配置盖回来。
+from_crontab() {
+    crontab -l 2>/dev/null | sed -n "s/^$1=//p" | awk 'NR==1'
+}
+QB_OFFSITE_REMOTE="${QB_OFFSITE_REMOTE-$(from_crontab QB_OFFSITE_REMOTE)}"
+OFFSITE_KEEP_DAYS="${QB_OFFSITE_KEEP_DAYS:-$(from_crontab QB_OFFSITE_KEEP_DAYS)}"
+OFFSITE_KEEP_DAYS="${OFFSITE_KEEP_DAYS:-30}"
 
 # deploy 用户无 sudo,rclone 装在 ~/bin;cron 的精简 PATH 找不到它,故显式解析
 find_rclone() {
+    if [ -z "${QB_RCLONE_BIN:-}" ]; then
+        QB_RCLONE_BIN="$(from_crontab QB_RCLONE_BIN)"
+    fi
     if [ -n "${QB_RCLONE_BIN:-}" ]; then
         # 显式指定却不可执行时直接报错,不静默回落到另一个二进制掩盖配置错误
         if [ -x "$QB_RCLONE_BIN" ]; then
