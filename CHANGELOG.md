@@ -3,6 +3,31 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
+## [v1.11.0] 系统性渲染盘查 + 题面还原(2026-07-26)
+不再等用户肉眼发现问题,把渲染、内容完整性、功能三条线过了一遍。
+
+**渲染的真正根因**:全站每个页面都有一条未处理的 Promise 拒绝 ——
+`Failed to construct 'Worker': blob:… denied by CSP`(MathJax v4 用 blob Worker 做无障碍)。
+CSP 是 `default-src 'self'` 且无 `worker-src`,Worker 创建被拒后该 Promise 未处理地 reject,
+连带 `startup.promise` 与 `typesetPromise` 永久挂起 —— 这才是题解退化成 LaTeX 源码的根因。
+补 `worker-src/child-src 'self' blob:`。裸探针页没有 CSP,所以此前怎么测都正常。
+
+**四处漏网一并接入共享管线**:错题本卡片与预览弹窗、总览最近题目、题单详情条目、
+题目管理列表预览(此前只做 escapeHtml,显示裸 `##` / `**` / `:::`)。管线脚本抽成
+`templates/_render_pipeline.html` 单一来源。预览格改为先截断再渲染(列表页排版量 1820→670)。
+
+**题面还原(影响 126 道题,占 35%)**:这些题因转载条件不放原题面,`question_latex` 只是
+一句声明,真正的题目写在题解开头的 `## 問題重述` 里 —— 学生想读题就得展开题解,等于先看答案。
+新增 `QDRender.splitRestatement()`,详情页与复习页把重述还给题面区并从题解中去重。
+
+**新增可复跑的审计**:`scripts/audit_render.py`(全站带延迟巡检,现 8/8 页干净)、
+`audit_solution_completeness.py`(小问覆盖/截断迹象/双轨与结构完整性)、
+`audit_images.py`(题面图 PDF 跨页截断检测)。
+
+**盘查结论**:题解内容完整(题面文本与「問題重述」都含全部小问,题解逐问覆盖,0 道确认缺解);
+题面图 47/196 张被 PDF 跨页截断 —— 只影响观感,正文在文字里是齐的;
+功能闭环(检索/筛选/分页/进度/收藏/笔记/错题本/复习/题单/反馈/PDF 导出/判题占位)全部通过。
+
 ## [v1.10.0] 修复题解数学退化成 LaTeX 源码(2026-07-26)
 线上题解整篇显示为 `$…$` 源码(Mac/Windows 同现),本机怎么测都正常。
 - **根因**:题解正文由 API 取回后注入,只能靠我们显式调用 MathJax 排版;而 MathJax 4.1.3 在
