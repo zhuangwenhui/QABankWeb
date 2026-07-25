@@ -40,3 +40,22 @@ jobs:
             echo "check $f"
             node --check "$f"
           done
+
+  shellcheck:
+    # 备份/恢复/部署脚本出错的代价最高(数据没了才发现),而它们最没有测试覆盖。
+    # shellcheck 能抓未引用变量、误吞退出码这类正是本仓踩过的坑。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shell 静态检查(bash -n + shellcheck)
+        run: |
+          set -e
+          pip install shellcheck-py==0.11.0.1
+          for f in deploy/*.sh scripts/*.sh; do
+            echo "check $f"
+            bash -n "$f"
+          done
+          shellcheck -S warning deploy/*.sh scripts/*.sh

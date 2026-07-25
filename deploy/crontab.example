@@ -3,8 +3,11 @@
 # 异地备份/心跳的配置直接写在本 crontab 顶部:cron 会把这些 KEY=value 注入到下方任务的环境,
 # 无需 source 任何文件 —— 避开两个坑:(a) `. env` 不带 export 时变量不传子进程;
 # (b) /etc/question-bank.env 通常 chmod 600 root:deploy,deploy 用户根本读不到。
-# 取消注释并填入你的值即可启用(未设则备份仅本机、心跳跳过):
-# QB_OFFSITE_REMOTE=scp:user@host:/backups/qb        # 或 rclone 远端:remote:qb-backups
+# 异地备份的三行由 deploy/setup_offsite_r2.sh 自动写入,不必手抄;心跳需手填。
+#
+# QB_OFFSITE_REMOTE=r2:qb-backups                    # rclone 远端;或 scp 目标 scp:user@host:/backups/qb
+# QB_OFFSITE_KEEP_DAYS=30                            # 异地保留天数(本地固定 14 天)
+# QB_RCLONE_BIN=/home/deploy/bin/rclone              # cron 精简 PATH 找不到 ~/bin,必须显式给
 # QB_HEARTBEAT_URL=https://hc-ping.com/your-uuid     # Healthchecks.io 等;健康 ping,异常 ping /fail
 # QB_ERROR_LOG=/srv/backups/question-bank/app.log    # 心跳扫描的日志文件(缺省回落 journald)
 
@@ -13,3 +16,6 @@
 
 # 每 10 分钟错误告警心跳(若设了 QB_HEARTBEAT_URL)
 */10 * * * * /srv/question-bank/deploy/alert_heartbeat.sh >> /srv/backups/question-bank/alert.log 2>&1
+
+# 每季度 1 号 05:30 恢复演练(备份只有被恢复过才算数;失败会以非零退出触发 cron MAILTO)
+30 5 1 1,4,7,10 * /srv/question-bank/deploy/restore_drill.sh >> /srv/backups/question-bank/drill.log 2>&1

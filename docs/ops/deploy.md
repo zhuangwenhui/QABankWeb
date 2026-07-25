@@ -271,21 +271,27 @@ find /srv/backups/question-bank -name 'db_*.sqlite3' -mtime -1   # 应能看到 
 
 有条件的话可以把 crontab 那行的 `backup.sh` 换成包一层失败告警的脚本(例如失败时 `curl` 一个 Healthchecks.io/UptimeRobot 心跳 URL),本 runbook 不强制要求,但强烈建议在没有告警前每周至少人工抽查一次。
 
-### 4.4(可选)异地备份
+### 4.4 异地备份(必做)
 
-配置好 `rclone` 远端(OneDrive / Google Drive / S3 均可)后:
-
-```bash
-rclone config   # 交互式配置远端,记下远端名,下面假设叫 remote
-```
-
-在 `backup.sh` 末尾追加一行(脚本里已经预留了注释位置):
+本地快照和生产库在同一块盘上,VPS 灭失时一起没。异地副本走 Cloudflare R2,
+一次性配置命令、凭证获取步骤、成本估算与整机重建流程见 **[`backup.md`](backup.md)**。
 
 ```bash
-rclone copy "$BACKUP_DIR" remote:qb-backups/ --max-age 48h
+# 摘要:凭证经环境变量传入,脚本负责装 rclone、写配置、往返验证、写 crontab
+export R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=...
+/srv/question-bank/deploy/setup_offsite_r2.sh
 ```
 
 ### 4.5 恢复演练(上线前必做一次,之后建议每季度重演一次)
+
+自动化演练(只读生产库,结束自清理,退出码 0 即通过):
+
+```bash
+/srv/question-bank/deploy/restore_drill.sh              # 演练异地副本
+QB_DRILL_SOURCE=local /srv/question-bank/deploy/restore_drill.sh   # 只演练本机副本
+```
+
+手工演练(真把库换掉,验证全链路):
 
 ```bash
 # 1. 停服务
