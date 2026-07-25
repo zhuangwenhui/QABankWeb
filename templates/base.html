@@ -11,8 +11,8 @@
         href="{{ url_for('static', filename='fonts/shippori-mincho-regular.subset.woff2') }}">
   <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='vendor/css/fontawesome.min.css') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/fonts.css') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/fonts.css') }}?v={{ ASSET_V }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}?v={{ ASSET_V }}" rel="stylesheet">
   <script nonce="{{ csp_nonce() }}">
     window.MathJax = {
       loader: { load: ['[tex]/boldsymbol'] },
@@ -119,11 +119,11 @@
   <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;"></div>
 
   <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/toast.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/utils.js') }}?v={{ ASSET_V }}"></script>
+  <script src="{{ url_for('static', filename='js/toast.js') }}?v={{ ASSET_V }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ ASSET_V }}"></script>
   {% if current_user %}
-  <script nonce="{{ csp_nonce() }}" src="{{ url_for('static', filename='js/nav_badge.js') }}"></script>
+  <script nonce="{{ csp_nonce() }}" src="{{ url_for('static', filename='js/nav_badge.js') }}?v={{ ASSET_V }}"></script>
   {% endif %}
   {% block scripts %}{% endblock %}
 </body>

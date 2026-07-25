@@ -240,5 +240,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js') }}"></script>
+<script src="{{ url_for('static', filename='js/overview.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

@@ -8,7 +8,7 @@
 {% if current_user %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/codemirror.min.css') }}">
 {% endif %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}?v={{ ASSET_V }}">
 <style>
   /* 题目管理页局部样式(公共样式见 style.css) */
   .card-latex-clip { max-height: 170px; overflow: hidden; cursor: pointer; }
@@ -523,5 +523,5 @@
 <script src="{{ url_for('static', filename='vendor/js/codemirror.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/codemirror-stex.min.js') }}"></script>
 {% endif %}
-<script src="{{ url_for('static', filename='js/questions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/questions.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

@@ -145,5 +145,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/feedback.js') }}"></script>
+<script src="{{ url_for('static', filename='js/feedback.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

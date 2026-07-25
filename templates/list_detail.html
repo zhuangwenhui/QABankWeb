@@ -55,5 +55,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/list_detail.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_detail.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

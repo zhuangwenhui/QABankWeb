@@ -143,9 +143,28 @@ def create_app(config_object=None):
             return redirect(url_for('change_password'))
         return csrf_protect()
 
+    # 静态资源指纹:nginx 给 /static 发的是 max-age=604800,不带指纹时改了 JS 用户仍会用
+    # 缓存里的旧版最长 7 天 —— 2026-07-25 修数学渲染时,光部署根本救不了已中招的浏览器。
+    # 取自身 JS/CSS 的最新 mtime,内容一变 URL 就变,浏览器必然重新拉。
+    def _asset_version():
+        latest = 0
+        for sub in ('js', 'css'):
+            d = os.path.join(app.static_folder, sub)
+            if not os.path.isdir(d):
+                continue
+            for name in os.listdir(d):
+                try:
+                    latest = max(latest, int(os.path.getmtime(os.path.join(d, name))))
+                except OSError:
+                    pass
+        return str(latest)
+
+    app.config['ASSET_V'] = _asset_version()
+
     @app.context_processor
     def inject_globals():
         return {
+            'ASSET_V': app.config['ASSET_V'],
             'current_user': g.get('user'),
             'csrf_token': session.get('csrf_token', ''),
             'SUBJECTS': config.SUBJECTS,

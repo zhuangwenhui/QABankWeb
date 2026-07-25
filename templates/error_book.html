@@ -268,5 +268,5 @@
     pdfTemplates: {{ PDF_TEMPLATES | tojson }}
   };
 </script>
-<script src="{{ url_for('static', filename='js/error_book.js') }}"></script>
+<script src="{{ url_for('static', filename='js/error_book.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}
