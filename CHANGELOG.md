@@ -3,6 +3,20 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
+## [v1.9.0] 异地备份与容灾(2026-07-25)
+本地快照与生产库同盘,VPS 灭失即全丢 —— 补上唯一能挺过整机故障的一层,落点选 Cloudflare R2
+(10GB 免费额度覆盖 30 天保留量,**出口流量免费**故恢复不花钱,S3 兼容)。
+- `backup.sh`:显式解析 rclone 路径(cron 精简 PATH 找不到 `~/bin`);只推本次两个产物而非整目录
+  `--max-age`;**推送后回查远端字节数**才算落地;新增**异地保留期清理**(此前远端无界增长),
+  `--include` 限定只删本脚本自己的产物。
+- `setup_offsite_r2.sh`:一次性配置(装 rclone → 写配置 → 往返验证 → 写 crontab)。凭证只走环境变量
+  不进命令行;**往返验证失败即中止**,不留"看似启用实则每晚静默失败"的开关;幂等可重跑。
+- `restore_drill.sh`:从异地拉最新快照做 `integrity_check`、与生产行数比对、归档抽样解压;
+  只读生产库、结束自清理。**备份只有被恢复过才算数**,已进季度 cron。
+- 文档 `docs/ops/backup.md`:凭证获取步骤、容量成本、整机重建流程、RPO/RTO 与排查表。
+- CI 增 shellcheck + `bash -n`;`tests/test_backup_scripts.py` 钉死九条脚本不变量。
+- **启用状态**:代码与 VPS 侧 rclone 已就绪,待填入 R2 凭证后跑一次 `setup_offsite_r2.sh` 即生效。
+
 ## [v1.8.0] 权限收紧(2026-07-24)
 审计发现题库**内容管理**端点(create/update/delete_question、batch_delete/tags/source、upload/delete_image、
 source_exists)此前仅 `@login_required`,任何登录学生都能管理共享题库 —— admin 与 student 在内容域权限**等价**,
