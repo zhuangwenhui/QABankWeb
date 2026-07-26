@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""把本地整理好的题解正文同步进**在跑的**生产库,只动题解四列。
+"""把本地整理好的题解正文同步进**在跑的**生产库,只动题面与题解这五列。
 
 为什么不是"传一个整库覆盖过去":生产库同时装着用户数据(笔记、收藏、进度、作答、
-错题本),整库覆盖会把这些一并抹掉。所以只更新 questions 表的四列,其余分毫不动。
+错题本),整库覆盖会把这些一并抹掉。所以只更新 questions 表的五列(题面、中日两轨题解、
+采点结构化、渐进提示),其余分毫不动。
 
 并发保护:同步用三个库。
     base   —— 拉快照那一刻的生产库(即"我以为的现状")
@@ -20,7 +21,11 @@ import argparse
 import sqlite3
 import sys
 
-COLUMNS = ('solution_latex', 'solution_ja', 'solution_structured', 'hints')
+# question_latex(题面)也在同步范围内,但它是入试原题的转写,改它就可能变成另一道题。
+# 只有当出错的那段本身是**录题者自撰的内容**(如照图整理的边表)、且逐条复核过时才该动;
+# 本脚本不做这个判断,判断在上游 —— 这里只保证"我以为的现状"没被人动过。
+COLUMNS = ('question_latex', 'solution_latex', 'solution_ja',
+           'solution_structured', 'hints')
 SELECT = 'SELECT id, ' + ', '.join(f"COALESCE({c},'')" for c in COLUMNS) + ' FROM questions'
 
 

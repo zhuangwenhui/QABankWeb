@@ -29,7 +29,32 @@ MATH = re.compile(r'(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|(?<!\\)\$(?:\\.|[^$\\\n])+?\$
 H2 = re.compile(r'(?m)^#{2,4}[ \t]')
 FENCE = re.compile(r'(?m)^:::')
 
-COLUMN = {'zh': 'solution_latex', 'ja': 'solution_ja'}
+# stem = question_latex。改题面要慎之又慎:它是入试原题的转写,"修正"它就可能变成另一道题。
+# 只有当出错的那段本身是**录题者自撰的内容**(如照图整理的边表)时才允许改,且必须逐条复核。
+COLUMN = {'zh': 'solution_latex', 'ja': 'solution_ja',
+          'struct': 'solution_structured', 'hints': 'hints',
+          'stem': 'question_latex'}
+JSON_TRACKS = {'struct', 'hints'}   # 这两列存的是 JSON,只能改字符串**值**,不能碰结构
+
+
+def json_replace(raw, old, new):
+    """在 JSON 的字符串值里做一次替换。命中次数不等于 1 就返回 None(由调用方拒绝)。"""
+    data = json.loads(raw)
+    hits = [0]
+
+    def walk(node):
+        if isinstance(node, str):
+            n = node.count(old)
+            hits[0] += n
+            return node.replace(old, new, 1) if n else node
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        if isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        return node
+
+    out = walk(data)
+    return (json.dumps(out, ensure_ascii=False), hits[0])
 
 
 def structure_signature(text):
@@ -44,6 +69,17 @@ def apply_one(text, patches, qid, track, rejects):
         tag = f'{track}/q{qid}#{i}'
         if not old or old == new:
             rejects.append((tag, 'old 为空或与 new 相同'))
+            continue
+        if track in JSON_TRACKS:
+            try:
+                cand, n = json_replace(out, old, new)
+            except Exception as e:
+                rejects.append((tag, f'JSON 字段改写失败:{e}'))
+                continue
+            if n != 1:
+                rejects.append((tag, f'old 在原文中出现 {n} 次(必须恰好 1 次):{old[:60]!r}'))
+                continue
+            out = cand
             continue
         n = out.count(old)
         if n != 1:
