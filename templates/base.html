@@ -16,6 +16,10 @@
   <script nonce="{{ csp_nonce() }}">
     window.MathJax = {
       loader: { load: ['[tex]/boldsymbol'] },
+      // 关掉 MathJax 的开场自动排版:本站内容全部由 API 取回后注入,页面载入时并无数学。
+      // 留着它只会让"它的初始扫描"与"我们的显式排版"抢同一批文本节点 —— 首块因此一直
+      // 不 settle,整块停在源码态(2026-07-26 题面区空白)。排版一律走 qd_render 的串行队列。
+      startup: { typeset: false },
       tex: {
         inlineMath: [['$', '$'], ['\\(', '\\)']],
         displayMath: [['$$', '$$'], ['\\[', '\\]']],

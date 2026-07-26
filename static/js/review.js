@@ -74,8 +74,8 @@
     var jaFull = (q.solution_ja || '').trim();
     var zh = (q.solution_latex || '').trim();
     // 题面区会显示「問題重述」,题解正文里去掉它以免重复
-    var pre = window.QDRender ? window.QDRender.splitRestatement(jaFull)
-                              : { restatement: '', body: jaFull };
+    var pre = (window.QDRender && window.QDRender.isNoticeOnly(q.question_latex))
+      ? window.QDRender.splitRestatement(jaFull) : { restatement: '', body: jaFull };
     var ja = pre.restatement ? pre.body : jaFull;
     var solTrack = ja ? 'ja' : 'zh';
     var solRaw = ja || zh;
@@ -109,8 +109,10 @@
     var probEl = document.getElementById('rvProblem');
     // 转载条件下题面在题解开头的「問題重述」里 —— 复习页同样要把它还给题面,
     // 否则揭示答案前学生根本看不到题目。
-    var split = window.QDRender ? window.QDRender.splitRestatement(q.solution_ja || '')
-                                : { restatement: '', body: '' };
+    var R2 = window.QDRender;
+    var noticeOnly = R2 ? R2.isNoticeOnly(q.question_latex) : !(q.question_latex || '').trim();
+    var split = (noticeOnly && R2) ? R2.splitRestatement(q.solution_ja || '')
+                                   : { restatement: '', body: '' };
     var qtext = (q.question_latex || '').trim();
     if (split.restatement) {
       renderMd((qtext ? qtext + '\n\n' : '') + split.restatement, 'ja', probEl);

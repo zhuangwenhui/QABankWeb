@@ -1247,7 +1247,11 @@
     el.detailQuestionImage.innerHTML = imageBlockHtml(question.question_image_url, question.question_image);
 
     // 区块四/五:解答内容与图片(默认折叠)
-    renderRich(el.detailSolutionLatex, question.solution_latex, '(无解答内容)');
+    // 只暂存原文,等展开时再渲染 —— 容器此刻是 d-none,MathJax 无法为
+    // display:none 的元素测量排版,在隐藏态渲染出来的公式是排不出来的。
+    state.detailSolutionRaw = question.solution_latex || '';
+    state.detailSolutionRendered = false;
+    el.detailSolutionLatex.innerHTML = '';
     el.detailSolutionImage.innerHTML = imageBlockHtml(question.solution_image_url, question.solution_image);
     el.detailSolutionWrap.classList.add('d-none');
     el.btnToggleSolution.innerHTML = '<i class="fa-solid fa-eye me-1"></i>查看答案';
@@ -1280,7 +1284,13 @@
     el.btnToggleSolution.innerHTML = hidden
       ? '<i class="fa-solid fa-eye me-1"></i>查看答案'
       : '<i class="fa-solid fa-eye-slash me-1"></i>收起答案';
-    if (!hidden) typesetMath(el.detailSolutionWrap);
+    if (!hidden) {
+      if (!state.detailSolutionRendered) {
+        renderRich(el.detailSolutionLatex, state.detailSolutionRaw, '(无解答内容)');
+        state.detailSolutionRendered = true;
+      }
+      typesetMath(el.detailSolutionWrap);
+    }
   }
 
   /** 详情弹窗内的书签按钮外观 */

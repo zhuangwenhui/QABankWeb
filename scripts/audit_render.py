@@ -221,9 +221,10 @@ def main():
         # 详情弹窗(含展开解答)
         if br.ev("!!document.querySelector('.js-open-detail')"):
             br.ev("document.querySelector('.js-open-detail').click()")
-            br.wait(6)
+            br.wait(4)
             br.ev("var b=document.getElementById('btnToggleSolution'); b&&b.click()")
-            br.wait(10)
+            # 弹窗与整页共用同一条排版队列,排在列表页那一批之后,预算要给足
+            br.wait(args.wait)
             text = br.ev("document.getElementById('detailModal').innerText") or ""
             print(f"  {'✓' if not RAW_MD.findall(text) and not RAW_MATH.findall(text) else '✗'}"
                   f" 题目详情弹窗                        裸md={len(RAW_MD.findall(text))}"

@@ -120,26 +120,42 @@
   }
 
   // ---------------------------------------------------------------- MathJax 排版
-  // 2026-07-25 线上事故:题解整篇停在 LaTeX 源码态。实测结论(真实时间轴 + 生产数据):
-  //   · MathJax 4.1.3 在本页的 startup.promise 与 typesetPromise 都可能永不 settle,
-  //     且不在等任何网络请求 —— 拿它们当唯一路径,公式就永远排不出来;
-  //   · 同步版 MathJax.typeset 可用,但遇到需按需加载的内容(如 \mathbb 触发字体分片
-  //     mathjax-newcm-font/svg/dynamic/double-struck.js)会抛 "retry -- an asynchronous
-  //     action is required";
-  //   · 那个按需加载本身是会成功的 —— 所以"促发一次 → 等它落地 → 再同步排"必然收敛。
-  // 本机零延迟时,题解能赶在 MathJax 开场自动排版之前落地而被顺带排掉,故一直没暴露;
-  // 只要有真实网络延迟(≥300ms)就必现。护栏见 scripts/e2e_math_render.py。
-  var KICK_TIMEOUT_MS = 1500;   // 只用来促发按需加载,不指望它 resolve
-  var RETRY_WAIT_MS = 900;      // 等按需资源落地
-  var MAX_SYNC_TRIES = 4;
+  // 两次线上事故的结论都落在这里,改动前请读完:
+  //   1) 题解整篇停在 LaTeX 源码态 —— 真因是 CSP 挡掉了 MathJax v4 的 blob Worker,
+  //      导致其 Promise 未处理地 reject、startup/typesetPromise 永久挂起。已在 app.py
+  //      补 worker-src/child-src 'self' blob:。
+  //   2) 题面区空白 —— 曾为绕开 (1) 写过"同步排版 + 促发重试"的兜底,它会与自己促发的
+  //      异步排版并发作用于同一批文本节点,MathJax 抛 splitText offset 错。病根既除,
+  //      兜底即删,改为**串行的纯 Promise**。
+  // 因此:排版只走 typesetPromise,且全页共用一条串行队列,永不并发。
+  // 只防死锁。重页面(一页几百个公式)在慢网下整页重排本来就要十几秒,超时定得太紧
+  // 只会误报并提前放弃。
+  var TYPESET_TIMEOUT_MS = 45000;
+  var chain = Promise.resolve();    // 全页共用的串行排版队列
 
-  /** 等到排版 API 可用;超时返回 false 交由调用方降级(不再依赖 startup.promise)。 */
+  /**
+   * 等到可以安全排版为止。
+   *
+   * 两个条件缺一不可:①typesetPromise 已存在;②MathJax 自身启动完成(startup.promise)。
+   * 只等 ① 就动手,会和 MathJax 的开场自动排版抢同一批文本节点,那次调用便一直不 settle
+   * ——实测首块要卡满 20s 超时,整页公式在近 20 秒里都是源码态。
+   * startup.promise 兜一层超时:万一它又因某种原因不 settle,也只慢一次,不至于全站没数学。
+   */
+  // startup.promise 实测常常不 settle(它是 MathJax 的滚动队列头,被任一未完成操作占住),
+  // 所以只给它很短的礼让时间,别让整页公式为它干等。
+  var STARTUP_WAIT_MS = 1500;
   function mathReady(maxWaitMs) {
     var deadline = Date.now() + (maxWaitMs || 20000);
     return new Promise(function (res) {
       (function poll() {
-        if (window.MathJax && (window.MathJax.typesetPromise || window.MathJax.typeset)) {
-          return res(true);
+        var MJ = window.MathJax;
+        if (MJ && MJ.typesetPromise) {
+          var sp = MJ.startup && MJ.startup.promise;
+          if (!sp) return res(true);
+          return Promise.race([
+            sp.then(function () { return true; }, function () { return true; }),
+            new Promise(function (r) { setTimeout(function () { r(true); }, STARTUP_WAIT_MS); })
+          ]).then(res);
         }
         if (Date.now() > deadline) return res(false);
         setTimeout(poll, 50);
@@ -147,46 +163,75 @@
     });
   }
 
-  /** 同步排版一次:成功 true;抛 retry 类错误 'retry';其它错误 false。 */
-  function trySync(node) {
-    if (!window.MathJax || !window.MathJax.typeset) return false;
+  /**
+   * 排版前必须先清掉 MathJax 对该节点的旧记录。
+   *
+   * 我们是把 innerHTML 整块换掉来更新内容的,MathJax 文档对象里却还留着上一轮的 MathItem,
+   * 它们指向已被替换的文本节点。再排版时 MathJax 按旧偏移去 splitText,于是抛
+   *   IndexSizeError: The offset N is larger than the Text node's length
+   * 该次 Promise 未处理地 reject,整块公式停在源码态 —— 这正是 2026-07-26 题面区空白的机制。
+   * 官方对动态内容的要求就是 typesetClear 之后再 typeset,我们此前从未调过。
+   */
+  function clearNode(node) {
+    var MJ = window.MathJax;
     try {
-      window.MathJax.typeset([node]);
-      return true;
-    } catch (e) {
-      if (String(e).indexOf('retry') >= 0) return 'retry';
-      console.warn('MathJax 同步排版失败:', e);
-      return false;
-    }
+      if (MJ && MJ.typesetClear) MJ.typesetClear([node]);
+    } catch (e) { /* 清理失败不该阻断渲染 */ }
   }
 
-  function typesetOne(node) {
-    if (!window.MathJax) return Promise.resolve();
-    return new Promise(function (done) {
-      var kicked = false;
+  /**
+   * 排版:短时间内的多次请求合并成**一次整页排版**(typesetClear() + typesetPromise())。
+   *
+   * 逐块 typesetPromise([node]) 试过三种写法,都不可靠:同一页里往往只有第一块排得出来,
+   * 其余的调用要么不 settle、要么抛 IndexSizeError(splitText 偏移),而且每次运行失败的
+   * 块还不一样。MathJax 本就是按整篇文档设计的 —— 先 typesetClear() 丢掉全部旧 MathItem
+   * (我们整块替换 innerHTML,旧记录必然失效),再整页重排,结果稳定。
+   * 防抖把详情页那十几次调用收敛成一两次;配合 base.html 关掉开场自动排版,
+   * 全站排版有且只有这一条串行路径。
+   */
+  var DEBOUNCE_MS = 180;
+  var pendingTimer = null;
+  var pendingResolvers = [];
 
-      function attempt(n) {
-        var r = trySync(node);
-        if (r === true || r === false || n >= MAX_SYNC_TRIES) return done();
-        // r === 'retry':需要异步资源。第一次先用 typesetPromise 促发加载(不等它 settle),
-        // 之后每轮等一小会儿再同步重试,资源到位即成功。
-        if (!kicked && window.MathJax.typesetPromise) {
-          kicked = true;
-          window.MathJax.typesetPromise([node]).then(done, function () {});
-          setTimeout(function () { attempt(n + 1); }, KICK_TIMEOUT_MS);
-        } else {
-          setTimeout(function () { attempt(n + 1); }, RETRY_WAIT_MS);
-        }
-      }
-      attempt(0);
+  function typesetAll() {
+    var MJ = window.MathJax;
+    if (!MJ || !MJ.typesetPromise) return Promise.resolve();
+    try {
+      if (MJ.typesetClear) MJ.typesetClear();
+    } catch (e) { /* 清理失败不该阻断渲染 */ }
+    return new Promise(function (done) {
+      var t = setTimeout(function () {
+        console.warn('MathJax 排版超时');
+        done();
+      }, TYPESET_TIMEOUT_MS);
+      MJ.typesetPromise().then(
+        function () { clearTimeout(t); done(); },
+        function (e) { clearTimeout(t); console.warn('MathJax 排版失败:', e); done(); });
     });
   }
 
-  function typeset(node) {
-    return mathReady().then(function (ok) {
-      if (!ok) { console.warn('MathJax 未就绪,公式保持源码'); return; }
-      return typesetOne(node);
-    }).catch(function (e) { console.warn('MathJax 排版失败:', e); });
+  function flush() {
+    pendingTimer = null;
+    var waiting = pendingResolvers;
+    pendingResolvers = [];
+    chain = chain.then(function () {
+      return mathReady().then(function (ok) {
+        if (!ok) { console.warn('MathJax 未就绪,公式保持源码'); return; }
+        return typesetAll();
+      });
+    }).catch(function (e) {
+      console.warn('MathJax 排版链异常:', e);
+    }).then(function () { waiting.forEach(function (r) { r(); }); });
+    return chain;
+  }
+
+  /** 请求排版(节点参数保留以兼容调用方,实际按整页合并处理)。 */
+  function typeset(node) {   // eslint-disable-line no-unused-vars
+    return new Promise(function (res) {
+      pendingResolvers.push(res);
+      if (pendingTimer) clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(flush, DEBOUNCE_MS);
+    });
   }
 
   /**
@@ -217,11 +262,35 @@
    * 卡片上就是一行网址而不是题目 —— 与其它卡片风格也不统一。有「問題重述」时优先用它;
    * 退化时也把裸 URL 去掉,预览格里不该出现链接。
    */
-  function previewSource(q) {
+  // 转载声明式题面:正文没放出来,只有一句版权说明(常带一条官方存档 URL)
+  var NOTICE_RE = /(転載|掲載しません|公式アーカイブ|原題面)/;
+
+  /** question_latex 是否只是版权声明而无实质题面。 */
+  function isNoticeOnly(text) {
+    var t = String(text || '');
+    if (!t.trim()) return true;
+    if (!NOTICE_RE.test(t)) return false;
+    // 去掉数学与空白后仍很短 → 确实没有正文
+    return t.replace(/\$\$[\s\S]+?\$\$/g, '').replace(/\$[^$\n]+\$/g, '')
+             .replace(/\s/g, '').length < 220;
+  }
+
+  /**
+   * 这道题的题面正文该取哪一段。
+   *
+   * 只有当 question_latex 确实只是版权声明时,才改用题解开头的「問題重述」;
+   * 题面本身有正文却也拼上重述,页面上就会**把同一道题显示两遍**(实测会影响 197 道题)。
+   */
+  function questionText(q) {
     q = q || {};
-    var restate = splitRestatement(q.solution_ja || '').restatement;
-    var text = restate || q.question_latex || '';
-    return text.replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*[)）]/g, '').trim();
+    var own = q.question_latex || '';
+    if (!isNoticeOnly(own)) return own;
+    return splitRestatement(q.solution_ja || '').restatement || own;
+  }
+
+  function previewSource(q) {
+    return questionText(q)
+      .replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*[)）]/g, '').trim();
   }
 
   /**
@@ -232,7 +301,7 @@
    * 按字符数截到段落边界,渲染量降一个量级,可见部分完全不变。
    */
   function renderPreviewInto(node, raw, track, maxChars) {
-    var limit = maxChars || 420;
+    var limit = maxChars || 240;
     var text = String(raw || '');
     if (text.length > limit) {
       var cut = text.slice(0, limit);
@@ -294,6 +363,8 @@
     renderPreviewInto: renderPreviewInto,
     splitRestatement: splitRestatement,
     previewSource: previewSource,
+    questionText: questionText,
+    isNoticeOnly: isNoticeOnly,
     renderMd: renderMd,
     typeset: typeset,
     mathReady: mathReady,

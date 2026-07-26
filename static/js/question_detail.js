@@ -153,9 +153,13 @@
 
   function problemHtml(q) {
     var esc = window.escapeHtml;
-    // 转载条件下不放原题面时,题目正文写在题解开头的「問題重述」里。把它还给题面区,
-    // 否则学生想读题就得先看答案 —— 做题这件事就不成立了。
-    var restate = (window.QDRender && window.QDRender.splitRestatement(q.solution_ja || '').restatement) || '';
+    // 转载条件下不放原题面时,题目正文写在题解开头的「問題重述」里,把它还给题面区,
+    // 否则学生想读题就得先看答案。但**题面本身已有正文时绝不能再拼一遍重述** ——
+    // 那会把同一道题显示两遍(曾影响 197 道)。判断交给 QDRender.isNoticeOnly。
+    var R2 = window.QDRender;
+    var noticeOnly = R2 ? R2.isNoticeOnly(q.question_latex) : !(q.question_latex || '').trim();
+    var restate = noticeOnly && R2
+      ? R2.splitRestatement(q.solution_ja || '').restatement : '';
     var parts = [];
     var own = renderMarkdown(q.question_latex, 'ja');
     if (restate) {
@@ -470,10 +474,15 @@
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
       // 题面区已经显示了「問題重述」,题解里就不再重复一遍
+      // 题面区若已经展示了重述(仅当题面本身只有版权声明时),题解正文就去掉它以免重复;
+      // 题面自带正文时题解保持原样。判定条件必须与 problemHtml 里一致。
       var jaFull = (q.solution_ja || '').trim();
-      var split = window.QDRender ? window.QDRender.splitRestatement(jaFull)
-                                  : { restatement: '', body: jaFull };
-      var ja = split.restatement ? split.body : jaFull;
+      var ja = jaFull;
+      var QR = window.QDRender;
+      if (QR && QR.isNoticeOnly(q.question_latex)
+          && QR.splitRestatement(jaFull).restatement) {
+        ja = QR.splitRestatement(jaFull).body || jaFull;
+      }
       var zh = (q.solution_latex || '').trim();
       renderInto(el.trackJa, ja, 'ja');
       renderInto(el.trackZh, zh, 'zh');

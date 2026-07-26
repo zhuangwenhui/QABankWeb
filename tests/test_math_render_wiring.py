@@ -12,28 +12,57 @@ def _read(p):
     return (ROOT / p).read_text(encoding='utf-8')
 
 
-def test_typeset_does_not_gate_on_startup_promise():
-    """MathJax v4.1.3 的 startup.promise 实测会永不 settle,拿它当闸门=公式永远不排版。"""
+def test_startup_wait_is_bounded():
+    """可以礼让 MathJax 启动,但不能无限等 —— startup.promise 常被未完成操作占住而不 settle,
+    无上限地等它就等于全站没有数学。"""
     src = _read('static/js/qd_render.js')
-    code = '\n'.join(ln for ln in src.splitlines()
-                     if not ln.strip().startswith(('//', '/*', '*')))
-    assert 'startup.promise' not in code, \
-        'qd_render 不得再以 MathJax.startup.promise 作为排版前置条件'
+    assert 'STARTUP_WAIT_MS' in src, '等待 startup 必须有上限'
+    assert 'typesetClear' in src, '动态替换 innerHTML 后必须先 typesetClear,否则 splitText 报错'
 
 
-def test_typeset_has_sync_fallback_and_retry():
-    """typesetPromise 可能永不 settle;同步版遇按需加载会抛 retry。二者都要兜住。"""
+def test_single_typeset_queue_site_wide():
+    """全站只能有一条排版队列:两条并发会在同一批文本节点上打架。"""
+    utils = _read('static/js/utils.js')
+    assert 'window.QDRender.typeset' in utils, 'utils.typesetMath 未委托给共享管线'
+
+
+def test_typeset_whole_document_with_clear_and_autotypeset_off():
+    """整页排版 + 先 typesetClear();并关掉 MathJax 的开场自动排版。
+
+    逐块排版试过三种写法都不可靠(同页只有第一块排得出、失败的块每次还不一样);
+    开场自动排版若留着,它的初始扫描会与我们的首次调用抢同一批文本节点。
+    """
     src = _read('static/js/qd_render.js')
-    assert 'MathJax.typeset(' in src, '缺同步排版兜底'
-    assert "indexOf('retry')" in src, '缺对 “retry -- asynchronous action required” 的识别'
-    assert 'MAX_SYNC_TRIES' in src, '缺按需资源到位后的重试收敛'
+    assert 'DEBOUNCE_MS' in src and 'typesetAll' in src
+    assert 'typesetClear()' in src
+    assert 'typeset: false' in _read('templates/base.html')
 
 
-def test_utils_typeset_math_has_sync_fallback():
-    """列表/总览页走 utils.typesetMath,同样不能只依赖 Promise 版。"""
+def test_typeset_is_serialized_with_timeout():
+    """排版必须串行且带超时。
+
+    并发排版同一批文本节点会让 MathJax 抛
+    "Failed to execute 'splitText' … offset is larger than the Text node's length",
+    该次 Promise 未处理地 reject,整块公式停在源码态(2026-07-26 题面区空白即此)。
+    """
+    src = _read('static/js/qd_render.js')
+    assert 'chain = chain.then' in src, 'qd_render 排版未串行'
+    assert 'TYPESET_TIMEOUT_MS' in src, 'qd_render 排版缺超时,一次卡死会堵住整页'
+
+
+def test_no_sync_typeset_racing_the_promise():
+    """不得再出现"同步排版 + 促发异步"的兜底 —— 它正是上面那个并发竞态的来源。"""
+    for name in ('static/js/qd_render.js', 'static/js/utils.js'):
+        code = '\n'.join(ln for ln in _read(name).splitlines()
+                          if not ln.strip().startswith(('//', '*', '/*')))
+        assert 'MathJax.typeset(' not in code, f'{name} 又用回了同步 MathJax.typeset'
+
+
+def test_utils_typeset_math_is_serialized():
+    """列表/总览页走 utils.typesetMath,同样必须串行。"""
     src = _read('static/js/utils.js')
-    assert 'MathJax.typeset(' in src, 'utils.typesetMath 缺同步兜底'
-    assert "includes('retry')" in src, 'utils.typesetMath 缺 retry 识别'
+    assert '__mathChain' in src, 'utils.typesetMath 未串行'
+    assert 'typesetPromise' in src
 
 
 def test_e2e_guard_script_exists_and_injects_latency():

@@ -68,40 +68,26 @@ function debounce(fn, wait = 300) {
 }
 
 /**
- * 对指定元素(或整页)重新渲染 MathJax 公式。
+ * 请求重排数学公式。
  *
- * MathJax v4.1.3 的 typesetPromise 实测会永久挂起(不 settle,也不在等任何网络请求),
- * 而同步版 MathJax.typeset 正常。只等 Promise 会让动态插入的公式永远停在 LaTeX 源码态 ——
- * 2026-07-25 线上事故即此。故加超时 + 同步兜底,与 qd_render.js 同一策略。
+ * 有共享管线(qd_render.js)时一律委托给它:排版必须全站走**同一条串行队列**,
+ * 两条队列并发作用于同一批文本节点会让 MathJax 抛 splitText offset 错,整块公式
+ * 停在源码态(2026-07-26 详情弹窗即此)。没有管线的页面才走这里的极简实现。
  */
+let __mathChain = Promise.resolve();
 function typesetMath(el) {
-  const nodes = el ? [el] : undefined;
-  const trySync = () => {
-    if (!(window.MathJax && window.MathJax.typeset)) return false;
-    try {
-      MathJax.typeset(nodes);
-      return true;
-    } catch (e) {
-      if (String(e).includes('retry')) return 'retry';
-      console.warn('MathJax 同步排版失败:', e);
-      return false;
-    }
-  };
-  return new Promise((done) => {
-    let kicked = false;
-    const attempt = (n) => {
-      const r = trySync();
-      if (r === true || r === false || n >= 4) return done();
-      if (!kicked && window.MathJax && window.MathJax.typesetPromise) {
-        kicked = true;   // 促发按需加载,不等它 settle(可能永不 settle)
-        MathJax.typesetPromise(nodes).then(done, () => {});
-        setTimeout(() => attempt(n + 1), 1500);
-      } else {
-        setTimeout(() => attempt(n + 1), 900);
-      }
-    };
-    attempt(0);
-  });
+  if (window.QDRender && window.QDRender.typeset) return window.QDRender.typeset(el);
+  __mathChain = __mathChain.then(() => {
+    if (!(window.MathJax && window.MathJax.typesetPromise)) return;
+    return new Promise((done) => {
+      const t = setTimeout(() => { console.warn('MathJax 排版超时'); done(); }, 20000);
+      try { if (MathJax.typesetClear) MathJax.typesetClear(); } catch (e) { /* 忽略 */ }
+      MathJax.typesetPromise().then(
+        () => { clearTimeout(t); done(); },
+        (e) => { clearTimeout(t); console.warn('MathJax 渲染失败:', e); done(); });
+    });
+  }).catch((e) => { console.warn('MathJax 排版链异常:', e); });
+  return __mathChain;
 }
 
 /** 难度 → 样式类(简单绿 / 中等黄 / 困难红) */
