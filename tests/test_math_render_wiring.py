@@ -38,6 +38,36 @@ def test_typeset_whole_document_with_clear_and_autotypeset_off():
     assert 'typeset: false' in _read('templates/base.html')
 
 
+def test_code_spans_are_shielded_before_math_extraction():
+    """抽取数学之前必须先把代码段挡开。
+
+    代码段里的 `$` 不是数学。少了这一步,`)$` 这类代码段里的美元号会跟后面真正的公式
+    配上对,把中间整段正文吞进"公式"里 —— 页面上表现为文字被拆成一行一个字的碎片
+    (2026-07-26 id=266「以 `)$` 收」即此)。
+    """
+    src = _read('static/js/qd_render.js')
+    protect = src[src.index('function protectMath'):]
+    protect = protect[:protect.index('function restoreMath')]
+    code_at = protect.find('```[\\s\\S]*?```')
+    math_at = protect.find('\\$\\$([\\s\\S]+?)')
+    assert code_at != -1, 'protectMath 没有挡开代码段'
+    assert math_at != -1, 'protectMath 找不到行间公式的匹配'
+    assert code_at < math_at, '代码段必须在数学之前挡开,否则代码里的 $ 会跟公式配对'
+
+
+def test_escaped_dollar_cannot_open_math():
+    """`\\$` 是字面美元号,不能充当定界符。
+
+    少了这个判断,`$(L)\\$$` 里「\\$ 的 $ + 收尾的 $」会被当成一对 display 定界符,
+    从那里到下一个 \\$ 之间的整段正文都被吞进"公式",页面上表现为文字碎成一行一个字
+    (2026-07-26 id=266 即此)。
+    """
+    src = _read('static/js/qd_render.js')
+    protect = src[src.index('function protectMath'):]
+    protect = protect[:protect.index('function restoreMath')]
+    assert protect.count('(?<!\\\\)') >= 2, 'protectMath 的定界符没有排除转义的 \\$'
+
+
 def test_a11y_render_actions_are_removed():
     """必须摘掉 MathJax v4 的 enrich / attachSpeech / explorable 渲染动作。
 

@@ -23,7 +23,9 @@ import sqlite3
 import sys
 from collections import Counter
 
-MATH = re.compile(r'\$\$[\s\S]*?\$\$|\$[^$\n]*?\$|```[\s\S]*?```|`[^`\n]*`')
+# `\$` 是字面美元号,不是定界符;不认转义会在错的位置配对,校验因此形同虚设
+MATH = re.compile(r'(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|(?<!\\)\$(?:\\.|[^$\\\n])+?\$'
+                  r'|```[\s\S]*?```|`[^`\n]*`')
 H2 = re.compile(r'(?m)^#{2,4}[ \t]')
 FENCE = re.compile(r'(?m)^:::')
 

@@ -56,14 +56,31 @@
   }
 
   function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
+  function cph(i) { return 'QDCODEPLACEHOLDER' + i + 'ENDQD'; }
 
   function fixTextModeEscapes(tex) { return tex; }
 
   function protectMath(src) {
     var store = [];
     function grab(m) { store.push(fixTextModeEscapes(m)); return ph(store.length - 1); }
-    src = src.replace(/\$\$([\s\S]+?)\$\$/g, grab);        // 先 display
-    src = src.replace(/\$((?:\\.|[^\$\\\n])+?)\$/g, grab); // 再 inline
+
+    // 先把代码段挡开:代码里的 $ 不是数学。少了这一步,`)$` 这种代码段里的美元号会跟
+    // 后面真正的公式配上对,把中间整段正文吞进"公式"里 —— 页面上表现为文字被拆成
+    // 一行一个字的碎片(id=266「以 `)$` 收」即此)。挡开后原样放回,仍由 markdown-it
+    // 正常渲染成 <code>。
+    var code = [];
+    src = src.replace(/```[\s\S]*?```|`[^`\n]*`/g, function (m) {
+      code.push(m);
+      return cph(code.length - 1);
+    });
+
+    // `\$` 是**字面美元号**,不能充当定界符。少了 (?<!\\) 这个判断,`$(L)\$$` 里
+    // 「\$ 的 $ + 收尾的 $」会被当成一对 display 定界符,于是从那里到下一个 \$ 之间
+    // 的整段正文都被吞进"公式",页面上表现为文字碎成一行一个字(id=266 即此)。
+    src = src.replace(/(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g, grab);   // 先 display
+    src = src.replace(/(?<!\\)\$((?:\\.|[^\$\\\n])+?)\$/g, grab);   // 再 inline
+
+    code.forEach(function (m, i) { src = src.split(cph(i)).join(m); });
     return { src: src, store: store };
   }
 

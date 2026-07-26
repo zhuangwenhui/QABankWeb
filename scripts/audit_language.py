@@ -27,8 +27,11 @@ from collections import Counter, defaultdict
 
 # ---------------------------------------------------------------- 文本切分
 
-MATH_BLOCK = re.compile(r'\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]')
-MATH_INLINE = re.compile(r'\$[^$\n]*?\$|\\\([\s\S]*?\\\)')
+# 行间公式内部允许嵌 \tag{$\ast$}、\text{$A$ …} 这类内层行内公式,所以它的模式不能排除 $,
+# 否则整块匹配不上,反而彻底不设防。转义只对行内公式有意义:`\$` 是字面美元号,不是定界符,
+# 不认它就会在错的位置配对(id=266 即此)。
+MATH_BLOCK = re.compile(r'(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|\\\[[\s\S]*?\\\]')
+MATH_INLINE = re.compile(r'(?<!\\)\$(?:\\.|[^$\\\n])+?\$|\\\([\s\S]*?\\\)')
 CODE = re.compile(r'```[\s\S]*?```|`[^`\n]*`')
 LINK = re.compile(r'!?\[[^\]]*\]\([^)]*\)|https?://\S+')
 HEADING = re.compile(r'(?m)^(#{2,6})[ \t]*(.+?)[ \t]*$')
