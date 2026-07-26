@@ -17,8 +17,13 @@
   /* 字体按语言分栈(修 Mac 中日字形互串,详见 style.css 顶部说明)。
      旧值把 Songti SC(中文宋)排在日文衬线前、Hiragino(日文)排在中文黑体前,
      macOS 上两种语言互相套用了对方的汉字字形。 */
-  --font-latin-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --font-latin-read:"Charter","Iowan Old Style","Georgia",serif;
+  /* 拉丁段**不得以泛型(serif/sans-serif)结尾**:字体栈里一旦出现泛型,它后面的族就永远
+     轮不到 —— 泛型能覆盖所有码位,浏览器到那儿就停了。旧值以 serif/sans-serif 收尾,于是
+     `--font-read: <latin>, <zh>` 实际是 "…,Georgia,serif,LXGW WenKai,…",汉字不在 Charter/
+     Georgia 里,直接落到系统宋体,**自托管的文楷/Klee/思源黑全程没被用过**。
+     泛型只允许出现在最终组合栈的末尾(即 --font-zh-* / --font-ja-* 的尾巴上)。 */
+  --font-latin-ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
+  --font-latin-read:"Charter","Iowan Old Style","Georgia";
   /* 界面(黑体/明朝)与正文(文楷/Klee)均前置自托管 web 字体(+度量面 Fallback 消 CLS),
      系统字体栈原样保留作后备。 */
   --font-zh-ui:"Noto Sans SC","Noto Sans SC Fallback","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
@@ -166,7 +171,10 @@
 .qd-navpills a.active{background:var(--brand-soft); border-color:var(--brand-line); color:var(--brand-ink); font-weight:500;}
 
 .qd-page .solbody{padding:22px 30px 32px; font-family:var(--font-read); font-size:15.5px; line-height:1.85; color:var(--ink);}
-.qd-track{display:none;}
+/* 字体在轨容器上自行解析,而不是继承父级已解析好的值 ——
+   font-family:var(--font-read) 原本只写在父级 .qd-solbody 上,自定义属性在那里就被算成
+   中文栈了,子轨的 :lang(ja) 再也改不动,日文轨因此吃中文字形。 */
+.qd-track{display:none; font-family:var(--font-read);}
 .qd-track.on{display:block; animation:qd-fade .22s ease;}
 @keyframes qd-fade{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
 @media (prefers-reduced-motion:reduce){ .qd-track.on{animation:none;} }

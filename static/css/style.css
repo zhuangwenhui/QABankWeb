@@ -20,7 +20,9 @@
      Hiragino 排在中文字体前、--font-read 把中文 Songti 排在日文字体前,
      macOS 两套字体齐全 → 中文用日文字形、日文用中文字形,双向串味。
      现按 :lang() 分派,浏览器据元素语言选对应字形。 */
-  --qb-font-latin:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* 拉丁段不得以泛型结尾:泛型覆盖所有码位,其后的 CJK 族永远轮不到 ——
+     旧值害得自托管的思源黑/Shippori/文楷全程没被使用(详见 question-detail.css 同处注释)。 */
+  --qb-font-latin:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial;
   /* 中文界面·黑体:前置自托管 Noto Sans SC(+度量面 Fallback 消 CLS),回落系统黑体 */
   --qb-font-zh:"Noto Sans SC","Noto Sans SC Fallback","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
   /* 日文界面·明朝(用户指定,原为黑体 Hiragino Sans…):前置 Shippori Mincho(+Fallback),

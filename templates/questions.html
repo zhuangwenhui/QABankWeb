@@ -18,8 +18,10 @@
   /* 窄屏(手机)卡片视图单列,避免 minmax(420px) 撑出整页横向滚动 */
   @media (max-width: 480px) { .question-card-view { grid-template-columns: 1fr; } }
   /* 详情弹窗复用 .qd-page 设计令牌以渲染题解版式,但去掉整卡外观 */
-  .qd-modal-body { background: transparent; border: 0; border-radius: 0; }
-  .qd-modal-body .solbody { padding: 4px 0 8px; }
+  /* 弹窗里保留 .qd-page 自己的 paper 背景。抹成透明会让深色模式下的浅色字
+     落在 Bootstrap 的白色弹窗上,整段变成白字白底 —— 踩过一次。 */
+  .qd-modal-body { margin-bottom: 6px; }
+  .qd-modal-body .solbody { padding: 14px 18px 18px; }
   .history-menu, .preset-menu { min-width: 330px; max-width: 420px; max-height: 380px; overflow-y: auto; }
   .history-item { cursor: pointer; white-space: normal; }
   .history-item small { color: var(--qb-ink-faint); }

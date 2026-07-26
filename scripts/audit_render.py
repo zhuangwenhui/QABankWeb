@@ -127,19 +127,55 @@ class Browser:
         shutil.rmtree(self.profile, ignore_errors=True)
 
 
+CONTRAST_JS = r"""
+(function () {
+  function lum(c) {
+    var m = (c || '').match(/[\d.]+/g); if (!m || m.length < 3) return null;
+    var v = m.slice(0, 3).map(function (x) {
+      x = x / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  }
+  function bgOf(el) {
+    for (var n = el; n && n !== document.documentElement; n = n.parentElement) {
+      var c = getComputedStyle(n).backgroundColor;
+      if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) return c;
+    }
+    return getComputedStyle(document.body).backgroundColor;
+  }
+  var bad = [];
+  document.querySelectorAll('.solbody, .qd-track, .qd-prob, .latex-content').forEach(function (el) {
+    if (!el.innerText || !el.innerText.trim() || el.offsetParent === null) return;
+    var lf = lum(getComputedStyle(el).color), lb = lum(bgOf(el));
+    if (lf === null || lb === null) return;
+    var ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
+    if (ratio < 4.5) bad.push((el.id || el.className).toString().slice(0, 28) + ' ' + ratio.toFixed(1) + ':1');
+  });
+  return JSON.stringify(bad.slice(0, 6));
+})()
+"""
+
+
 def scan(br, label, out):
     text = br.ev("document.body.innerText") or ""
     raw_md = len(RAW_MD.findall(text))
     raw_math = len(RAW_MATH.findall(text))
     mjx = br.ev("document.querySelectorAll('mjx-container').length") or 0
-    bad = raw_md or raw_math or br.console or br.failed
+    # 对比度:深色模式下把浅色字放到白底容器上会整段"消失",肉眼之外没人会发现
+    try:
+        low_contrast = json.loads(br.ev(CONTRAST_JS) or '[]')
+    except Exception:
+        low_contrast = []
+    bad = raw_md or raw_math or low_contrast or br.console or br.failed
     out.append({
         "页面": label, "裸markdown": raw_md, "裸公式": raw_math, "已排版": mjx,
-        "控制台": list(br.console), "失败请求": list(br.failed),
+        "低对比": low_contrast, "控制台": list(br.console), "失败请求": list(br.failed),
         "ok": not bad,
     })
     mark = "✓" if not bad else "✗"
     print(f"  {mark} {label:<34} 裸md={raw_md:<4} 裸公式={raw_math:<4} 已排版={mjx}")
+    for c in low_contrast:
+        print(f"       低对比度 {c}")
     for c in br.console[:4]:
         print(f"       控制台 {c}")
     for f in br.failed[:4]:
@@ -152,6 +188,8 @@ def main():
     ap.add_argument("--latency", type=float, default=400)
     ap.add_argument("--qid", default="41")
     ap.add_argument("--wait", type=float, default=14)
+    ap.add_argument("--scheme", choices=["light", "dark"], default="light",
+                    help="模拟的配色方案;深色模式下最容易出现白字白底")
     args = ap.parse_args()
 
     if not shutil.which("google-chrome"):
@@ -165,9 +203,11 @@ def main():
 
     base = args.base.rstrip("/")
     br = Browser(args.latency)
+    br.send("Emulation.setEmulatedMedia",
+            {"features": [{"name": "prefers-color-scheme", "value": args.scheme}]})
     out = []
     try:
-        print(f"=== 全站渲染巡检 base={base} 延迟={args.latency:.0f}ms ===")
+        print(f"=== 全站渲染巡检 base={base} 延迟={args.latency:.0f}ms 配色={args.scheme} ===")
 
         br.goto(f"{base}/questions", args.wait)
         scan(br, "题目管理(表格视图)", out)
@@ -215,6 +255,7 @@ def main():
     print(f"\n=== 结论:{len(out) - len(bad)}/{len(out)} 页干净 ===")
     for r in bad:
         print(f"  ✗ {r['页面']}: 裸md={r['裸markdown']} 裸公式={r['裸公式']}"
+              f" 低对比={len(r.get('低对比') or [])}"
               f" 控制台={len(r['控制台'])} 失败请求={len(r['失败请求'])}")
     return 1 if bad else 0
 

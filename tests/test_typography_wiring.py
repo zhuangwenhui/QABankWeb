@@ -30,3 +30,41 @@ def test_base_uses_mathjax_v4_newcm():
     assert "mathjax@4" in b and "mathjax@3" not in b
     assert "mathjax-newcm" in b
     assert "mtextInheritFont" in b
+
+
+def test_latin_font_tokens_do_not_end_with_generic():
+    """拉丁字体段不得以泛型(serif/sans-serif/monospace)结尾。
+
+    字体栈里一旦出现泛型,它后面的族就永远轮不到 —— 泛型能覆盖所有码位,浏览器到那儿就停。
+    `--font-read: <latin>, <zh>` 若 latin 段以 serif 收尾,实际就是 "…,Georgia,serif,LXGW WenKai",
+    汉字直接落到系统宋体,自托管的文楷/Klee/思源黑**全程没被用过**。这条 bug 从 v1.1.0
+    排版改造起一直存在,2026-07-26 才被发现。泛型只允许出现在最终组合栈的末尾。
+    """
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    generic = ('serif', 'sans-serif', 'monospace', 'system-ui', 'cursive', 'fantasy')
+    bad = []
+    for css in ('static/css/question-detail.css', 'static/css/style.css'):
+        text = (root / css).read_text(encoding='utf-8')
+        for m in re.finditer(r'(--[\w-]*latin[\w-]*)\s*:\s*([^;]+);', text):
+            name, value = m.group(1), m.group(2).strip()
+            last = value.split(',')[-1].strip().strip('"\'')
+            if last in generic:
+                bad.append(f'{css} {name} 以泛型 {last} 结尾')
+    assert not bad, '拉丁字体段以泛型结尾,其后的 CJK 字体将永远不被使用:' + '; '.join(bad)
+
+
+def test_cjk_font_tokens_include_self_hosted_first():
+    """中日正文/界面字体的第一位必须是自托管 web 字体,否则等于白下载。"""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    text = (root / 'static/css/question-detail.css').read_text(encoding='utf-8')
+    want = {'--font-zh-read': 'LXGW WenKai', '--font-ja-read': 'Klee One',
+            '--font-zh-ui': 'Noto Sans SC', '--font-ja-ui': 'Shippori Mincho'}
+    for token, family in want.items():
+        m = re.search(re.escape(token) + r'\s*:\s*([^;]+);', text)
+        assert m, f'缺字体令牌 {token}'
+        first = m.group(1).split(',')[0].strip().strip('"\'')
+        assert first == family, f'{token} 首位应为自托管的 {family},实为 {first}'
