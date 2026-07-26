@@ -251,8 +251,9 @@
     const qid = Number(q.id);
     const isSelected = state.selected.has(qid);
     // 预览格先落转义文本,渲染进 DOM 后由 renderCardPreviews 就地重渲成 markdown
-    const latex = q.question_latex
-      ? escapeHtml(q.question_latex)
+    const preview = window.QDRender ? window.QDRender.previewSource(q) : (q.question_latex || '');
+    const latex = preview
+      ? escapeHtml(preview)
       : '<span class="text-muted fst-italic">(本题内容为图片,请打开预览查看)</span>';
     const tags = (q.tags && q.tags.length) ? `<div class="mb-2">${tagBadges(q.tags)}</div>` : '';
     return `

@@ -28,7 +28,7 @@
   }
 
   function itemHtml(q, idx) {
-    const latex = q.question_latex || '(无题面)';
+    const latex = (window.QDRender ? window.QDRender.previewSource(q) : q.question_latex) || '(无题面)';
     const rm = editable
       ? `<button type="button" class="ld-rm" data-qid="${q.id}" title="移除"><i class="fa-solid fa-xmark"></i></button>`
       : '';

@@ -795,7 +795,7 @@
         <td>${escapeHtml(q.source || '-')}</td>
         <td>${tagBadges(q.tags) || '<span class="text-muted">-</span>'}</td>
         <td style="min-width:260px">
-          <div class="latex-content js-open-detail" data-id="${q.id}" title="点击查看详情">${escapeHtml(q.question_latex || '(无内容)')}</div>
+          <div class="latex-content js-open-detail" data-id="${q.id}" title="点击查看详情">${escapeHtml(previewText(q))}</div>
         </td>
         <td class="text-nowrap">
           <i class="fa-solid fa-bookmark bookmark-btn${marked ? ' bookmarked' : ''} me-2" data-id="${q.id}" title="加入/移出错题本"></i>
@@ -819,7 +819,7 @@
           ${difficultyBadge(q.difficulty)}
           <i class="fa-solid fa-bookmark bookmark-btn${marked ? ' bookmarked' : ''} ms-auto" data-id="${q.id}" title="加入/移出错题本"></i>
         </div>
-        <div class="latex-content card-latex-clip js-open-detail" data-id="${q.id}" title="点击查看详情">${escapeHtml(q.question_latex || '(无内容)')}</div>
+        <div class="latex-content card-latex-clip js-open-detail" data-id="${q.id}" title="点击查看详情">${escapeHtml(previewText(q))}</div>
         <div class="mt-2">${tagBadges(q.tags)}</div>
         <div class="text-muted small mt-1">
           ${escapeHtml(q.chapter || '-')} · ${escapeHtml(q.source || '-')} · ${escapeHtml(formatDate(q.created_at))}
@@ -838,6 +838,12 @@
    * 从 textContent 取原文即可,不必把原文再存一份到 data 属性。
    * 不这样做的话列表里会显示裸的 ## / ** / :::,与详情页观感割裂。
    */
+  /** 预览该显示哪段文字:转载题用「問題重述」,并去掉裸 URL(否则卡片上是一行网址)。 */
+  function previewText(q) {
+    var t = window.QDRender ? window.QDRender.previewSource(q) : (q.question_latex || '');
+    return t || '(无内容)';
+  }
+
   function renderPreviews(root) {
     if (!window.QDRender) return;
     root.querySelectorAll('.latex-content.js-open-detail').forEach((node) => {

@@ -211,6 +211,20 @@
   }
 
   /**
+   * 列表/卡片预览该用哪段文字。
+   *
+   * 转载条件下 question_latex 只是一句版权声明(还带一条 URL),直接拿来当预览,
+   * 卡片上就是一行网址而不是题目 —— 与其它卡片风格也不统一。有「問題重述」时优先用它;
+   * 退化时也把裸 URL 去掉,预览格里不该出现链接。
+   */
+  function previewSource(q) {
+    q = q || {};
+    var restate = splitRestatement(q.solution_ja || '').restatement;
+    var text = restate || q.question_latex || '';
+    return text.replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*[)）]/g, '').trim();
+  }
+
+  /**
    * 列表/卡片里的预览格:先截断再渲染。
    *
    * 预览在视觉上被 CSS 裁到几行,但整篇题面照样会被 markdown 渲染并交给 MathJax ——
@@ -279,6 +293,7 @@
     renderInto: renderInto,
     renderPreviewInto: renderPreviewInto,
     splitRestatement: splitRestatement,
+    previewSource: previewSource,
     renderMd: renderMd,
     typeset: typeset,
     mathReady: mathReady,

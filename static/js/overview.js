@@ -149,8 +149,9 @@
       return;
     }
     container.innerHTML = questions.map(function (q) {
-      const latexHtml = q.question_latex
-        ? '<div class="latex-content">' + escapeHtml(q.question_latex) + '</div>'
+      const preview = window.QDRender ? window.QDRender.previewSource(q) : (q.question_latex || '');
+      const latexHtml = preview
+        ? '<div class="latex-content">' + escapeHtml(preview) + '</div>'
         : (q.question_image_url
             ? '<div class="text-muted small mt-1"><i class="fa-regular fa-image me-1"></i>图片题目</div>'
             : '');

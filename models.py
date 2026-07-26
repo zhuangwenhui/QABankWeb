@@ -61,10 +61,28 @@ class Question(db.Model):
     solution_image = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.now, index=True)
 
+    # 删除一道题时,所有引用它的行必须一并清掉,否则 SQLite 抛
+    # "FOREIGN KEY constraint failed",删除端点直接 500。
+    # 历史教训:这里最初只声明了 error_book 与 view_logs,之后陆续加的标签(v1.3)、
+    # 题单条目(v1.3)、做题进度(v1.2)、笔记/收藏(v1.6)、作答(v1.5)都没补 —— 而每道题
+    # 都有标签,于是「删除题目」这个基础功能从 v1.3 起就一直是坏的,直到 2026-07-26 才发现。
+    # 新增任何带 question_id 外键的表,都必须在此登记。护栏见 tests/test_delete_cascade.py。
     error_entries = db.relationship('ErrorBook', backref='question', lazy='dynamic',
                                     cascade='all, delete-orphan')
     view_logs = db.relationship('ViewLog', backref='question', lazy='dynamic',
                                 cascade='all, delete-orphan')
+    progress_entries = db.relationship('QuestionProgress', backref='question', lazy='dynamic',
+                                       cascade='all, delete-orphan')
+    list_items = db.relationship('QuestionListItem', backref='question', lazy='dynamic',
+                                 cascade='all, delete-orphan')
+    note_entries = db.relationship('QuestionNote', backref='question', lazy='dynamic',
+                                   cascade='all, delete-orphan')
+    bookmark_entries = db.relationship('QuestionBookmark', backref='question', lazy='dynamic',
+                                       cascade='all, delete-orphan')
+    tag_links = db.relationship('QuestionTag', backref='question', lazy='dynamic',
+                                cascade='all, delete-orphan')
+    submissions = db.relationship('AnswerSubmission', backref='question', lazy='dynamic',
+                                  cascade='all, delete-orphan')
 
     @property
     def tags_list(self):
