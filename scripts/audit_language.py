@@ -284,8 +284,28 @@ def check_zh(text):
     return hits
 
 
-def check_math(text, track):
+DOLLAR = re.compile(r'(?<!\\)\$\$?')
+
+
+def check_delimiters(text):
+    """未配对的 $ —— 它会把后面整段正文吞进数学模式,直到遇到下一个 $。
+
+    这是最贵的一类排版错:页面上不报错,只是好端端的日文/中文突然变成一串斜体符号。
+    逐行数(数学不跨行,`$$` 除外),奇数即为可疑。
+    """
     hits = []
+    body = CODE.sub(lambda m: ' ' * len(m.group(0)), text or '')
+    body = MATH_BLOCK.sub(lambda m: ' ' * len(m.group(0)), body)
+    for lineno, line in enumerate(body.split('\n'), 1):
+        if len(DOLLAR.findall(line)) % 2:
+            hits.append(('math-unbalanced-dollar', '本行的 $ 没有配对,其后的正文会被当成公式排版',
+                         f'第 {lineno} 行:{line.strip()[:90]}'))
+            break
+    return hits
+
+
+def check_math(text, track):
+    hits = check_delimiters(text)
     spans = math_spans(text)
     if not spans:
         return hits
