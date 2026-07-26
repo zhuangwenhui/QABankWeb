@@ -213,8 +213,8 @@ def main():
         scan(br, "题目管理(表格视图)", out)
 
         # 卡片视图
-        if br.ev("!!document.getElementById('btnCardView')"):
-            br.ev("document.getElementById('btnCardView').click()")
+        if br.ev("!!document.getElementById('btnViewCard')"):
+            br.ev("document.getElementById('btnViewCard').click()")
             br.wait(8)
             scan(br, "题目管理(卡片视图)", out)
 
@@ -226,13 +226,16 @@ def main():
             # 弹窗与整页共用同一条排版队列,排在列表页那一批之后,预算要给足
             br.wait(args.wait)
             text = br.ev("document.getElementById('detailModal').innerText") or ""
-            print(f"  {'✓' if not RAW_MD.findall(text) and not RAW_MATH.findall(text) else '✗'}"
-                  f" 题目详情弹窗                        裸md={len(RAW_MD.findall(text))}"
-                  f"    裸公式={len(RAW_MATH.findall(text))}")
-            out.append({"页面": "题目详情弹窗", "裸markdown": len(RAW_MD.findall(text)),
-                        "裸公式": len(RAW_MATH.findall(text)), "已排版": 0,
-                        "控制台": [], "失败请求": [],
-                        "ok": not RAW_MD.findall(text) and not RAW_MATH.findall(text)})
+            # 光看"有没有裸 $"不够:弹窗里既可能一个公式都没排出、文本又恰好不含 $,
+            # 于是整整一轮都在报绿。必须同时断言真的产出了 mjx-container。
+            mjx = br.ev("document.querySelectorAll('#detailModal mjx-container').length") or 0
+            raw_md, raw_math = len(RAW_MD.findall(text)), len(RAW_MATH.findall(text))
+            bad = raw_md or raw_math or mjx == 0
+            print(f"  {'✗' if bad else '✓'} 题目详情弹窗                        "
+                  f"裸md={raw_md:<4} 裸公式={raw_math:<4} 已排版={mjx}")
+            out.append({"页面": "题目详情弹窗", "裸markdown": raw_md, "裸公式": raw_math,
+                        "已排版": mjx, "低对比": [], "控制台": [], "失败请求": [],
+                        "ok": not bad})
 
         for path, label in [(f"/questions/{args.qid}", "题目详情页"),
                             ("/error_book", "错题本"),

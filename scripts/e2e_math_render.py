@@ -150,6 +150,24 @@ JAM_SCRIPT = r"""
 
 API_HOLD_SECONDS = 6   # 题解 API 至少压这么久,确保落在 MathJax 开场排版之后
 
+# 首屏排得出来 ≠ 排版链路是好的。MathJax v4 的 document.whenReady() 是一个**滚动闸门**:
+# 只要有一次 renderPromise 不 settle(v4 的 a11y 动作要 Worker 去 CDN 拉 SRE,被 CSP 的
+# connect-src 挡住就永远不回话),此后每一次排版都卡在闸门前连跑都跑不到。首渲的 DOM 更新
+# 在挂起前已完成,所以页面"看着是好的" —— 故障要等第二批内容注入才现形。
+# 因此护栏必须显式验证:**再排一次,能 settle**。
+SECOND_TYPESET = r"""Promise.race([
+  MathJax.typesetPromise().then(function () { return 'settled'; },
+                                function (e) { return 'rejected:' + (e && e.message || e); }),
+  new Promise(function (r) { setTimeout(function () { r('HUNG'); }, 20000); })
+])"""
+
+
+def ev_await(send, mid, expr):
+    """求值一个 Promise 表达式并等它 settle。"""
+    r = send("Runtime.evaluate", {"expression": expr, "returnByValue": True,
+                                  "awaitPromise": True})
+    return r.get("result", {}).get("result", {}).get("value")
+
 
 def check(url, latency, wait, chrome, jam=False):
     import websocket
@@ -221,8 +239,9 @@ def check(url, latency, wait, chrome, jam=False):
         mjx = ev("document.querySelectorAll('mjx-container').length") or 0
         raw = ev(r"(document.body.innerText.match(/\$[^$\n]{2,120}\$/g)||[]).length") or 0
         sample = ev(r"JSON.stringify((document.body.innerText.match(/\$[^$\n]{2,120}\$/g)||[]).slice(0,3))")
+        second = "跳过" if jam else ev_await(send, mid, SECOND_TYPESET)
         ws.close()
-        return mjx, raw, sample
+        return mjx, raw, sample, second
     finally:
         browser.terminate()
         try:
@@ -263,17 +282,31 @@ def main():
         for jam in modes:
             tag = "故障注入(typesetPromise 永不 settle)" if jam else "常规"
             print(f"[{tag}] {url}(延迟 {args.latency:.0f}ms,等待 {args.wait:.0f}s)")
-            mjx, raw, sample = check(url, args.latency, args.wait, chrome, jam=jam)
+            mjx, raw, sample, second = check(url, args.latency, args.wait, chrome, jam=jam)
             print(f"  已排版公式 mjx-container = {mjx}")
             print(f"  残留未排版 $…$ 段数 = {raw}  {sample if raw else ''}")
+            print(f"  再排一次能否 settle = {second}")
+            if jam:
+                # 故障注入是**反向对照**:把 typesetPromise 打断后,护栏必须报出问题。
+                # 若这里反而"通过",说明护栏是空的(它根本没在看真东西)。
+                if raw > 0 or mjx < 1:
+                    print("  ✓ 通过(反向对照):护栏成功识别出被打断的排版链路")
+                else:
+                    print("  ✗ 失败:排版链路被打断,护栏却报绿 —— 护栏是空的")
+                    rc = 1
+                continue
             if raw > 0:
                 print("  ✗ 失败:页面上有未排版的 LaTeX 源码 —— 动态注入内容的排版链路断了")
                 rc = 1
             elif mjx < 1:
                 print("  ✗ 失败:一个公式都没排版出来")
                 rc = 1
+            elif second == "HUNG":
+                print("  ✗ 失败:首屏排出来了,但排版闸门已被堵死 —— 后续注入的内容(如详情"
+                      "弹窗)将永远停在源码态")
+                rc = 1
             else:
-                print("  ✓ 通过:动态注入的题解数学全部排版成功")
+                print("  ✓ 通过:动态注入的题解数学全部排版成功,且排版链路仍可复用")
         return rc
     finally:
         if proc:

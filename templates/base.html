@@ -16,10 +16,33 @@
   <script nonce="{{ csp_nonce() }}">
     window.MathJax = {
       loader: { load: ['[tex]/boldsymbol'] },
-      // 关掉 MathJax 的开场自动排版:本站内容全部由 API 取回后注入,页面载入时并无数学。
-      // 留着它只会让"它的初始扫描"与"我们的显式排版"抢同一批文本节点 —— 首块因此一直
-      // 不 settle,整块停在源码态(2026-07-26 题面区空白)。排版一律走 qd_render 的串行队列。
-      startup: { typeset: false },
+      startup: {
+        // 关掉开场自动排版:本站内容全部由 API 取回后注入,页面载入时并无数学。
+        // 留着它只会让"它的初始扫描"与"我们的显式排版"抢同一批文本节点。
+        // 排版一律走 qd_render 的串行队列。
+        typeset: false,
+
+        // ── 摘掉 v4 的无障碍渲染动作(enrich / attachSpeech / explorable)──────────────
+        // 这三个动作把 SRE(speech-rule-engine)放进 Web Worker 跑,而 Worker 要从
+        //   https://cdn.jsdelivr.net/npm/mathjax@4.1.3/sre
+        // 拉规则与 mathmaps。本站 CSP 的 connect-src 只有 'self',这些请求发不出去,
+        // Worker 永远不回话 —— 于是:
+        //   document.renderPromise() → 等 actionPromises() → **永不 settle**
+        //   而 renderPromise 又包在 whenReady() 里,whenReady 的 _readyPromise 是
+        //   一个滚动的闸门:一次不 settle,此后**每一次排版都卡在闸门前,连跑都跑不到**。
+        // 首次渲染的 DOM 更新在挂起前已经完成,所以页面"看着是好的",故障要等到
+        // 第二批内容注入才现形 —— 这正是列表页详情弹窗里公式全是 $…$ 源码的真因
+        // (2026-07-26;此前误判为"整页排版跳过弹窗")。
+        // 取舍:与其让全站数学依赖第三方 CDN 的一次 fetch(失败即全站无数学,且服务端
+        // 毫无迹象),不如去掉这层依赖。代价是失去数学公式的读屏朗读支持。
+        ready: function () {
+          MathJax.startup.defaultReady();
+          var doc = MathJax.startup.document;
+          ['enrich', 'attachSpeech', 'explorable', 'describe', 'speech'].forEach(function (name) {
+            try { doc.removeRenderAction(name); } catch (e) { /* 该版本没有此动作 */ }
+          });
+        }
+      },
       tex: {
         inlineMath: [['$', '$'], ['\\(', '\\)']],
         displayMath: [['$$', '$$'], ['\\[', '\\]']],

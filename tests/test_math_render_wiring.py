@@ -38,6 +38,37 @@ def test_typeset_whole_document_with_clear_and_autotypeset_off():
     assert 'typeset: false' in _read('templates/base.html')
 
 
+def test_a11y_render_actions_are_removed():
+    """必须摘掉 MathJax v4 的 enrich / attachSpeech / explorable 渲染动作。
+
+    这三个动作把 SRE 放进 Web Worker 跑,Worker 要从 cdn.jsdelivr.net 拉规则;本站 CSP 的
+    connect-src 只有 'self',请求发不出去,Worker 永不回话,于是 renderPromise() 里的
+    actionPromises() 永不 settle。它又包在 whenReady() 里 —— 那是个滚动闸门,一次不 settle,
+    **此后每一次排版都卡在闸门前连跑都跑不到**。首渲的 DOM 更新在挂起前已完成,页面"看着是好的",
+    故障要等第二批内容注入才现形(2026-07-26 列表页详情弹窗满屏 $…$ 源码即此)。
+    """
+    src = _read('templates/base.html')
+    assert 'removeRenderAction' in src, 'base.html 未摘掉 a11y 渲染动作'
+    for action in ('enrich', 'attachSpeech', 'explorable'):
+        assert f"'{action}'" in src, f'未摘掉渲染动作 {action}'
+    assert 'defaultReady' in src, 'startup.ready 覆盖了默认初始化却没调 defaultReady()'
+
+
+def test_e2e_guard_checks_second_typeset_settles():
+    """端到端护栏必须验证"第二次排版能 settle" —— 只看首屏永远发现不了闸门被堵。"""
+    src = _read('scripts/e2e_math_render.py')
+    assert 'SECOND_TYPESET' in src, 'e2e 护栏缺少二次排版回归'
+
+
+def test_render_audit_asserts_modal_actually_typeset():
+    """巡检对弹窗不能只看"有没有裸 $",还必须断言真的排出了 mjx-container。
+
+    弹窗内容曾经既没有裸 $ 计数(文本被截断)也没有公式,靠文本规则漏了整整一轮。
+    """
+    src = _read('scripts/audit_render.py')
+    assert 'detailModal mjx-container' in src, '巡检未断言弹窗内真的有排版产物'
+
+
 def test_typeset_is_serialized_with_timeout():
     """排版必须串行且带超时。
 
