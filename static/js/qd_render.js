@@ -325,6 +325,9 @@
     return typeset(node);
   }
 
+  // 假名 = 日语的判据(汉字两语共用,判不出来)
+  var KANA_RE = /[぀-ゟ゠-ヿ]/;
+
   // 采点结构化题解四段:方針蓝/答案例橙/失点红/部分点绿。整块空则隐藏。
   var STRUCT_SECTIONS = [
     { key: 'houshin', label: '解答方針', kind: 'houshin' },
@@ -351,7 +354,10 @@
                        '<span class="qd-struct-t">' + esc(sec.label) + '</span></div>' +
                        '<div class="qd-struct-b solbody"></div>';
       grid.appendChild(card);
-      renderMd(raw, 'ja', card.querySelector('.qd-struct-b'));
+      // 区块小标题是日语的采点术语,但正文实际上几乎全是中文(全库 358 道里 357 道如此)。
+      // 一律按 'ja' 渲染会让容器标题(Note/注意/結論)和字体走日文轨 —— 中文正文吃日文
+      // 字形正是之前被指出的那类问题。按有没有假名判定,内容是哪种语言就按哪种渲染。
+      renderMd(raw, KANA_RE.test(raw) ? 'ja' : 'zh', card.querySelector('.qd-struct-b'));
     });
   }
 

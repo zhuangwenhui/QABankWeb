@@ -7,10 +7,15 @@
   1. 日文轨的结构小标题整套是中文 —— 全库 323 道一模一样:
        問題重述→問題文  思路→方針  分步推導→詳細な導出  関連題目→関連問題
        第一步→第一段階(「步」不是日文用字,日语作「歩」)
-  2. 句読点体例 —— 一篇之内混用多种逗号/句点是硬伤:
-       中文轨统一为全角 ,;:!?    日文轨统一为 、。
+  2. 句読点体例 —— 半角标点被当作中日文的句読点使用,以及一篇之内混用多套体例:
+       中文轨统一为全角 ,;:!?
+       日文轨的 、。 与 ,. 是**两套都对**的体例,故不一刀切:按每篇的多数派统一,
+       只有半角一律纠正。
+     覆盖四个字段:solution_latex / solution_ja,以及同样是中文正文、同样有这个问题的
+     solution_structured(采点结构化)与 hints(渐进提示)—— 后两者存的是 JSON,
+     只改字符串值,结构原样不动。
 
-改写只发生在**自然语言区**:数学($…$/$$…$$)、代码、链接、容器标记(:::)一律屏蔽。
+改写只发生在**自然语言区**:数学($…$/$$…$$)、代码、链接、容器标记(:::)、表格行一律屏蔽。
 
 用法:
     python scripts/fix_language.py <db>              # 只报告(默认)
@@ -19,6 +24,7 @@
 """
 import argparse
 import difflib
+import json
 import re
 import sqlite3
 import sys
@@ -156,6 +162,34 @@ def fix_zh(text):
     return on_prose(text, punct), counts
 
 
+def fix_zh_json(raw, counts, label):
+    """采点结构化(dict)与渐进提示(list)存的是 JSON,正文同样是中文,同样要修标点。
+
+    只改字符串**值**,JSON 结构原样不动;解析不了就整条跳过,不冒险。
+    """
+    if not (raw or '').strip():
+        return raw
+    try:
+        data = json.loads(raw)
+    except Exception:
+        counts[label + '·解析失败'] += 1
+        return raw
+
+    def walk(node):
+        if isinstance(node, str):
+            new, c = fix_zh(node)
+            counts[label] += c['标点']
+            return new
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        if isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        return node
+
+    fixed = walk(data)
+    return json.dumps(fixed, ensure_ascii=False) if fixed != data else raw
+
+
 # ---------------------------------------------------------------- 主流程
 
 def main():
@@ -166,16 +200,19 @@ def main():
     args = ap.parse_args()
 
     con = sqlite3.connect(f'file:{args.db}{"" if args.apply else "?mode=ro"}', uri=True)
-    rows = con.execute("SELECT id, COALESCE(solution_latex,''), COALESCE(solution_ja,'') "
+    rows = con.execute("SELECT id, COALESCE(solution_latex,''), COALESCE(solution_ja,''), "
+                       "COALESCE(solution_structured,''), COALESCE(hints,'') "
                        "FROM questions ORDER BY id").fetchall()
 
     total = Counter()
     touched_zh = touched_ja = 0
     shown = 0
     updates = []
-    for qid, zh, ja in rows:
+    for qid, zh, ja, structured, hints in rows:
         new_zh, czh = fix_zh(zh)
         new_ja, cja = (fix_ja(ja) if ja.strip() else (ja, Counter()))
+        new_st = fix_zh_json(structured, total, '采点结构化·标点')
+        new_hi = fix_zh_json(hints, total, '渐进提示·标点')
         for k, v in czh.items():
             total['中文轨·' + k] += v
         for k, v in cja.items():
@@ -184,8 +221,8 @@ def main():
             touched_zh += 1
         if new_ja != ja:
             touched_ja += 1
-        if new_zh != zh or new_ja != ja:
-            updates.append((new_zh, new_ja, qid))
+        if (new_zh, new_ja, new_st, new_hi) != (zh, ja, structured, hints):
+            updates.append((new_zh, new_ja, new_st, new_hi, qid))
             if shown < args.diff:
                 shown += 1
                 for label, old, new in (('中文轨', zh, new_zh), ('日文轨', ja, new_ja)):
@@ -203,7 +240,8 @@ def main():
     print(f'  中文轨改动 {touched_zh} 道 / 日文轨改动 {touched_ja} 道')
 
     if args.apply:
-        con.executemany("UPDATE questions SET solution_latex=?, solution_ja=? WHERE id=?", updates)
+        con.executemany("UPDATE questions SET solution_latex=?, solution_ja=?, "
+                        "solution_structured=?, hints=? WHERE id=?", updates)
         con.commit()
         print(f'✓ 已写入 {len(updates)} 道')
     else:
