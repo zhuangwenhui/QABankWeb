@@ -85,11 +85,15 @@ ZH_PUNCT_MAP = {',': '，', ';': '；', ':': '：', '!': '！', '?': '？'}
 JA_PUNCT_SETS = {',': '，、', '.': '．。'}     # 半角 → 两套全角体例里的对应字符
 
 
+ORDERED_ITEM = re.compile(r'(?m)^[ \t]*\d{1,2}\.[ \t]')
+
+
 def real_halfwidth(text, i):
     """这个半角标点是不是**真的**半角用法(不该改成全角)?
 
-    只有三类:千分位 1,000、小数 0.5、拉丁缩写/文件名 e.g. / foo.txt、时刻 12:30。
-    其余出现在中日文行文里的半角标点都是输入法遗留,应改为全角。
+    只有这几类:千分位 1,000、小数 0.5、拉丁缩写/文件名 e.g. / foo.txt、时刻 12:30,
+    以及 **markdown 有序列表的项目符号**「1. 」—— 它不是句点,改成全角既读着别扭,
+    又让 markdown 不再把它当列表渲染。其余出现在中日文行文里的半角标点都是输入法遗留。
     """
     ch = text[i]
     prev = text[i - 1] if i else ''
@@ -98,6 +102,10 @@ def real_halfwidth(text, i):
         return True
     if ch == '.' and prev.isascii() and prev.isalpha() and nxt.isascii() and nxt.isalpha():
         return True
+    if ch == '.' and prev.isdigit() and nxt in ' \t':
+        line_start = text.rfind('\n', 0, i) + 1
+        if ORDERED_ITEM.match(text, line_start):
+            return True
     return False
 
 
