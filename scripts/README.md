@@ -37,6 +37,21 @@ audit_images.py     报告问题  →  recrop_images.py --apply      重裁图�
 > `audit_latex.py` 是全仓唯一没被任何测试或文档提及的脚本,但**别按"零引用即删"处理** ——
 > 它是上线前唯一能发现"MathJax 认不出的环境 → 页面上一个红色报错框"的检查。
 
+> ⚠️ **`audit_render.py` 不会登录**(2026-07-27 V1 收尾时发现)。它直接 `Page.navigate` 到各页,
+> 而所有内容页都带 `@login_required` —— 未登录时浏览器被 302 到 `/login`,它扫的其实是登录页,
+> 然后照样打印「7/7 页干净」。**这个"通过"是假的。**
+>
+> 要拿到真结果,得先让无头浏览器带上会话。目前的办法是签发一个 session cookie 再注入 CDP:
+>
+> ```bash
+> # 1) 用固定密钥起本地服务(默认开发配置每次重启随机生成密钥,签出的 cookie 对不上)
+> SECRET_KEY=<固定值> APP_ENV=development PORT=8098 python app.py
+> # 2) 用同一密钥签 {'user_id': <管理员id>} 并 Network.setCookie 注入,再跑巡检
+> ```
+>
+> 判断有没有真登录:看服务日志里有没有 `"path": "/questions", "status": 200`。
+> 全是 `/login 200` 就说明这轮白跑了。
+
 ## 修复类(与上面配对,默认试算,`--apply` 才写库)
 
 | 脚本 | 行 | 修什么 | 配对 |
