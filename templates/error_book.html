@@ -28,13 +28,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="breadcrumb-container">
-  <div class="breadcrumb-custom">
-    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
-    <span class="breadcrumb-separator">/</span>
-    <span>错题本</span>
-  </div>
-</div>
+{% from '_macros.html' import breadcrumb %}
+{{ breadcrumb('错题本') }}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h4 class="mb-0"><i class="fa-solid fa-bookmark me-2 text-warning"></i>我的错题本</h4>

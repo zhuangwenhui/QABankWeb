@@ -52,13 +52,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="breadcrumb-container">
-  <div class="breadcrumb-custom">
-    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
-    <span class="breadcrumb-separator">/</span>
-    <span>管理总览</span>
-  </div>
-</div>
+{% from '_macros.html' import breadcrumb, stat_card %}
+{{ breadcrumb('管理总览') }}
 
 <!-- 顶部统计卡片 -->
 <div class="row g-3 mb-4">
@@ -91,30 +86,15 @@
 <!-- 题数分布 -->
 <div class="row g-4 mb-4">
   <div class="col-lg-7">
-    <div class="overview-card card h-100">
-      <div class="card-header"><i class="fa-solid fa-layer-group me-1 text-primary"></i>按科目题数分布</div>
-      <div class="card-body" id="subjectDist">
-        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
-      </div>
-    </div>
+    {{ stat_card('fa-layer-group', '按科目题数分布', 'subjectDist', 'h-100') }}
   </div>
   <div class="col-lg-5">
-    <div class="overview-card card h-100">
-      <div class="card-header"><i class="fa-solid fa-gauge-high me-1 text-primary"></i>难度分布</div>
-      <div class="card-body" id="difficultyDist">
-        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
-      </div>
-    </div>
+    {{ stat_card('fa-gauge-high', '难度分布', 'difficultyDist', 'h-100') }}
   </div>
 </div>
 
 <!-- 近 14 天查看趋势 -->
-<div class="overview-card card mb-4">
-  <div class="card-header"><i class="fa-solid fa-chart-column me-1 text-primary"></i>近 14 天题目查看趋势</div>
-  <div class="card-body" id="viewTrend">
-    <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
-  </div>
-</div>
+{{ stat_card('fa-chart-column', '近 14 天题目查看趋势', 'viewTrend', 'mb-4') }}
 
 <!-- Top10 与错题分布 -->
 <div class="row g-4 mb-4">
@@ -142,22 +122,12 @@
     </div>
   </div>
   <div class="col-lg-5">
-    <div class="overview-card card h-100">
-      <div class="card-header"><i class="fa-solid fa-book-bookmark me-1 text-primary"></i>全体用户错题按科目分布</div>
-      <div class="card-body" id="errorDist">
-        <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
-      </div>
-    </div>
+    {{ stat_card('fa-book-bookmark', '全体用户错题按科目分布', 'errorDist', 'h-100') }}
   </div>
 </div>
 
 <!-- 最近新增题目 -->
-<div class="overview-card card mb-4">
-  <div class="card-header"><i class="fa-solid fa-clock-rotate-left me-1 text-primary"></i>最近新增题目</div>
-  <div class="card-body" id="recentQuestions">
-    <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
-  </div>
-</div>
+{{ stat_card('fa-clock-rotate-left', '最近新增题目', 'recentQuestions', 'mb-4') }}
 
 <!-- 用户管理 -->
 <div class="overview-card card mb-4" id="userManageCard">

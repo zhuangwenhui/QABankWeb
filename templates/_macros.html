@@ -1,0 +1,44 @@
+{#
+  页面级共用片段。用法:{% from '_macros.html' import breadcrumb, stat_card %}
+
+  只收「多个页面(或同一页面多处)逐字节相同、只差一两个字面量」的结构。带条件分支或
+  页面专属语义的不要往这里搬 —— 模板宏没有任何自动化测试兜着(templates/ 与 static/css/
+  只有 scripts/audit_render.py 的人工巡检),抽错了不会有测试变红,只会在页面上看出来。
+#}
+
+{#
+  面包屑。此前 questions / error_book / overview / feedback 四个页面各抄一份 7 行,
+  彼此只差最后那个当前页名称。
+
+  首页链接恒指向 /questions:app.py 的 `/` 本就重定向到题目管理,这里直接写终点少一跳。
+#}
+{% macro breadcrumb(current) -%}
+<div class="breadcrumb-container">
+  <div class="breadcrumb-custom">
+    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
+    <span class="breadcrumb-separator">/</span>
+    <span>{{ current }}</span>
+  </div>
+</div>
+{%- endmacro %}
+
+
+{#
+  总览页的统计卡外壳:标题栏 + 一个由 overview.js 异步填充的容器。
+  总览页有 5 张卡是这个形状(按科目分布 / 难度分布 / 查看趋势 / 错题分布 / 最近新增)。
+
+  loading 占位必须写在 HTML 里、而不是等 JS 塞进去 —— 统计接口慢的时候,一张空白卡片
+  看着像坏了。这也是这五处此前逐字节相同、最该合并的一行。
+
+  card_class:同一行并排的卡片用 h-100 撑等高,独占一行的用 mb-4 留间距。
+  另外两张卡不走本宏:Top10 的 card-body 是 p-0 且内嵌表格,用户管理的 card-header
+  带 d-flex 布局与操作按钮 —— 形状不同,硬套只会把宏撑成一堆条件分支。
+#}
+{% macro stat_card(icon, title, body_id, card_class='h-100') -%}
+<div class="overview-card card {{ card_class }}">
+  <div class="card-header"><i class="fa-solid {{ icon }} me-1 text-primary"></i>{{ title }}</div>
+  <div class="card-body" id="{{ body_id }}">
+    <div class="loading-block"><div class="spinner-border spinner-border-sm"></div> 加载中...</div>
+  </div>
+</div>
+{%- endmacro %}

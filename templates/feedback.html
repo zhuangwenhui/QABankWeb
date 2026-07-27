@@ -38,13 +38,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="breadcrumb-container">
-  <div class="breadcrumb-custom">
-    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
-    <span class="breadcrumb-separator">/</span>
-    <span>意见反馈</span>
-  </div>
-</div>
+{% from '_macros.html' import breadcrumb %}
+{{ breadcrumb('意见反馈') }}
 
 <div class="row g-4">
   <!-- 提交反馈表单 -->

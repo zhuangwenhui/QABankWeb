@@ -69,13 +69,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="breadcrumb-container">
-  <div class="breadcrumb-custom">
-    <a href="/questions"><i class="fa-solid fa-house"></i> 首页</a>
-    <span class="breadcrumb-separator">/</span>
-    <span>题目管理</span>
-  </div>
-</div>
+{% from '_macros.html' import breadcrumb %}
+{{ breadcrumb('题目管理') }}
 
 <!-- 学习进度面板:总进度 + 待复习 / 分组进度条 / 做题日历热力图。
      默认展开、折叠态记 localStorage;数据由 questions.js:initProgressPanel() 异步填充,
