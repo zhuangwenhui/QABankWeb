@@ -44,9 +44,5 @@ def test_progress_calendar_endpoint_reachable(client, login):
         assert 'count' in data['calendar'][0]
 
 
-def test_review_stats_endpoint_reachable(client, login):
-    """待复习数据源:GET /api/review/stats 登录后 200,带 due_today。"""
-    login('student', 'StudentPass123456')
-    r = client.get('/api/review/stats')
-    assert r.status_code == 200
-    assert 'due_today' in r.get_json()['data']
+# /api/review/stats 的可达性由 tests/test_review_page.py 的同名测试覆盖(此处曾有一份逐行相同的
+# 拷贝,V1 收尾时去重);到期口径的具体值断言见 tests/test_review_api.py。

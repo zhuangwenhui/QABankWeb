@@ -1,9 +1,11 @@
-"""渐进提示 + 采点结构化题解:模型列 / to_dict 回环 + 迁移列存在。
+"""渐进提示 + 采点结构化题解:模型列 / to_dict 回环。
 
 内容生成属另一单元,本测试只验证数据模型的可显示骨架:
   - 写入 hints(JSON 数组)/ solution_structured(JSON 对象)后 GET 单题能取回;
-  - 空值题(旧题)返回 [] / {},页面照常;
-  - 迁移在空库 upgrade 后 questions 表含两新列。
+  - 空值题(旧题)返回 [] / {},页面照常。
+
+迁移是否建出这两列,由 tests/test_migrations.py 的自动派生比对统一兜住 —— 此前这里另跑了
+一次完整 upgrade() 只为查两列,是全仓第三份重复的建库开销,V1 收尾时删除。
 """
 import json
 import os
@@ -11,11 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import config as config_module
-from app import create_app
 from models import Question, db
-
-MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), '..', 'migrations')
 
 HINTS = ['先想:被积函数在围道内是否解析?', '回忆留数定理 $\\oint f\\,dz = 2\\pi i\\sum \\mathrm{Res}$。',
          '孤立奇点在 $z=0$,求其留数。']
@@ -88,27 +86,3 @@ def test_detail_page_mounts_hint_and_structured_containers(app, client, login):
     html = client.get(f'/questions/{qid}').get_data(as_text=True)
     assert 'qdHints' in html          # 渐进提示容器
     assert 'qdStructured' in html      # 采点结构化容器
-
-
-def test_review_page_script_supports_structured(client, login):
-    """复习页渲染脚本包含采点四段渲染(复习揭示时也显示)。"""
-    login('student', 'StudentPass123456')
-    r = client.get('/review')
-    assert r.status_code == 200
-    # 脚本资源已挂载;采点四段渲染逻辑在 review.js 内(静态资源另测其存在)
-    assert 'review.js' in r.get_data(as_text=True)
-
-
-def test_migration_adds_hints_and_structured_columns(tmp_path):
-    """空文件库 upgrade 后 questions 含 hints / solution_structured 两列。"""
-    db_file = tmp_path / 'fresh.db'
-    cfg = type('Cfg', (config_module.TestingConfig,),
-               {'SQLALCHEMY_DATABASE_URI': f'sqlite:///{db_file}'})
-    application = create_app(cfg)
-    with application.app_context():
-        from flask_migrate import upgrade
-        upgrade(directory=MIGRATIONS_DIR)
-        cols = {row[1] for row in db.session.execute(
-            db.text('PRAGMA table_info(questions)'))}
-        for col in ('hints', 'solution_structured'):
-            assert col in cols, f'questions 缺列:{col}'
