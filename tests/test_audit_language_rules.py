@@ -81,6 +81,25 @@ def test_state_set_is_not_a_number_set():
 
 # ---------------------------------------------------------------- 定界符
 
+def test_math_inside_code_span_is_reported():
+    """行内代码是逐字展示的,MathJax 不进去排版 —— `PUSH($X_1$)` 会原样露出 $X_1$
+    (2026-07-27 q185 线上即此)。"""
+    assert 'md-math-in-code' in rules(al.check_markdown('`PUSH($X_1$) → POP()` を施す。'))
+    assert 'md-math-in-code' not in rules(al.check_markdown('`PUSH(X_1)` と $X_1$ は別物。'))
+    # 围栏代码块本来就整段逐字展示,不算
+    assert 'md-math-in-code' not in rules(al.check_markdown('```\nf($x$)\n```\n'))
+
+
+def test_unpaired_bold_is_reported():
+    """少写一个 `**`,那一个就以字面量留在页面上(2026-07-27 q168 即此)。"""
+    assert 'md-unpaired-bold' in rules(al.check_markdown('NFA 用**非确定性去猜哪个是。'))
+    assert 'md-unpaired-bold' not in rules(al.check_markdown('NFA 用**非确定性**去猜。'))
+    # 段落各自算:两段各有一对,不能合起来算成偶数就放行
+    assert 'md-unpaired-bold' in rules(al.check_markdown('第一段 **甲\n\n第二段 乙**\n'))
+    # 代码里的 `**` 是 Python 的幂、C 的二级指针,不参与配对
+    assert 'md-unpaired-bold' not in rules(al.check_markdown('用 `int(num**0.5)` 收窄循环。'))
+
+
 def test_stray_dollar_is_reported_per_occurrence():
     """落单的 $ 要逐处报,不能每篇只报第一条 —— 漏报的那几处正是线上坏页面。"""
     doc = '**(2)** $\\displaystyle\n\\begin{cases}0\\end{cases}$\n'

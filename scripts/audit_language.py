@@ -363,6 +363,37 @@ def check_zh(text):
 
 
 STRAY_DOLLAR = re.compile(r'(?<!\\)\$')
+CODE_SPAN = re.compile(r'`[^`\n]*`')
+FENCE = re.compile(r'```[\s\S]*?```')
+BOLD = re.compile(r'\*\*')
+
+
+def check_markdown(text):
+    """两类会让 markdown 记号原样露在页面上的写法。
+
+    · **成对不上的 `**`** —— 少写一个,那一个就以字面量留在正文里。
+      (「收尾的 `**` 后面是汉字所以收不了尾」那一类不在这里:那是渲染器的 flanking
+       规则对 CJK 不友好,已在 qd_render.js 里放宽,不该要求内容去迁就。)
+    · **行内代码里写公式** —— 代码段是逐字展示的,MathJax 不会进去排版,
+      `PUSH($X_1$)` 会原样显示成 `$X_1$`(2026-07-27 q185 即此)。
+    """
+    hits = []
+    body = FENCE.sub(lambda m: ' ' * len(m.group(0)), text or '')
+
+    for m in CODE_SPAN.finditer(body):
+        inner = MATH_INLINE.findall(m.group(0))
+        if inner:
+            hits.append(('md-math-in-code', '行内代码里写了公式(代码段逐字展示,不会排版)',
+                         m.group(0)[:70]))
+
+    plain = CODE_SPAN.sub(lambda m: ' ' * len(m.group(0)), body)
+    for para in re.split(r'\n[ \t]*\n', plain):
+        n = len(BOLD.findall(para))
+        if n % 2:
+            i = BOLD.search(para).start()
+            hits.append(('md-unpaired-bold', '`**` 没有成对,会以字面量留在页面上',
+                         snippet(para, i, i + 2, w=32)))
+    return hits
 
 
 def check_delimiters(text):
@@ -454,15 +485,16 @@ def audit(con):
             "SELECT id, COALESCE(source,''), COALESCE(solution_latex,''), "
             "COALESCE(solution_ja,''), COALESCE(solution_structured,''), "
             "COALESCE(hints,'') FROM questions ORDER BY id"):
-        for rule, desc, ev in check_zh(zh) + check_math(zh, 'zh'):
+        for rule, desc, ev in check_zh(zh) + check_math(zh, 'zh') + check_markdown(zh):
             findings[qid].append(('zh', rule, desc, ev, source))
         if ja.strip():
-            for rule, desc, ev in check_ja(ja) + check_math(ja, 'ja'):
+            for rule, desc, ev in check_ja(ja) + check_math(ja, 'ja') + check_markdown(ja):
                 findings[qid].append(('ja', rule, desc, ev, source))
-        # 采点/提示也会漏排公式,同样要查定界符;措辞类规则不在这两列上跑。
+        # 采点/提示同样会漏排公式、露出 markdown 记号(q241 的 node** 即在采点里),
+        # 所以定界符与 markdown 记号这两类也要在这两列上跑;措辞类规则不跑。
         for track, raw in (('struct', struct), ('hints', hints)):
             for text in json_strings(raw):
-                for rule, desc, ev in check_delimiters(text):
+                for rule, desc, ev in check_delimiters(text) + check_markdown(text):
                     findings[qid].append((track, rule, desc, ev, source))
     return findings
 
