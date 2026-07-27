@@ -127,6 +127,31 @@ def test_emit_fontface_css_structure():
     assert "local('Songti SC')" in css
 
 
+def test_emit_fontface_css_writes_one_face_per_slice():
+    """切片したときは片ごとに @font-face を出し、それぞれに unicode-range を付ける。"""
+    css = bf.emit_fontface_css(slices={("lxgw-wenkai", "regular"): [set("中日"), set("题解")]})
+    assert "lxgw-wenkai-regular.0.subset.woff2" in css
+    assert "lxgw-wenkai-regular.1.subset.woff2" in css
+    assert "unicode-range:" in css
+    # 切っていない ui 字体は従来どおり一枚のまま
+    assert "noto-sans-sc-regular.subset.woff2" in css
+
+
+def test_unicode_range_merges_consecutive_codepoints():
+    assert bf.unicode_range(set("AB")) == "U+41-42"
+    assert bf.unicode_range(set("AC")) == "U+41,U+43"
+    assert bf.unicode_range(set()) == ""
+
+
+def test_slice_charset_puts_frequent_chars_first():
+    """よく出る字ほど前の片に入れる —— 実際に落ちる片数を減らすための順序。"""
+    freq = {"的": 900, "题": 500, "解": 100}
+    parts = bf.slice_charset(set("的题解僻"), freq, size=2)
+    assert parts[0] == {"的", "题"}
+    assert parts[1] == {"解", "僻"}          # 語彙に無い字(兜底)は最後尾へ
+    assert set().union(*parts) == set("的题解僻")   # 切っても字は一つも落とさない
+
+
 def test_emit_fontface_css_applies_metrics():
     metrics = {"LXGW WenKai": {"ascent": "92.0%", "descent": "23.0%", "size_adjust": "100%"}}
     css = bf.emit_fontface_css(metrics)
