@@ -330,21 +330,41 @@ curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
 > `curl -s https://co-enquestionbank.cc/login | grep -o 'style.css?v=[0-9]*'`
 
 
+> ⚠️ **`deploy` 用户没有免密 sudo。** 下面这套命令**全程不用 sudo**,`ssh deploy@…` 进去直接跑。
+> 早先这一节写的是 `sudo -u deploy git pull` + `sudo systemctl restart`,照着做会卡在密码提示上,
+> 留下「磁盘是新代码、内存还是旧代码」的半完成状态(2026-07-27 发布 v1.17.0 时踩到)。
+> 你已经是 deploy 了,`sudo -u deploy` 这个前缀本身就是多余的。
+
 ```bash
+ssh -i ~/.ssh/qbank_deploy deploy@161.34.33.67
 cd /srv/question-bank
-sudo -u deploy git pull
 
-# 若服务器已装 pip-tools:
-sudo -u deploy .venv/bin/pip-sync requirements.txt
-# 未装 pip-tools 时退化为(不会移除已卸载的依赖,仅补充/升级):
-sudo -u deploy .venv/bin/pip install -r requirements.txt
+# 1) 取代码。/srv/question-bank 属 deploy,不需要 sudo
+git fetch --tags
+git pull --ff-only
+git describe --tags          # 确认拉到了预期的 tag
 
-APP_ENV=production SECRET_KEY=$(grep ^SECRET_KEY /etc/question-bank.env | cut -d= -f2) \
-  sudo -u deploy /srv/question-bank/.venv/bin/flask --app app db upgrade
+# 2) 依赖(无变更时可跳过;先看 git diff 有没有动 requirements.txt)
+.venv/bin/pip-sync requirements.txt          # 装了 pip-tools 时
+.venv/bin/pip install -r requirements.txt    # 没装时(只补充/升级,不移除)
 
-sudo systemctl restart question-bank
-curl -s -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/healthz
+# 3) 迁移。SECRET_KEY 只用于签会话,迁移不碰会话 —— 给个占位值即可,
+#    不必(也无法)去读 /etc/question-bank.env:那文件是 chmod 600 root:deploy,deploy 读不了。
+APP_ENV=production SECRET_KEY=placeholder-for-migration-only \
+  .venv/bin/flask --app app db upgrade
+
+# 4) 重载。deploy 无 sudo,不能 systemctl restart;用 SIGHUP 优雅重载(脚本内含 healthz 门禁)
+./deploy/reload.sh
 ```
+
+上线后**必须**确认新代码真的在跑 —— 静态资源指纹是按 `static/js`、`static/css` 的最新 mtime 算的,
+代码变了它就会变:
+
+```bash
+curl -s https://co-enquestionbank.cc/login | grep -o 'style.css?v=[0-9]*'
+```
+
+指纹跟部署前一样,就说明重载没生效,别急着宣布上线。
 
 ### 5.2 回滚
 
