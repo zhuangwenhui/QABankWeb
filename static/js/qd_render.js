@@ -21,9 +21,72 @@
   };
   var activeTrack = 'ja';
 
+  // markdown-it 判定 `**` 能不能收尾,用的是 CommonMark 的 flanking 规则,而那套规则把
+  // CJK 当成"普通字符"。于是「**答えは「存在する」**である。」里的收尾 `**` —— 前面是
+  // 「(标点)、后面是 で(普通字符)—— 被判成"不是右侧贴合",收不了尾,`**` 就原样留在页面上。
+  // 更糟的是一行里有两对时会**配错对**:「**環境(environment)**とは…を**束縛(binding)**と呼ぶ」
+  // 会把中间两个配成一对,加粗加到错的地方,首尾两个照样裸露。
+  // 全库 358 道里有 122 道栽在这上面,占三分之一。
+  //
+  // 只放宽**一条**:判断"后面(前面)是不是标点或空白"时,汉字假名也放行。
+  // 不能干脆把 CJK 当成标点 ——「**どの**5分割」在原规则下本来是好的(收尾的 `**` 前面是
+  // 「の」不是标点),一律当标点反而会把它弄坏。
+  //
+  // 还有一处是本管线自己造成的:数学先被换成 `QDMATHPLACEHOLDER0ENDQD` 这种字母数字占位符,
+  // 而原文那个位置本来是 `$`(标点)。于是「**比較関数(バリア関数)**$\varphi$」的收尾 `**`
+  // 前是 `)`、后是占位符的字母 Q,同样收不了尾。占位符代表的就是 `$…$`,按标点算才与原文一致。
+  var CJK_FOR_FLANK = /[⺀-〿぀-ヿ㐀-䶿一-鿿豈-﫿＀-￯]/;
+  var PH_HEAD = 'QDMATHPLACEHOLDER';
+  var PH_TAIL = 'ENDQD';
+
+  function makeCjkFriendly(mdInst) {
+    var State = mdInst.inline && mdInst.inline.State;
+    if (!State || !State.prototype.scanDelims || State.prototype.__cjkFriendly) return;
+    var utils = mdInst.utils;
+    var original = State.prototype.scanDelims;
+
+    function white(ch) {
+      return ch === undefined || (ch === ' ' || ch === '\t' || ch === '\n' ||
+                                  utils.isWhiteSpace(ch.charCodeAt(0)));
+    }
+    function punct(ch) {
+      return ch !== undefined &&
+             (utils.isMdAsciiPunct(ch.charCodeAt(0)) || utils.isPunctChar(ch));
+    }
+    function cjk(ch) {
+      return ch !== undefined && CJK_FOR_FLANK.test(ch);
+    }
+
+    State.prototype.scanDelims = function (start, canSplitWord) {
+      var res = original.call(this, start, canSplitWord);
+      var src = this.src;
+      var after = start + res.length;
+      // 行首/行尾按空白处理,与 CommonMark 一致
+      var last = start > 0 ? src[start - 1] : undefined;
+      var next = src[after];
+      var lastIsPh = start >= PH_TAIL.length &&
+                     src.slice(start - PH_TAIL.length, start) === PH_TAIL;
+      var nextIsPh = src.substr(after, PH_HEAD.length) === PH_HEAD;
+      var wLast = white(last), wNext = white(next);
+      var pLast = punct(last) || lastIsPh, pNext = punct(next) || nextIsPh;
+      var left = !wNext && (!pNext || wLast || pLast || cjk(last));
+      var right = !wLast && (!pLast || wNext || pNext || cjk(next));
+      if (canSplitWord) {                       // `*` 与 `**`
+        res.can_open = left;
+        res.can_close = right;
+      } else {                                  // `_`:词内不切
+        res.can_open = left && (!right || pLast);
+        res.can_close = right && (!left || pNext);
+      }
+      return res;
+    };
+    State.prototype.__cjkFriendly = true;
+  }
+
   var md = null;
   if (window.markdownit) {
     md = window.markdownit({ html: false, linkify: true, breaks: false, typographer: false });
+    makeCjkFriendly(md);
     if (window.markdownitContainer) {
       registerContainer('def', '');            // 橙:定義/定理
       registerContainer('note', 'note');       // 蓝:Note

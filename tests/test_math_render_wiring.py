@@ -105,6 +105,25 @@ def test_lint_catches_cross_line_inline_math():
         '行内/行间/代码/转义美元号都不该误报'
 
 
+def test_markdown_emphasis_is_cjk_aware():
+    """`**` 的收尾判定必须对 CJK 放宽,否则三分之一的题会在页面上露出字面 `**`。
+
+    CommonMark 的 flanking 规则按"标点/空白/其它"三分类,CJK 落在"其它"。于是
+    「**答えは「存在する」**である。」的收尾 `**` —— 前是「(标点)、后是 で(其它)——
+    被判成"不是右侧贴合",收不了尾。全库 358 道里 122 道栽在这上面。
+    另外本管线把数学换成了字母数字占位符,而原文那里是 `$`(标点),同样会让收尾失败。
+    """
+    src = _read('static/js/qd_render.js')
+    assert 'scanDelims' in src, '没有放宽 flanking 判定'
+    assert 'CJK_FOR_FLANK' in src, '放宽规则里没有认 CJK'
+    assert 'PH_HEAD' in src and 'PH_TAIL' in src, '数学占位符没有按标点处理'
+    patch = src[src.index('function makeCjkFriendly'):]
+    patch = patch[:patch.index('State.prototype.__cjkFriendly = true')]
+    assert 'cjk(last)' in patch and 'cjk(next)' in patch, \
+        'CJK 只该放宽"是否标点/空白"这一条,不该直接当成标点'
+    assert 'CJK_FOR_FLANK.test(ch)' in patch
+
+
 def test_a11y_render_actions_are_removed():
     """必须摘掉 MathJax v4 的 enrich / attachSpeech / explorable 渲染动作。
 
