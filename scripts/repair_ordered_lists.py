@@ -11,6 +11,10 @@
 用法:
     python scripts/repair_ordered_lists.py <db>            # 只报告
     python scripts/repair_ordered_lists.py <db> --apply    # 写库(先备份)
+
+生命周期:这次事故的源头(fix_language.py 的句読点归一化)已于 2026-07-27 打好补丁,
+所以本脚本在干净数据上跑就是报 0 命中。**保留它是当回归检查用** ——
+哪天 fix_language 又越界把列表符号吃了,先跑这个就能立刻看出来。
 """
 import argparse
 import json

@@ -11,6 +11,9 @@
 用法:
     python scripts/recrop_images.py <uploads 目录> [--apply] [--backup 备份目录]
 默认只试算不落盘;--apply 才真的改,且改前把原图复制到备份目录。
+
+配对与生命周期:与 scripts/audit_images.py 成对 —— 那个检测截断,这个重裁。
+**不是跑完就作废的一次性脚本**:只要还从 PDF 采题,跨页截断就会再次出现。
 """
 import argparse
 import os

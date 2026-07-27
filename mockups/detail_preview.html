@@ -1,5 +1,10 @@
 <!-- ⚠ 设计参照(design reference),非运行时资产:定稿视觉稿,无路由服务、不参与构建。
-     现行详情页实现见 templates/question_detail.html + static/css/question-detail.css + static/js/question_detail.js。 -->
+     现行详情页实现见 templates/question_detail.html + static/css/question-detail.css + static/js/question_detail.js。
+
+     本文件是 static/css/question-detail.css 的视觉规范唯一真源,该文件第 3 行反向引用本路径。
+     改这里的配色/间距/字号,要同步改那边;改那边而不改这里,下一个人就会照着过期的稿子改回去。
+     (同目录曾有 detail_pipeline_preview.html,2026-07-11 联调期供本地肉眼验收渲染管线用,
+      该职责已由 CI 里的 scripts/e2e_math_render.py 接管,故于 V1 收尾时删除。) -->
 <title>院試題庫 · 双语题解详情页</title>
 <style>
   :root{

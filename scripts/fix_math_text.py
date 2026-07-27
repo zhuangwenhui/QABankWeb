@@ -19,6 +19,9 @@
 用法:
     python scripts/fix_math_text.py <db>            # 只报告
     python scripts/fix_math_text.py <db> --apply    # 写库(先备份)
+
+配对与生命周期:与 scripts/audit_latex.py 成对 —— 那个报告 MathJax 认不出的写法,这个修其中一类。
+**不是跑完就作废的一次性脚本**:每批新内容入库后同类问题会再出现。
 """
 import argparse
 import json

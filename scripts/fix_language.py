@@ -21,6 +21,10 @@
     python scripts/fix_language.py <db>              # 只报告(默认)
     python scripts/fix_language.py <db> --apply      # 写库(先备份!)
     python scripts/fix_language.py <db> --diff 3     # 抽 3 道看逐行 diff
+
+配对与生命周期:与 scripts/audit_language.py 成对 —— 那个报告问题,这个修。
+**不是跑完就作废的一次性脚本**:每批新内容入库后 audit 会重新报同类问题,这里就是解药。
+另见 scripts/repair_ordered_lists.py,它修的是本脚本早期版本的越界。
 """
 import argparse
 import difflib
