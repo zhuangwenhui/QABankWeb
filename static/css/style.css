@@ -169,16 +169,6 @@ tr.selected {
 }
 
 /* ============ 公式渲染 ============ */
-.latex-code {
-  font-family: var(--qb-font-mono);
-  font-size: 0.85rem;
-  background: var(--qb-panel-2);
-  border-radius: 6px;
-  padding: 8px 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 .latex-content {
   line-height: 1.7;
   overflow-x: auto;

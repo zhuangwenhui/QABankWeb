@@ -21,7 +21,7 @@ import captcha
 import config
 from auth import admin_required, csrf_protect, login_required
 from logging_setup import audit, request_extra, setup_logging
-from models import User, db
+from models import GeneratedFile, Question, QuestionList, User, db
 from ratelimit import LoginThrottle
 
 # 登录限流:同一 IP 或用户名 5 分钟内失败 5 次,锁定 15 分钟
@@ -305,7 +305,6 @@ def create_app(config_object=None):
     @login_required
     def question_detail_page(qid):
         """LeetCode 式双语题解详情页(新路由,不动既有模态框)。"""
-        from models import Question
         if db.session.get(Question, qid) is None:
             abort(404)
         return render_template('question_detail.html', qid=qid)
@@ -320,7 +319,6 @@ def create_app(config_object=None):
     @login_required
     def list_detail_page(lid):
         """题单详情:有序题目 + 顶部进度(数据经 /api/lists/<id>)。"""
-        from models import QuestionList
         lst = db.session.get(QuestionList, lid)
         if lst is None:
             abort(404)
@@ -386,7 +384,6 @@ def create_app(config_object=None):
     @app.route('/generated/<path:filename>')
     @login_required
     def generated_file(filename):
-        from models import GeneratedFile
         record = GeneratedFile.query.filter_by(
             filename=os.path.basename(filename)).first()
         if record is None or (record.user_id != g.user.id and not g.user.is_admin):

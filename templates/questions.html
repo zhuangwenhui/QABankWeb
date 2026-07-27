@@ -3,11 +3,11 @@
 {% block title %}题目管理 - 题库系统{% endblock %}
 
 {% block head %}
-{# CodeMirror 供题目编辑器用。编辑当前是 @login_required(任何登录用户可建/编辑题),
-   故按 current_user 加载而非 is_admin —— 与实际编辑权限一致,避免非管理员误报"编辑器加载失败"。 #}
-{% if current_user %}
+{# CodeMirror 供题目编辑器用,对所有登录用户无条件加载:编辑当前是 @login_required
+   (任何登录用户可建/编辑题),按 is_admin 加载会让非管理员误报"编辑器加载失败"。
+   本页路由 /questions 带 @login_required(app.py:299-301),所以到这里 current_user 必然存在,
+   无需再包 {% if current_user %} —— 那个判断恒为真,只会误导人以为存在匿名访问的情形。 #}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/codemirror.min.css') }}">
-{% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/progress-panel.css') }}?v={{ ASSET_V }}">
 {# 详情弹窗复用详情页的题解排版(标题层级 / :::note 色块 / 列表 / 代码) #}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/question-detail.css') }}?v={{ ASSET_V }}">
@@ -507,12 +507,12 @@
 <!-- 右键上下文菜单 -->
 <div class="context-menu" id="contextMenu">
   <div class="context-menu-item" data-action="detail"><i class="fa-solid fa-eye"></i>查看详情</div>
-  {% if current_user and current_user.is_admin %}
+  {% if current_user.is_admin %}
   <div class="context-menu-item" data-action="edit"><i class="fa-solid fa-pen"></i>编辑</div>
   {% endif %}
   <div class="context-menu-item" data-action="bookmark"><i class="fa-solid fa-bookmark"></i><span id="ctxBookmarkText">加入错题本</span></div>
   <div class="context-menu-item" data-action="copy"><i class="fa-solid fa-copy"></i>复制题目 LaTeX</div>
-  {% if current_user and current_user.is_admin %}
+  {% if current_user.is_admin %}
   <div class="context-menu-item text-danger" data-action="delete"><i class="fa-solid fa-trash"></i>删除</div>
   {% endif %}
 </div>
@@ -526,10 +526,8 @@
     perPageOptions: {{ PER_PAGE_OPTIONS | tojson }}
   };
 </script>
-{% if current_user %}
 <script src="{{ url_for('static', filename='vendor/js/codemirror.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/codemirror-stex.min.js') }}"></script>
-{% endif %}
 {% include '_render_pipeline.html' %}
 <script src="{{ url_for('static', filename='js/questions.js') }}?v={{ ASSET_V }}"></script>
 {% endblock %}

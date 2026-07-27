@@ -5,19 +5,19 @@
 {% block head %}
 <style>
   .lists-wrap { max-width: 1100px; margin: 0 auto; padding: 8px 4px 40px; }
-  .lists-section-title { font-weight: 600; border-left: 4px solid var(--qb-blue, #2563eb); padding-left: 10px; margin: 22px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .lists-section-title { font-weight: 600; border-left: 4px solid var(--qb-blue); padding-left: 10px; margin: 22px 0 12px; display: flex; align-items: center; gap: 8px; }
   .lists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
   @media (max-width: 480px) { .lists-grid { grid-template-columns: 1fr; } }
-  .list-card { display: block; border: 1px solid var(--qb-hair, #e5e7eb); border-radius: 10px; padding: 16px; background: var(--qb-panel, #fff); text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s; }
+  .list-card { display: block; border: 1px solid var(--qb-hair); border-radius: 10px; padding: 16px; background: var(--qb-panel); text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s; }
   .list-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); transform: translateY(-2px); color: inherit; }
   .list-card .lc-title { font-size: 1.05rem; font-weight: 600; margin: 0 0 6px; }
-  .list-card .lc-desc { font-size: .85rem; color: var(--qb-ink-soft, #6b7280); margin: 0 0 12px; min-height: 1.1em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .list-card .lc-meta { font-size: .8rem; color: var(--qb-ink-faint, #9ca3af); display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .list-card .lc-desc { font-size: .85rem; color: var(--qb-ink-soft); margin: 0 0 12px; min-height: 1.1em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .list-card .lc-meta { font-size: .8rem; color: var(--qb-ink-faint); display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .lc-bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; display: flex; }
   .lc-bar .seg-mastered { background: #16a34a; }
   .lc-bar .seg-done { background: #93c5fd; }
   .badge-official { background: #f59e0b; color: #1f2937; font-size: .7rem; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
-  .lists-empty { color: var(--qb-ink-soft, #6b7280); padding: 24px 4px; }
+  .lists-empty { color: var(--qb-ink-soft); padding: 24px 4px; }
 </style>
 {% endblock %}
 

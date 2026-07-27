@@ -9,6 +9,9 @@
 from datetime import datetime, timedelta
 
 from flask import jsonify
+from sqlalchemy import or_
+
+from models import Question, QuestionTag, Tag, ViewLog, db
 
 
 def ok(data=None, message=None, status=200):
@@ -40,10 +43,6 @@ def apply_question_search(query, search):
     或该题挂有名称含此词的知识点标签(子查询,不与主查询 join 冲突)。上限 6 词。
     questions 与 error_book 共用此单一实现,杜绝两处搜索覆盖面漂移。
     """
-    from sqlalchemy import or_
-
-    from models import Question, QuestionTag, Tag, db
-
     terms = [t for t in (search or '').split() if t][:6]
     for term in terms:
         pattern = f'%{escape_like(term)}%'
@@ -67,8 +66,6 @@ def prune_view_logs(retention_days=180):
 
     调用方按 id 采样触发(非每次),失败静默(不影响主写入)。
     """
-    from models import ViewLog, db
-
     cutoff = datetime.now() - timedelta(days=retention_days)
     try:
         ViewLog.query.filter(ViewLog.viewed_at < cutoff).delete(synchronize_session=False)

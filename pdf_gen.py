@@ -6,7 +6,10 @@ escape_latex 转义,题目 LaTeX 原样注入)→ 探测 xelatex/pdflatex 编译
 
 对外接口:
     generate_pdf(template_name, context, questions, output_basename) -> dict
-    返回 {'ok': bool, 'pdf_path' 或 'tex_path', 'engine_missing': bool, 'error': str|None}
+    返回 {'ok': bool, 'engine_missing': bool, 'error': str|None}(并发满时另有 'busy')
+
+产物路径不在返回值里:调用方拿到的是 output_basename(它自己生成的 uuid),
+落盘位置固定为 config.Config.GENERATED_PDF_FOLDER,自行拼接即可,不必回传。
 """
 import os
 import shutil
@@ -150,8 +153,11 @@ def generate_pdf(template_name, context, questions, output_basename, out_dir=Non
         out_dir: 输出目录,默认取 config.Config.GENERATED_PDF_FOLDER
 
     返回:
-        {'ok': bool, 'pdf_path' 或 'tex_path', 'engine_missing': bool, 'error': str|None}
+        {'ok': bool, 'engine_missing': bool, 'error': str|None}
         并发闸门已满时:{'ok': False, 'busy': True, 'engine_missing': False, 'error': str}
+
+        engine_missing=True 表示系统没装 LaTeX 引擎,此时 ok 仍为 True —— 只是产物退化成
+        .tex 源文件而非 .pdf。调用方(api/error_book.py)据此改提示文案,不当作失败。
     """
     if not _compile_slot.acquire(blocking=False):
         return {'ok': False, 'busy': True, 'engine_missing': False,
@@ -208,7 +214,6 @@ def generate_pdf(template_name, context, questions, output_basename, out_dir=Non
         except OSError as exc:
             result['error'] = f'写入 .tex 文件失败:{exc}'
             return result
-        result['tex_path'] = tex_path
 
         # ---- 引擎探测:xelatex 优先,其次 pdflatex;都没有则优雅降级 ----
         engine = shutil.which('xelatex') or shutil.which('pdflatex')
@@ -238,24 +243,20 @@ def generate_pdf(template_name, context, questions, output_basename, out_dir=Non
         except subprocess.TimeoutExpired:
             result['error'] = f'LaTeX 编译超时({COMPILE_TIMEOUT} 秒),请减少题目数量后重试'
             _cleanup_failed(out_dir, output_basename)
-            result.pop('tex_path', None)
             return result
         except OSError as exc:
             result['error'] = f'LaTeX 编译进程启动失败:{exc}'
             _cleanup_failed(out_dir, output_basename)
-            result.pop('tex_path', None)
             return result
 
         if proc is None or proc.returncode != 0 or not os.path.isfile(pdf_path):
             result['error'] = ('LaTeX 编译失败,日志尾部:\n'
                                + _log_tail(out_dir, output_basename, proc))
             _cleanup_failed(out_dir, output_basename)
-            result.pop('tex_path', None)
             return result
 
         _cleanup_aux(out_dir, output_basename)
         result['ok'] = True
-        result['pdf_path'] = pdf_path
         return result
     finally:
         _compile_slot.release()

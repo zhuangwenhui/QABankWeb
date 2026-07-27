@@ -134,7 +134,6 @@
 /* ---------- 问题栏 ---------- */
 .qd-prob{font-family:var(--font-read); font-size:16px; color:var(--ink); line-height:1.82;}
 .qd-prob p{margin:0 0 14px;}
-.qd-prob .lead{font-weight:600;}
 .qd-srcbox{margin-top:20px; border:1px solid var(--hair); border-radius:var(--radius); background:var(--panel-2);
   padding:12px 14px; font-size:12.5px; color:var(--ink-soft); display:flex; flex-direction:column; gap:7px; font-family:var(--font-ui);}
 .qd-srcbox .r{display:flex; gap:10px;}
@@ -186,7 +185,6 @@
 .qd-page .solbody h2::before{content:""; width:7px; height:7px; border-radius:2px; background:var(--brand); flex:none;}
 .qd-page .solbody h2:first-child{margin-top:2px;}
 .qd-page .solbody p{margin:0 0 13px;}
-.qd-page .solbody .lede{color:var(--ink-soft);}
 .qd-page .solbody ul,.qd-page .solbody ol{margin:0 0 13px; padding-left:1.4em;}
 .qd-page .solbody li{margin:0 0 5px;}
 .qd-page .solbody code{font-family:var(--font-mono); font-size:.9em; background:var(--hair-soft);
@@ -197,7 +195,10 @@
 .qd-page .solbody a{color:var(--blue);}
 
 /* 步骤:h3 渲染为步骤块。渲染器把"第N步/编号"前缀包成 .n 徽标(qd-h3-chip),
-   无前缀的 h3 退化为左标尺(qd-h3-plain)。兼容 .step 手写块。 */
+   无前缀的 h3 退化为左标尺(qd-h3-plain)。
+   (曾另有一套 .step/.eqn 手写块样式,给的是 mockups/detail_preview.html 里的手写 HTML 用的。
+    正文一律经 qd_render.js 的 markdown-it 渲染、且 html:false,写死的 <div class="step"> 只会被
+    转义成文字,永远激活不了这些规则 —— 故于 V1 收尾时删除。) */
 .qd-page .solbody h3{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
   margin:20px 0 9px; scroll-margin-top:84px;}
 .qd-page .solbody h3 .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; font-weight:600;
@@ -205,31 +206,21 @@
   white-space:nowrap;}
 .qd-page .solbody h3.qd-h3-plain{padding-left:12px; position:relative;}
 .qd-page .solbody h3.qd-h3-plain::before{content:""; position:absolute; left:0; top:2px; bottom:2px; width:2px; border-radius:2px; background:var(--brand);}
-.qd-page .step{margin:0 0 13px; padding-left:16px; position:relative;}
-.qd-page .step::before{content:""; position:absolute; left:0; top:8px; bottom:5px; width:2px; border-radius:2px; background:var(--hair);}
-.qd-page .step .h{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);
-  display:inline-flex; align-items:center; gap:9px; margin-bottom:4px;}
-.qd-page .step .n{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.02em; background:var(--hair-soft); color:var(--ink-soft);
-  border-radius:5px; padding:1.5px 7px;}
 
-/* 独立公式 */
-.qd-page .eqn{margin:13px 0; padding:11px 8px; overflow-x:auto; text-align:center; background:var(--panel-2);
-  border-radius:8px; border:1px solid var(--hair-soft);}
 .qd-page .solbody mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
 /* 题面栏同样需要:院試题里大量 C/Python 程序清单以 \texttt 排在 display 公式内,
    宽度常超窄栏。此前本栏无溢出规则,代码被裁掉且无法横向滚动=内容真的取不到。 */
 .qd-page .qd-prob mjx-container{overflow-x:auto; overflow-y:hidden; max-width:100%;}
 /* 可横向滚动的块常驻一条细滚动条:覆盖式滚动条不滚不显,用户会把"可滑动"误读成"被截断"。 */
 .qd-page .qd-prob mjx-container, .qd-page .solbody mjx-container,
-.qd-page .solbody table, .qd-page .eqn{scrollbar-width:thin; scrollbar-color:var(--hair) transparent;}
+.qd-page .solbody table{scrollbar-width:thin; scrollbar-color:var(--hair) transparent;}
 .qd-page .qd-prob mjx-container::-webkit-scrollbar, .qd-page .solbody mjx-container::-webkit-scrollbar,
-.qd-page .solbody table::-webkit-scrollbar, .qd-page .eqn::-webkit-scrollbar{height:7px;}
+.qd-page .solbody table::-webkit-scrollbar{height:7px;}
 .qd-page .qd-prob mjx-container::-webkit-scrollbar-thumb, .qd-page .solbody mjx-container::-webkit-scrollbar-thumb,
-.qd-page .solbody table::-webkit-scrollbar-thumb, .qd-page .eqn::-webkit-scrollbar-thumb{
+.qd-page .solbody table::-webkit-scrollbar-thumb{
   background:var(--hair); border-radius:4px;}
 /* 宽内容不撑破窄栏:长公式/宽表格在各自块内横向滚动;长 token 允许折断 */
 .qd-page .solbody{overflow-wrap:break-word;}
-.qd-page .solbody .eqn math{max-width:none;}
 .qd-page .solbody table{display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; margin:0 0 13px;}
 .qd-page .solbody th,.qd-page .solbody td{border:1px solid var(--hair); padding:5px 9px; text-align:left;}
 .qd-page .solbody th{background:var(--panel-2);}
@@ -266,8 +257,6 @@
   font-size:10.5px; font-weight:600; letter-spacing:.08em; padding:2px 11px; border-radius:20px; text-transform:uppercase;}
 .qd-page .conclusion p{margin:0;}
 
-.qd-page .aside{color:var(--ink-faint); font-size:13px; font-style:italic; margin:11px 0 4px; padding-left:12px;
-  border-left:2px solid var(--hair);}
 
 /* ---------- 渐进提示(逐层揭示) ---------- */
 .qd-page .qd-hints{margin:20px 0 4px; border:1px solid var(--blue-line); border-radius:var(--radius);
