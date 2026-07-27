@@ -14,6 +14,11 @@ from collections import defaultdict, deque
 
 class LoginThrottle:
     def __init__(self, max_attempts=5, window=300, lockout=900):
+        """max_attempts 次失败落在 window 秒内即锁 lockout 秒。默认 5 次 / 5 分钟 / 锁 15 分钟。
+
+        两个 defaultdict 都不做过期清理:key 是 IP 与用户名,自托管场景下基数很小,
+        且 locked_for / record_failure 会在读到时顺手剔除过期项。
+        """
         self.max_attempts = max_attempts
         self.window = window
         self.lockout = lockout
@@ -50,6 +55,7 @@ class LoginThrottle:
             return 0
 
     def remaining_attempts(self, key):
+        """该 key 在锁定前还剩几次机会。仅用于给用户提示,不参与判定。"""
         now = time.time()
         with self._lock:
             dq = self._fails[key]
@@ -58,6 +64,7 @@ class LoginThrottle:
             return max(0, self.max_attempts - len(dq))
 
     def reset(self, key):
+        """清掉该 key 的失败计数与锁定 —— 登录成功时调用。"""
         with self._lock:
             self._fails.pop(key, None)
             self._locked.pop(key, None)

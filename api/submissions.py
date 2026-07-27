@@ -20,7 +20,11 @@ MAX_IMAGES = 4  # 单次提交作答图上限
 
 
 def _image_exts():
-    # 作答图仅收位图(不含 pdf:多模态阅卷需 image 块)
+    """作答图允许的扩展名 = 全站上传白名单**减去 pdf**。
+
+    减 pdf 不是安全考虑,是能力限制:阅卷走多模态模型的 image 块,喂不进 PDF。
+    题面图那边仍收 PDF(见 api/questions.py),两处白名单不同是刻意的。
+    """
     return set(current_app.config.get('ALLOWED_UPLOAD_EXTENSIONS', set())) - {'pdf'}
 
 
@@ -48,6 +52,11 @@ def _save_images(files):
 
 
 def _remove_files(names):
+    """删掉这些作答图文件。失败静默 —— 删图是收尾动作,不该让删除提交本身失败。
+
+    每个路径都先 realpath 再确认落在上传目录内才删:文件名虽然是入库时用 uuid 生成的,
+    但这里是**按库里存的字符串**去删,一旦库被写脏就成了任意文件删除。
+    """
     folder = os.path.realpath(_upload_folder())
     for n in names or []:
         try:
@@ -60,6 +69,11 @@ def _remove_files(names):
 
 
 def _reference_solution(q):
+    """把双轨题解拼成给阅卷模型看的参考答案文本。
+
+    两轨都给、并各自加中文小标题:模型据此判断学生答的是哪一步,
+    只给一轨会在学生用另一种语言作答时对不齐。哪轨为空就跳过哪轨。
+    """
     parts = []
     if (q.solution_latex or '').strip():
         parts.append('【中文速览】\n' + q.solution_latex.strip())
@@ -126,6 +140,11 @@ def list_submissions(qid):
 
 
 def _owned_or_404(sid):
+    """取该提交,且必须属于当前用户;否则返回 None。
+
+    "不存在"与"是别人的"故意合并成同一个结果,调用方一律回 404 ——
+    分开回 404 / 403 等于告诉攻击者哪些 id 是存在的。
+    """
     sub = db.session.get(AnswerSubmission, sid)
     if sub is None or sub.user_id != g.user.id:
         return None
@@ -135,6 +154,7 @@ def _owned_or_404(sid):
 @bp.route('/submissions/<int:sid>', methods=['GET'])
 @login_required
 def get_submission(sid):
+    """取一份自己的作答提交(含评分结果)。别人的提交一律 404。"""
     sub = _owned_or_404(sid)
     if sub is None:
         return _err('提交不存在', code='NOT_FOUND', status=404)
@@ -144,6 +164,7 @@ def get_submission(sid):
 @bp.route('/submissions/<int:sid>', methods=['DELETE'])
 @login_required
 def delete_submission(sid):
+    """删除自己的一份作答提交,连同已落盘的作答图一起清掉。别人的提交一律 404。"""
     sub = _owned_or_404(sid)
     if sub is None:
         return _err('提交不存在', code='NOT_FOUND', status=404)

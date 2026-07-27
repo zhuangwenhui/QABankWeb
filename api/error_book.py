@@ -215,7 +215,8 @@ def add_batch():
                 skipped += 1
                 continue
             try:
-                # 每条用 SAVEPOINT 包裹:并发下唯一约束冲突只回退该条,不影响整批
+                # 每条用 SAVEPOINT 包裹:并发下唯一约束冲突只回退该条,整批其余照常入库。
+                # 完整理由见 api/_helpers.py 顶部说明。
                 with db.session.begin_nested():
                     db.session.add(ErrorBook(user_id=g.user.id, question_id=qid, notes=''))
                 added += 1

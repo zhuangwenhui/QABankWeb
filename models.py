@@ -34,13 +34,16 @@ class User(db.Model):
                                 cascade='all, delete-orphan')
 
     def set_password(self, password):
+        """存口令哈希(werkzeug 默认 scrypt),明文不落库、不进日志。"""
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        """核对口令。内部是常数时间比较,别改成 == 自己比。"""
         return check_password_hash(self.password_hash, password)
 
     @property
     def is_admin(self):
+        """是否管理员。角色只有 student / admin 两种,没有中间态。"""
         return self.role == 'admin'
 
 
@@ -91,6 +94,12 @@ class Question(db.Model):
 
     @property
     def tags_list(self):
+        """自由标签(JSON 数组字符串)→ list;解析失败或不是数组一律回 []。
+
+        容错而不是抛:标签是展示用的附属信息,一条脏数据不该让整个列表页 500。
+        注意这与规范化的知识点标签(Tag / QuestionTag 关联表)是**两套东西**,
+        用途不同、并存 —— 见 SPEC §0。
+        """
         try:
             data = json.loads(self.tags or '[]')
             return data if isinstance(data, list) else []
@@ -99,6 +108,7 @@ class Question(db.Model):
 
     @tags_list.setter
     def tags_list(self, value):
+        """写回 JSON。ensure_ascii=False 保证中文在库里可读,便于直接 sqlite3 排查。"""
         self.tags = json.dumps(list(value or []), ensure_ascii=False)
 
     @property
@@ -112,6 +122,7 @@ class Question(db.Model):
 
     @hints_list.setter
     def hints_list(self, value):
+        """写回 JSON 数组。"""
         self.hints = json.dumps(list(value or []), ensure_ascii=False)
 
     @property
@@ -125,9 +136,16 @@ class Question(db.Model):
 
     @solution_structured_dict.setter
     def solution_structured_dict(self, value):
+        """写回 JSON 对象。"""
         self.solution_structured = json.dumps(dict(value or {}), ensure_ascii=False)
 
     def to_dict(self, with_solution=True):
+        """题目的对外表示。**这里就是 API 契约本身**(SPEC §1 列的字段),改动即改接口。
+
+        with_solution=False 时不带两轨题解正文:列表页一次要出 20-100 道,
+        带上题解全文会让响应大出一个量级,而列表上根本不显示。
+        时间统一走 fmt_dt(见本模块顶部),别在这里另写 strftime。
+        """
         d = {
             'id': self.id,
             'subject': self.subject,
@@ -169,6 +187,11 @@ class ErrorBook(db.Model):
     last_reviewed_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
+        """错题条目的对外表示,**内嵌整道题**(question 字段走 Question.to_dict())。
+
+        内嵌而不是只给 question_id:错题本列表要显示题面与题解,拆两次请求会让列表页
+        变成 N+1。代价是响应偏大,故调用方在只需要计数时不要用这个方法。
+        """
         return {
             'id': self.id,
             'question_id': self.question_id,
@@ -249,6 +272,7 @@ class Feedback(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
+        """反馈工单的对外表示。带 username 便于管理员列表直接显示提交人,免去再查一次。"""
         return {
             'id': self.id,
             'title': self.title,
@@ -332,6 +356,10 @@ class AnswerSubmission(db.Model):
 
     @property
     def image_paths_list(self):
+        """作答图文件名列表(JSON 数组字符串)→ list;解析失败回 [](仿 tags_list 容错)。
+
+        存的是**文件名**不是路径:上传目录由 config 决定,存绝对路径会让备份换机后全失效。
+        """
         try:
             data = json.loads(self.image_paths or '[]')
             return data if isinstance(data, list) else []
@@ -340,10 +368,15 @@ class AnswerSubmission(db.Model):
 
     @image_paths_list.setter
     def image_paths_list(self, value):
+        """写回 JSON 数组。"""
         self.image_paths = json.dumps(list(value or []), ensure_ascii=False)
 
     @property
     def rubric_breakdown_list(self):
+        """采点逐项得分(JSON 数组字符串)→ list;解析失败回 []。
+
+        每项形如 {label, awarded, max, comment},由 grading._normalize 归一化后写入。
+        """
         try:
             data = json.loads(self.rubric_breakdown or '[]')
             return data if isinstance(data, list) else []
@@ -352,9 +385,14 @@ class AnswerSubmission(db.Model):
 
     @rubric_breakdown_list.setter
     def rubric_breakdown_list(self, value):
+        """写回 JSON 数组。"""
         self.rubric_breakdown = json.dumps(list(value or []), ensure_ascii=False)
 
     def to_dict(self):
+        """一份作答提交的对外表示:图片、评分、转写、反馈与两个时间戳。
+
+        image_urls 由文件名现拼而不是入库:上传目录路径变了,历史记录不用跟着迁。
+        """
         imgs = self.image_paths_list
         return {
             'id': self.id,
@@ -383,12 +421,17 @@ from sqlalchemy.engine import Engine as _Engine
 # 注意:全局 Engine 监听,Alembic 迁移连接同样生效;迁移期需关外键,见 migrations/env.py
 @_sa_event.listens_for(_Engine, 'connect')
 def _sqlite_pragmas(dbapi_connection, connection_record):
-    """每个 SQLite 连接建立时启用外键约束、WAL 与忙等待。
+    """每个 SQLite 连接建立时设四条 PRAGMA:外键、忙等待、WAL、同步级别。
 
-    - foreign_keys:SQLite 默认 OFF,不开则 ForeignKey/级联形同虚设
+    - foreign_keys=ON:SQLite 默认 **OFF**,不开则 ForeignKey 与级联删除形同虚设
+    - busy_timeout=5000:写锁冲突时等 5 秒,而不是立刻抛 database is locked
     - journal_mode=WAL:读写不互斥,多用户并发的基础(内存库返回 memory,无害);
-      WAL 为库级持久设置,此处每连接重复执行为幂等确认
-    - busy_timeout:写锁冲突时等待 5s 而非立刻 database is locked
+      WAL 是**库级持久**设置,此处每连接重复执行只是幂等确认
+    - synchronous=NORMAL:**拿持久性换性能**。默认的 FULL 每次提交都 fsync;NORMAL 下
+      WAL 只在 checkpoint 时 fsync,写入快得多,代价是**操作系统崩溃或断电可能丢掉
+      最后若干个已提交事务**(进程自己崩溃不会丢 —— 那种情况 WAL 仍是完整的)。
+      单机自托管 + 每日 04:30 备份的前提下这个交换划算;哪天换成不能容忍丢数据的场景,
+      要改的是这一行。
     """
     if type(dbapi_connection).__module__.startswith('sqlite3'):
         cursor = dbapi_connection.cursor()

@@ -28,6 +28,11 @@ _MAX_REORDER = 5000
 
 
 def _list_meta(lst, item_count, progress):
+    """题单的对外元信息(不含题目条目本身)。
+
+    item_count 与 progress 由调用方算好传进来 —— 广场页要一次算几十个题单的计数,
+    在这里逐个查会变成 N+1。
+    """
     return {
         'id': lst.id,
         'owner_id': lst.owner_id,
@@ -190,6 +195,7 @@ def add_item(lid):
                .filter(QuestionListItem.list_id == lid).scalar())
     next_pos = 0 if max_pos is None else max_pos + 1
     try:
+        # SAVEPOINT 的用意见 api/_helpers.py 顶部说明(并发下只回退这一条)
         with db.session.begin_nested():
             db.session.add(QuestionListItem(list_id=lid, question_id=qid,
                                             position=next_pos))

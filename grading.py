@@ -30,6 +30,8 @@ class GradingError(Exception):
 
 
 def _media_type(path):
+    """按扩展名推 MIME。认不出就当 image/jpeg —— 上传时已按白名单挡过非图片,
+    这里猜错顶多是模型少一点格式提示,不值得为此让整次阅卷失败。"""
     ext = os.path.splitext(path)[1].lstrip('.').lower()
     return _MEDIA.get(ext, 'image/jpeg')
 
@@ -61,6 +63,11 @@ def _extract_json(text):
 
 
 def _num(v, default=0.0):
+    """模型给的分数转成两位小数;转不动就取默认值。
+
+    模型偶尔会把分数写成 "8" / "8分" / null,一个字段解析失败不该让整份评分作废,
+    所以这里吞掉异常回落默认值,而不是抛。
+    """
     try:
         return round(float(v), 2)
     except (TypeError, ValueError):
@@ -97,9 +104,17 @@ def _normalize(parsed, model):
 
 
 class Grader:
+    """阅卷引擎接口。实现类只需给出 name 与 grade()。"""
+
     name = 'base'
 
     def grade(self, *, question_text, reference_solution, rubric, image_paths):
+        """按采点标准评一份作答,返回归一化后的评分字典。
+
+        返回结构见 _normalize:total_score / max_score / breakdown / transcription /
+        feedback / model。失败一律抛 GradingError,由调用方(api/submissions.py)转成 4xx/5xx。
+        全参数都是关键字参数:实现类多了以后位置参数极易串位。
+        """
         raise NotImplementedError
 
 
@@ -108,6 +123,11 @@ class StubGrader(Grader):
     name = 'stub'
 
     def grade(self, *, question_text, reference_solution, rubric, image_paths):
+        """不评分,只如实说明引擎没配。
+
+        关键是 total_score 与 max_score 都给 0 而不是编一个分数 ——
+        学生的作答照片已经存下来了,配好引擎后可以重批;编分数会让人信以为真。
+        """
         return {
             'total_score': 0.0,
             'max_score': 0.0,
@@ -124,11 +144,18 @@ class ClaudeVisionGrader(Grader):
     name = 'claude'
 
     def __init__(self, api_key, model=DEFAULT_MODEL, base_url=DEFAULT_BASE_URL):
+        """model / base_url 传 None 或空串时回落到默认值(配置项留空比缺失更常见)。"""
         self.api_key = api_key
         self.model = model or DEFAULT_MODEL
         self.base_url = (base_url or DEFAULT_BASE_URL).rstrip('/')
 
     def _prompt(self, question_text, reference_solution, rubric):
+        """拼阅卷提示词:身份 + 任务 + 题面 + 参考题解 + 采点标准 + 输出格式约定。
+
+        要求模型只回 JSON 且字段固定,解析在 _extract_json / _normalize。
+        末尾两句兜底很重要:配点没给分值时要它均摊、照片读不清时要它如实说并给低分 ——
+        少了这两句,模型会自己编一套配点或硬猜内容。
+        """
         rub = rubric if isinstance(rubric, dict) else {}
         parts = [
             '你是日本大学院入试(院試)的资深阅卷官。学生上传了手写作答的照片。',
@@ -154,6 +181,12 @@ class ClaudeVisionGrader(Grader):
         return '\n'.join(parts)
 
     def _post(self, body):
+        """POST 到 Anthropic Messages API,回 JSON。
+
+        用标准库 urllib 而非 SDK:整个项目只有这一处外部 HTTP 调用,
+        为它引一个依赖(及其传递依赖)不划算。
+        一切网络与 HTTP 错误都转成 GradingError,调用方只需要处理这一种异常。
+        """
         req = urllib.request.Request(
             self.base_url + '/v1/messages',
             data=json.dumps(body).encode('utf-8'),
@@ -173,6 +206,11 @@ class ClaudeVisionGrader(Grader):
             raise GradingError(f'请求 Anthropic 失败:{exc}')
 
     def grade(self, *, question_text, reference_solution, rubric, image_paths):
+        """把提示词与全部作答照片作为一条多模态消息发出去,解析回评分。
+
+        照片以 base64 内联(不是 URL):作答图在 uploads/ 下受登录保护,给外部 URL 取不到。
+        代价是请求体会随张数线性变大 —— 上限 4 张由 api/submissions.py 的 MAX_IMAGES 挡住。
+        """
         if not image_paths:
             raise GradingError('无作答图可评分')
         content = [{'type': 'text', 'text': self._prompt(question_text, reference_solution, rubric)}]

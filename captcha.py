@@ -31,6 +31,11 @@ _FONT_CANDIDATES = [
 
 
 def _load_font(size):
+    """按候选表找第一个存在的 TTF;全都没有就退回 PIL 内置位图字体。
+
+    内置字体很小且不认字号,验证码会变得难认但仍可用 —— 宁可难认也不要因为服务器
+    没装字体就整个登录页挂掉。
+    """
     for path in _FONT_CANDIDATES:
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
@@ -38,6 +43,7 @@ def _load_font(size):
 
 
 def _rand_color(lo=0, hi=255):
+    """随机 RGB。调用方用 lo/hi 把前景压暗、背景提亮,保证对比度够读。"""
     return (random.randint(lo, hi), random.randint(lo, hi), random.randint(lo, hi))
 
 

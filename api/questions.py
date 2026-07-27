@@ -378,6 +378,12 @@ def related_questions(qid):
     target_names = set(_knowledge_tag_names([qid]).get(qid, []))
 
     def _card(q):
+        """相关题的轻量卡片:只出元信息,**不含题面与题解正文**。
+
+        相关题一次返回若干条,把 to_dict() 那样的全量字段(含两轨题解全文)带上,
+        单次响应能到几百 KB —— 而卡片上只显示出处、科目、难度和共享标签。
+        has_solution 只回一个布尔量,让前端能标"有题解",同样不带正文。
+        """
         return {
             'id': q.id,
             'source': q.source or '',

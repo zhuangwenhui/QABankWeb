@@ -35,6 +35,18 @@ IMPORT_ROUTES = frozenset({('POST', '/api/questions'),
 
 
 def create_app(config_object=None):
+    """应用工厂:建 Flask 实例、装配所有扩展与路由,返回可运行的 app。
+
+    装配顺序有讲究,别随手调:
+      配置与目录 → db/Migrate → 注册 9 个蓝图 → setup_logging → ProxyFix(仅生产)
+      → Talisman/CSP → before/after hooks → 页面路由
+    setup_logging 必须先于 load_user_and_csrf 注册,否则 g.request_id 未就绪,
+    那个 hook 里 audit() 打出的日志关联不上请求。
+    蓝图 import 写在函数体内而非模块顶部:各 api 模块会 import models/auth,提到顶部会成环。
+
+    config_object 省略时按 APP_ENV 取。生产配置下 SECRET_KEY 为空会直接 raise 拒绝启动 ——
+    宁可起不来也不能用随机密钥跑生产(每次重启全体掉线,多 worker 之间还互不认会话)。
+    """
     app = Flask(__name__)
     app.config.from_object(config_object or config.get_config())
     if app.config.get('ENV_NAME') == 'production' and not (app.config.get('SECRET_KEY') or '').strip():
@@ -107,6 +119,17 @@ def create_app(config_object=None):
 
     @app.before_request
     def load_user_and_csrf():
+        """每个请求的入口关卡:认身份 → 查停用/改密强制 → 校验 CSRF。
+
+        三条出路,任一 return 非 None 都会**跳过视图函数**直接作为响应:
+          1. 导入通道(Bearer):认出来就 `return None` 提前收工 —— 注意这条路
+             **绕过了下面的 CSRF 校验**,理由见 auth.csrf_protect 的说明。
+          2. 会话用户:账号被停用 → 清会话;须改初始密码 → 逼去 /change_password。
+          3. 其余一律走到末尾的 csrf_protect()。
+
+        顺序不能调:setup_logging 必须先于本 hook 注册,否则 g.request_id 还没就绪,
+        这里 audit() 打出来的日志会缺请求关联。
+        """
         if 'csrf_token' not in session:
             session['csrf_token'] = secrets.token_hex(16)
         g.user = None
@@ -129,6 +152,11 @@ def create_app(config_object=None):
                 return jsonify(success=False, error='无可用管理员身份', code='SERVER_ERROR'), 500
             g.import_api = True
             audit('import_api', target=request.path)
+            # ⚠️ 这个提前 return 是安全相关的控制流事实,不是"顺手早退":
+            # 它**跳过了本函数末尾的 csrf_protect()**。对 Bearer 认证的导入通道这是对的
+            # (CSRF 防的是带 Cookie 的跨站诱导,与令牌认证无关,详见 auth.csrf_protect),
+            # 但读代码的人很容易看漏。若哪天要在本函数末尾加新的通用检查(限流、审计、
+            # 请求体大小……),记得导入通道走不到那里,得在这行之前补。
             return None
         user_id = session.get('user_id')
         if user_id:
@@ -154,6 +182,11 @@ def create_app(config_object=None):
     # 缓存里的旧版最长 7 天 —— 2026-07-25 修数学渲染时,光部署根本救不了已中招的浏览器。
     # 取自身 JS/CSS 的最新 mtime,内容一变 URL 就变,浏览器必然重新拉。
     def _asset_version():
+        """取 static/js 与 static/css 下的最新 mtime 作为资源指纹。
+
+        用 mtime 而非内容哈希:文件不多,启动时 stat 一遍够快,算哈希要读全部内容。
+        代价是 git checkout 这类不改内容但动 mtime 的操作也会让指纹变(多一次冷加载,无害)。
+        """
         latest = 0
         for sub in ('js', 'css'):
             d = os.path.join(app.static_folder, sub)
@@ -170,6 +203,10 @@ def create_app(config_object=None):
 
     @app.context_processor
     def inject_globals():
+        """注入所有模板可直接使用的全局变量(清单见 SPEC §0 末尾)。
+
+        current_user 取自 g 而不是 session:g.user 已经过停用检查,session 里的 id 没有。
+        """
         return {
             'ASSET_V': app.config['ASSET_V'],
             'current_user': g.get('user'),
@@ -184,6 +221,7 @@ def create_app(config_object=None):
 
     @app.route('/')
     def index():
+        """站点根:直接送到题目管理页(本站没有独立首页)。"""
         return redirect(url_for('questions_page'))
 
     @app.route('/captcha')
@@ -197,6 +235,13 @@ def create_app(config_object=None):
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
+        """登录页与登录处理。
+
+        三道闸门依次是:图片验证码 → 限流锁定 → 口令核对。验证码答案在会话里只存 HMAC 摘要、
+        不落明文(否则机器人读自己的 Cookie 就知道答案),且一次性使用。
+        限流按 IP 与用户名两个维度各计一次(见 login_throttle)。
+        登录成功先 session.clear() 再写 user_id —— 轮换会话,防会话固定攻击。
+        """
         if g.user:
             return redirect(url_for('questions_page'))
         if request.method == 'POST':
@@ -262,6 +307,7 @@ def create_app(config_object=None):
 
     @app.route('/logout')
     def logout():
+        """退出登录。只清登录态,保留 csrf_token 供登录表单继续用。"""
         session.pop('user_id', None)  # 仅清登录态;csrf_token 保留供后续表单,下次登录会 session.clear 轮换
         flash('已退出登录', 'info')
         return redirect(url_for('login'))
@@ -269,6 +315,11 @@ def create_app(config_object=None):
     @app.route('/change_password', methods=['GET', 'POST'])
     @login_required
     def change_password():
+        """改密页与改密处理。首次登录会被 before_request 强制跳到这里。
+
+        四条校验:旧密码对、新密码够长、两次一致、新旧不同。最后一条是为了让
+        「强制改初始密码」真的换掉密码,而不是原样再填一遍糊弄过去。
+        """
         if request.method == 'POST':
             old = request.form.get('old_password', '')
             new = request.form.get('new_password', '')
@@ -299,6 +350,7 @@ def create_app(config_object=None):
     @app.route('/questions')
     @login_required
     def questions_page():
+        """题目管理页(本站默认首页)。数据全部由 questions.js 走 /api/ 异步取。"""
         return render_template('questions.html')
 
     @app.route('/questions/<int:qid>')
@@ -336,22 +388,29 @@ def create_app(config_object=None):
     @app.route('/error_book')
     @login_required
     def error_book_page():
+        """错题本页。"""
         return render_template('error_book.html')
 
     @app.route('/feedback')
     @login_required
     def feedback_page():
+        """意见反馈页。"""
         return render_template('feedback.html')
 
     @app.route('/overview')
     @admin_required
     def overview_page():
+        """管理总览页。学生角色会被 admin_required 重定向回题目管理。"""
         return render_template('overview.html')
 
     # ------------------------------------------------------------------ 健康检查
 
     @app.route('/healthz')
     def healthz():
+        """存活探针:能查通库就 200,否则 503。UptimeRobot 拨的就是这个。
+
+        故意不加登录:探针要在任何状态下都能打。响应里也不带库内信息,只有 ok/degraded。
+        """
         try:
             db.session.execute(db.text('SELECT 1'))
         except Exception:
@@ -360,6 +419,7 @@ def create_app(config_object=None):
 
     @app.route('/readyz')
     def readyz():
+        """就绪探针。单进程 + SQLite,没有独立外部依赖要等,故与存活同判据。"""
         # 就绪与存活同判据(单进程 + SQLite,无独立依赖需区分)
         return healthz()
 
@@ -379,11 +439,17 @@ def create_app(config_object=None):
     @app.route('/uploads/<path:filename>')
     @login_required
     def uploaded_file(filename):
+        """题面/解答图的文件服务。需登录;路径穿越防护在 _protected_send 里。"""
         return _protected_send(app.config['UPLOAD_FOLDER'], '/_protected_uploads', filename)
 
     @app.route('/generated/<path:filename>')
     @login_required
     def generated_file(filename):
+        """生成的试卷 PDF/.tex 下载。需登录,且**只能下自己生成的**。
+
+        按 GeneratedFile 表核对归属,别人的链接回 404 而不是 403 —— 403 等于确认了
+        那个文件确实存在。
+        """
         record = GeneratedFile.query.filter_by(
             filename=os.path.basename(filename)).first()
         if record is None or (record.user_id != g.user.id and not g.user.is_admin):
@@ -395,12 +461,18 @@ def create_app(config_object=None):
 
     @app.errorhandler(404)
     def not_found(e):
+        """404。接口回 JSON 信封,页面回一个只有导航壳的 base.html。"""
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='资源不存在', code='NOT_FOUND'), 404
         return render_template('base.html'), 404
 
     @app.errorhandler(413)
     def too_large(e):
+        """413 请求体过大(上限见 MAX_CONTENT_LENGTH)。
+
+        页面侧要重定向回来源页并 flash 提示 —— Werkzeug 在超限时可能已经断掉请求体,
+        此时渲染依赖 form 数据的模板会二次报错。
+        """
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='文件过大,上限 20MB', code='TOO_LARGE'), 413
         flash('上传内容过大(上限 20MB)', 'danger')
@@ -418,12 +490,17 @@ def create_app(config_object=None):
 
     @app.errorhandler(500)
     def server_error(e):
+        """500。对外只给一句笼统错误,细节留在服务端日志里(别把栈回给用户)。"""
         if request.path.startswith('/api/'):
             return jsonify(success=False, error='服务器内部错误', code='SERVER_ERROR'), 500
         return render_template('error.html'), 500
 
     @app.errorhandler(Exception)
     def unhandled_exception(e):
+        """兜底异常处理器:记一条带 request_id 的完整栈,再转交 500 处理器。
+
+        HTTPException 原样放行 —— 404/413 这些有自己的处理器,吞掉会让它们全变成 500。
+        """
         if isinstance(e, HTTPException):
             return e  # 404/413 等交由既有处理器,不吞
         app.logger.exception('未捕获异常', extra=request_extra())  # 带 request_id 便于关联(spec §3.3)

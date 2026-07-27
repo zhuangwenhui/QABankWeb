@@ -5,6 +5,28 @@
 (错题本此前漏了 solution_ja 与知识点标签命中)。
 
 仅依赖 flask 与 models,不依赖任何蓝图,无循环导入。
+
+
+关于各写入端点里那个 `with db.session.begin_nested():`
+--------------------------------------------------
+error_book / progress / lists / study 共五处 upsert 都是这个写法,含义在这里说一次:
+
+    try:
+        with db.session.begin_nested():      # 开一个 SAVEPOINT
+            db.session.add(SomeRow(...))
+    except IntegrityError:
+        ...改为更新已存在的行 / 计入 skipped...
+
+为什么非要 SAVEPOINT,不能只 try/except 包住 add:
+  · SQLAlchemy 的 `add()` 只是把对象放进 session,唯一约束冲突要到 **flush** 才暴露。
+    `begin_nested()` 退出时会 flush,冲突在这里就地抛出,而不是拖到最后 commit 才炸。
+  · 更要命的是 IntegrityError 会让**整个事务**进入失效状态 —— 不回滚就再也提交不了。
+    SAVEPOINT 让 except 分支只回退这一条,前面已经攒好的写入原样保留。
+    批量加错题(api/error_book.py 的 add_batch)靠的就是这一点:一批 200 道里有 3 道
+    已存在,那 3 道计入 skipped,其余 197 道照常入库。少了 SAVEPOINT,整批一起完蛋。
+
+触发条件是**并发**:同一用户两个标签页同时点、或前端重试。单请求顺序执行时永远走不到
+except 分支 —— 所以它没有测试覆盖,改的时候别以为跑绿了就没事。
 """
 from datetime import datetime, timedelta
 
@@ -31,6 +53,10 @@ def err(error, code='INVALID_INPUT', status=400):
 
 # 批量端点单次可处理的 ID 数上限。挡的是"一个请求让数据库扫十万行"这类放大攻击,
 # 不是业务约束 —— 前端跨页全选最多也就几百条。
+#
+# ⚠️ 与前端对不上:static/js/error_book.js 的 collectFilteredIds() 最多收 50 页 × 100 = 5000 个
+# id(生成"按当前筛选"的 PDF 试卷时用)。筛选结果超过 2000 条就会被这里拒掉。
+# 生产 358 道题够不到,故一直没暴露;要修改前端那侧的上限,别抬高这个数。
 MAX_BATCH_SIZE = 2000
 
 

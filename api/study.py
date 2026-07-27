@@ -17,6 +17,8 @@ MAX_NOTE_LEN = 20000
 
 
 def _question_or_none(qid):
+    """题目存在就返回,不存在返回 None。写入端点用它先挡掉不存在的题号 ——
+    不挡的话会插出一条指向空题的笔记/收藏,外键在 SQLite 下要 PRAGMA 开了才拦得住。"""
     return db.session.get(Question, qid)
 
 
@@ -24,6 +26,7 @@ def _question_or_none(qid):
 @bp.route('/questions/<int:qid>/note', methods=['GET'])
 @login_required
 def get_note(qid):
+    """取当前用户在该题下的笔记。没写过就返回空串,不是 404 —— 前端直接填进输入框。"""
     note = QuestionNote.query.filter_by(user_id=g.user.id, question_id=qid).first()
     return _ok({'content': note.content if note else ''})
 
@@ -31,6 +34,11 @@ def get_note(qid):
 @bp.route('/questions/<int:qid>/note', methods=['PUT'])
 @login_required
 def put_note(qid):
+    """保存当前用户在该题下的笔记(整体覆盖,非追加)。
+
+    空串是合法输入,表示清空笔记 —— 所以校验的是"必须是字符串"而不是"必须非空"。
+    首次保存走 upsert:并发下两个标签页同时保存会撞唯一约束,由 SAVEPOINT 兜住转为更新。
+    """
     if _question_or_none(qid) is None:
         return _err('题目不存在', code='NOT_FOUND', status=404)
     data = request.get_json(silent=True) or {}
@@ -42,6 +50,7 @@ def put_note(qid):
     note = QuestionNote.query.filter_by(user_id=g.user.id, question_id=qid).first()
     if note is None:
         try:
+            # SAVEPOINT 的用意见 api/_helpers.py 顶部说明(并发下只回退这一条)
             with db.session.begin_nested():
                 note = QuestionNote(user_id=g.user.id, question_id=qid, content=content)
                 db.session.add(note)
@@ -61,6 +70,7 @@ def put_note(qid):
 @bp.route('/questions/<int:qid>/bookmark', methods=['GET'])
 @login_required
 def get_bookmark(qid):
+    """当前用户是否收藏了该题。"""
     bm = QuestionBookmark.query.filter_by(user_id=g.user.id, question_id=qid).first()
     return _ok({'bookmarked': bm is not None})
 
@@ -68,11 +78,17 @@ def get_bookmark(qid):
 @bp.route('/questions/<int:qid>/bookmark', methods=['POST'])
 @login_required
 def toggle_bookmark(qid):
+    """切换收藏状态,返回切换后的结果。
+
+    是 toggle 不是 set:前端只有一个星标按钮,点一下反转。因此**同一请求重发不幂等** ——
+    网络重试会把刚收藏的又取消掉。前端(question_detail.js)靠按钮禁用防重复点击。
+    """
     if _question_or_none(qid) is None:
         return _err('题目不存在', code='NOT_FOUND', status=404)
     bm = QuestionBookmark.query.filter_by(user_id=g.user.id, question_id=qid).first()
     if bm is None:
         try:
+            # SAVEPOINT 的用意见 api/_helpers.py 顶部说明(并发下只回退这一条)
             with db.session.begin_nested():
                 db.session.add(QuestionBookmark(user_id=g.user.id, question_id=qid))
         except IntegrityError:

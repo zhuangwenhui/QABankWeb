@@ -17,7 +17,18 @@ _EXTRA_FIELDS = ('request_id', 'user_id', 'ip', 'event', 'target', 'detail',
 
 
 class JsonFormatter(logging.Formatter):
+    """把日志渲染成单行 JSON,供 journalctl / 日志采集直接解析。
+
+    _EXTRA_FIELDS 里的字段**存在才输出**(值为 None 的整个键都不出现),
+    所以同一个 logger 打出来的行字段数可能不同 —— 下游别假设 schema 固定。
+    """
+
     def format(self, record):
+        """LogRecord → 单行 JSON 串。
+
+        exc_info 存在时额外塞一个 exc 字段(格式化后的完整栈)。
+        ensure_ascii=False:中文日志直接可读,不然 journalctl 里全是 \\uXXXX。
+        """
         entry = {
             'ts': datetime.fromtimestamp(record.created, timezone.utc).isoformat(timespec='milliseconds'),
             'level': record.levelname,
@@ -81,11 +92,21 @@ def setup_logging(app):
 
     @app.before_request
     def _assign_request_id():
+        """给每个请求发一个短 id 与起始计时点,供全链路日志关联。
+
+        必须**先于** app.py 的 load_user_and_csrf 注册 —— 那个 hook 里的 audit() 要用
+        g.request_id,注册晚了就关联不上(setup_logging 的调用位置已保证这一点)。
+        """
         g.request_id = uuid.uuid4().hex[:12]
         g._req_start = time.perf_counter()
 
     @app.after_request
     def _log_request(response):
+        """每个请求收尾时打一行访问日志:方法 / 路径 / 状态码 / 耗时。
+
+        整块包在 try/except 里且吞掉一切异常:日志绝不能影响业务响应 ——
+        打不出日志顶多是少一行记录,抛出去就是用户看到 500。
+        """
         try:
             duration_ms = round((time.perf_counter() - getattr(g, '_req_start', time.perf_counter())) * 1000, 1)
             extra = request_extra()

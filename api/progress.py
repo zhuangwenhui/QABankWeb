@@ -53,6 +53,7 @@ def set_progress():
 
         if row is None:
             try:
+                # SAVEPOINT 的用意见 api/_helpers.py 顶部说明(并发下只回退这一条)
                 with db.session.begin_nested():
                     db.session.add(QuestionProgress(
                         user_id=g.user.id, question_id=qid, status=status))
@@ -105,6 +106,12 @@ def _summary_by(group_col, preset_keys):
     result = {k: {'total': 0, 'done': 0, 'mastered': 0} for k in preset_keys}
 
     def _bucket(key):
+        """取该分组的计数槽,没有就补一个零槽。
+
+        用 setdefault 而非直接索引:preset_keys 只预置了 config 里的固定分类,
+        库里若存在历史遗留的分类值(如已从 SUBJECTS 移除的「备注」),
+        直接索引会 KeyError,整个统计接口 500。
+        """
         return result.setdefault(key, {'total': 0, 'done': 0, 'mastered': 0})
 
     # 分母:题库中该组的全部题目

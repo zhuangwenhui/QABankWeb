@@ -124,11 +124,17 @@ _PW_CHARS = string.ascii_letters + string.digits
 
 
 def _gen_initial_password(length=None):
+    """生成初始密码。用 secrets 而非 random —— 后者是可预测的伪随机,拿它发密码等于没发。
+
+    字符集只有大小写字母与数字(见 _PW_CHARS):初始密码要靠人肉转述或复制粘贴,
+    掺进符号会在各种终端与输入法里被吃掉或转义。强度靠长度补(默认取 MIN_PASSWORD_LEN)。
+    """
     length = length or config.MIN_PASSWORD_LEN
     return ''.join(secrets.choice(_PW_CHARS) for _ in range(length))
 
 
 def _user_row(u):
+    """用户列表的一行。**不含任何口令字段** —— 连哈希都不出这个函数。"""
     return {'id': u.id, 'username': u.username, 'role': u.role,
             'is_active': u.is_active, 'must_change_password': u.must_change_password,
             'created_at': fmt_dt(u.created_at)}
@@ -137,6 +143,7 @@ def _user_row(u):
 @bp.route('/users', methods=['GET'])
 @admin_required
 def list_users():
+    """全部用户列表(管理员)。按 id 升序,不分页 —— 自托管场景用户数是两位数。"""
     users = User.query.order_by(User.id.asc()).all()
     return jsonify(success=True, data={'users': [_user_row(u) for u in users]})
 
@@ -144,6 +151,11 @@ def list_users():
 @bp.route('/users', methods=['POST'])
 @admin_required
 def create_user():
+    """建号(管理员)。初始密码由服务端生成、**仅在本次响应里明文返回一次**。
+
+    不落明文、不重发:忘了就走 reset_password 重发一个新的。新号强制
+    must_change_password=True,首次登录会被 before_request 逼去改密。
+    """
     data = request.get_json(silent=True) or {}
     username = str(data.get('username') or '').strip()
     role = data.get('role')
@@ -177,6 +189,7 @@ def create_user():
 @bp.route('/users/<int:uid>/reset_password', methods=['POST'])
 @admin_required
 def reset_password(uid):
+    """重置某用户的密码(管理员)。同 create_user:新密码明文仅本次返回,并强制改密。"""
     user = db.session.get(User, uid)
     if user is None:
         return _err('用户不存在', 'NOT_FOUND', 404)
@@ -200,6 +213,12 @@ def reset_password(uid):
 @bp.route('/users/<int:uid>/toggle_active', methods=['POST'])
 @admin_required
 def toggle_active(uid):
+    """停用 / 启用某用户(管理员)。
+
+    禁止停用自己:管理员把自己停了会立刻被 before_request 踢下线,而启用又需要管理员权限,
+    最后一个管理员这么干就把整个系统锁死了。
+    停用是即时生效的 —— before_request 每个请求都查 is_active,不必等会话过期。
+    """
     user = db.session.get(User, uid)
     if user is None:
         return _err('用户不存在', 'NOT_FOUND', 404)

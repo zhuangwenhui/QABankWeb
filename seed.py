@@ -400,6 +400,13 @@ FEEDBACK_ITEMS = [
 
 
 def seed(drop=False, force=False):
+    """写入演示数据:两个账号(admin/student)+ 一批各科目样题。
+
+    drop=False(默认):库非空就跳过,可安全重复执行。
+    drop=True:清空重建,但库里已有账号时**必须**同时给 force=True(防误清)。
+    表还没建时直接提示先跑 flask db upgrade,不自己 create_all() ——
+    绕过迁移建表会让 alembic 版本号对不上,后续迁移全部失败。
+    """
     with app.app_context():
         from sqlalchemy import inspect as _inspect
         if not drop and not _inspect(db.engine).has_table('questions'):

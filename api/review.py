@@ -23,9 +23,33 @@ RATINGS = ('again', 'hard', 'good', 'easy')
 # ---------------------------------------------------------------- SM-2 纯函数
 
 def sm2_schedule(rating, ease, interval_days, repetitions):
-    """rating: 'again'|'hard'|'good'|'easy'。返回 (ease, interval_days, repetitions)。
+    """按自评算下次复习时间。返回 (ease, interval_days, repetitions) 三元组,不写库。
 
-    ease 下限 1.3。again 重置连击、当日再来;good 走标准 SM-2;easy 更激进;hard 略缩。
+    rating: 'again'(完全没想起)| 'hard'(想起来了但很吃力)| 'good'(正常)| 'easy'(秒答)。
+
+    出处与偏离
+    ---------
+    底子是 SuperMemo SM-2(1987),但**不是原版**。原版按 0-5 打分再套一条 EF 公式;
+    这里改成 Anki 式的四按钮 —— 让学生在 0-5 里挑一个数,挑出来的分数并不可靠。
+    因此下面的常数是 Anki 默认值那一档,不是 SM-2 论文里的值,不要拿论文去对。
+
+    常数表(改之前先读这一段,每个数背后都有取舍)
+    ------------------------------------------
+      2.5   ease 初值。SM-2 原版同值,是唯一没改的一个。
+      1.3   ease 下限。再低下去间隔几乎不增长,题会天天回来,复习队列直接爆掉。
+      3.0   ease 上限。原版**没有**上限;不封顶的话连答几次 easy 就会把间隔推到几年后,
+            等于把这道题永久踢出队列 —— 对备考(考试日期固定)是有害的。
+      0.20 / 0.15   again / hard 的 ease 惩罚。again 罚得更重。
+      0.15  easy 的 ease 奖励。
+      1.2 / 1.3     hard / easy 的间隔系数,分别在标准间隔上缩一点、放一点。
+      1, 3 / 1, 6 / 2, 6   前两次复习(reps 0 与 1)的固定间隔,单位天。
+            这两次不套公式:刚学的题 interval_days 还是 0,乘出来恒为 0。
+
+    again 把 interval 与 repetitions 双双清零、当日再来 —— 连击断了就从头数,
+    这是 SM-2 的原意,别改成"只减不清零"。
+
+    纯函数,不碰 db、不读时钟,调用方拿到 interval_days 后自己算 due_at。
+    这也是它能被 tests/test_review_api.py 直接单测的原因。
     """
     ease = ease if ease else 2.5
     reps = repetitions or 0
