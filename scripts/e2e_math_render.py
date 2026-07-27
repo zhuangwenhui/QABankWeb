@@ -175,7 +175,14 @@ def check(url, latency, wait, chrome, jam=False):
     port = free_port()
     profile = tempfile.mkdtemp(prefix="e2e-chrome-")
     browser = subprocess.Popen(
+        # --remote-allow-origins=* 不能省。Chrome 111 起给调试端口加了 Origin 校验:
+        # 带 Origin 头的 WebSocket 握手一律 403 Forbidden,而 websocket-client 会按 URL
+        # 自动发这个头。少了它,CDP 连不上,报的却是 WebSocketBadStatusException —— 看不出
+        # 是 Chrome 版本问题。(本护栏 2026-07-26 起在 CI 上连红十余次就是这个原因;
+        # 本地长期"通过"只是因为那台机器的 Chrome 停在 101,还没有这项校验。)
+        # 放行 Origin 不扩大攻击面:端口绑在 127.0.0.1、随机取、用完即弃的临时 profile。
         [chrome, "--headless", "--disable-gpu", "--no-sandbox",
+         "--remote-allow-origins=*",
          f"--remote-debugging-port={port}", f"--user-data-dir={profile}", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -193,7 +200,16 @@ def check(url, latency, wait, chrome, jam=False):
         if not ws_url:
             raise SystemExit("✗ 连不上 Chrome CDP")
 
-        ws = websocket.create_connection(ws_url, timeout=120)
+        try:
+            ws = websocket.create_connection(ws_url, timeout=120)
+        except Exception as exc:
+            # 这里最常见的失败不是"网络问题",而是 Chrome 的 Origin 校验(见上面启动参数的说明)。
+            # 裸抛 WebSocketBadStatusException 只会甩一坨 traceback,看不出真正原因。
+            raise SystemExit(
+                f"✗ 连上了调试端口但 WebSocket 握手失败:{exc}\n"
+                f"  若报 403 Forbidden / Rejected an incoming WebSocket connection,\n"
+                f"  说明这版 Chrome 启用了 Origin 校验而启动参数里缺 --remote-allow-origins。\n"
+                f"  Chrome 版本:{subprocess.run([chrome, '--version'], capture_output=True, text=True).stdout.strip()}")
         mid = [0]
 
         def send(method, params=None):

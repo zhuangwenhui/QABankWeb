@@ -38,7 +38,11 @@ class Browser:
         self.port = free_port()
         self.profile = tempfile.mkdtemp(prefix="audit-chrome-")
         self.proc = subprocess.Popen(
+            # --remote-allow-origins=* 不能省,理由同 scripts/e2e_math_render.py:
+            # Chrome 111 起调试端口会校验 Origin,带该头的 WebSocket 握手一律 403,
+            # 而 websocket-client 按 URL 自动发这个头。少了它在任何现代 Chrome 上都连不上。
             ["google-chrome", "--headless", "--disable-gpu", "--no-sandbox",
+             "--remote-allow-origins=*",
              f"--remote-debugging-port={self.port}", f"--user-data-dir={self.profile}",
              "about:blank"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
