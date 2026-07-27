@@ -9,8 +9,8 @@ from flask import Blueprint, current_app, g, request
 from sqlalchemy.orm import selectinload
 
 from auth import login_required
-from models import ErrorBook, Question, db
-from api._helpers import ok as _ok, err as _err
+from models import ErrorBook, db, fmt_dt
+from api._helpers import ok as _ok, err as _err, parse_question_id as _parse_question_id
 
 bp = Blueprint('api_review', __name__, url_prefix='/api/review')
 
@@ -48,18 +48,6 @@ def sm2_schedule(rating, ease, interval_days, repetitions):
 # 响应信封 _ok/_err 已抽到 api/_helpers.py(见顶部别名导入)。
 
 
-def _parse_question_id(data):
-    """从请求 JSON 中解析单个正整数 question_id,非法时返回 None。"""
-    value = data.get('question_id')
-    if isinstance(value, bool):
-        return None
-    try:
-        qid = int(value)
-    except (TypeError, ValueError):
-        return None
-    return qid if qid > 0 else None
-
-
 def _entry_row(entry):
     """复习队列条目:题目 + error_book_id + SM-2 排期。"""
     return {
@@ -69,9 +57,8 @@ def _entry_row(entry):
         'ease': entry.ease,
         'interval_days': entry.interval_days,
         'repetitions': entry.repetitions,
-        'due_at': entry.due_at.strftime('%Y-%m-%d %H:%M:%S') if entry.due_at else None,
-        'last_reviewed_at': (entry.last_reviewed_at.strftime('%Y-%m-%d %H:%M:%S')
-                             if entry.last_reviewed_at else None),
+        'due_at': fmt_dt(entry.due_at),
+        'last_reviewed_at': fmt_dt(entry.last_reviewed_at),
         'question': entry.question.to_dict() if entry.question else None,
     }
 
@@ -141,8 +128,8 @@ def rate():
         'ease': entry.ease,
         'interval_days': entry.interval_days,
         'repetitions': entry.repetitions,
-        'due_at': entry.due_at.strftime('%Y-%m-%d %H:%M:%S'),
-        'last_reviewed_at': entry.last_reviewed_at.strftime('%Y-%m-%d %H:%M:%S'),
+        'due_at': fmt_dt(entry.due_at),
+        'last_reviewed_at': fmt_dt(entry.last_reviewed_at),
     }, message='已记录本次复习')
 
 

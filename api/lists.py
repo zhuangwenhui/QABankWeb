@@ -11,8 +11,8 @@ from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 
 from auth import login_required
-from api._helpers import ok as _ok, err as _fail
-from models import (Question, QuestionList, QuestionListItem,
+from api._helpers import ok as _ok, err as _err, parse_question_id as _parse_question_id
+from models import (Question, QuestionList, QuestionListItem, fmt_dt,
                     QuestionProgress, db)
 
 bp = Blueprint('api_lists', __name__, url_prefix='/api/lists')
@@ -24,7 +24,7 @@ _MAX_REORDER = 5000
 
 # ---------------------------------------------------------------- 响应辅助
 
-# 响应信封 _ok/_fail 已抽到 api/_helpers.py(见顶部别名导入,err as _fail)。
+# 响应信封 _ok/_err 已抽到 api/_helpers.py(见顶部别名导入)。
 
 
 def _list_meta(lst, item_count, progress):
@@ -37,7 +37,7 @@ def _list_meta(lst, item_count, progress):
         'is_public': bool(lst.is_public),
         'item_count': item_count,
         'progress': progress,
-        'created_at': lst.created_at.strftime('%Y-%m-%d %H:%M:%S') if lst.created_at else None,
+        'created_at': fmt_dt(lst.created_at),
     }
 
 
@@ -45,19 +45,6 @@ def _can_edit(lst):
     """仅 owner 或 admin 可改;官方单由 admin 拥有,天然只有 admin 能动。"""
     return g.user.is_admin or lst.owner_id == g.user.id
 
-
-def _parse_question_id(data):
-    value = data.get('question_id')
-    if isinstance(value, bool):
-        return None
-    try:
-        qid = int(value)
-    except (TypeError, ValueError):
-        return None
-    return qid if qid > 0 else None
-
-
-# ---------------------------------------------------------------- 广场:列表
 
 @bp.route('', methods=['GET'])
 @login_required
@@ -113,10 +100,10 @@ def list_detail(lid):
     """题单详情:meta + 有序题目 + 当前用户在本单内的进度。"""
     lst = db.session.get(QuestionList, lid)
     if lst is None:
-        return _fail('题单不存在', 'NOT_FOUND', 404)
+        return _err('题单不存在', 'NOT_FOUND', 404)
     # 私有单仅 owner/admin 可见;不可见按 404 处理,避免泄露存在性
     if not lst.is_public and not _can_edit(lst):
-        return _fail('题单不存在', 'NOT_FOUND', 404)
+        return _err('题单不存在', 'NOT_FOUND', 404)
 
     items = (db.session.query(QuestionListItem, Question)
              .join(Question, Question.id == QuestionListItem.question_id)
@@ -156,12 +143,12 @@ def create_list():
     data = request.get_json(silent=True) or {}
     title = str(data.get('title') or '').strip()
     if not title:
-        return _fail('标题不能为空')
+        return _err('标题不能为空')
     if len(title) > _MAX_TITLE_LEN:
-        return _fail(f'标题不得超过 {_MAX_TITLE_LEN} 字')
+        return _err(f'标题不得超过 {_MAX_TITLE_LEN} 字')
     description = str(data.get('description') or '').strip()
     if len(description) > _MAX_DESC_LEN:
-        return _fail(f'简介不得超过 {_MAX_DESC_LEN} 字')
+        return _err(f'简介不得超过 {_MAX_DESC_LEN} 字')
 
     # is_official 仅管理员可置;非管理员一律建普通单
     is_official = bool(data.get('is_official')) and g.user.is_admin
@@ -183,16 +170,16 @@ def add_item(lid):
     """向题单加题(position=末尾+1)。仅 owner 或 admin 可改;重复加题幂等。"""
     lst = db.session.get(QuestionList, lid)
     if lst is None:
-        return _fail('题单不存在', 'NOT_FOUND', 404)
+        return _err('题单不存在', 'NOT_FOUND', 404)
     if not _can_edit(lst):
-        return _fail('无权修改此题单', 'FORBIDDEN', 403)
+        return _err('无权修改此题单', 'FORBIDDEN', 403)
 
     data = request.get_json(silent=True) or {}
     qid = _parse_question_id(data)
     if qid is None:
-        return _fail('question_id 必须为正整数')
+        return _err('question_id 必须为正整数')
     if db.session.get(Question, qid) is None:
-        return _fail('题目不存在', 'NOT_FOUND', 404)
+        return _err('题目不存在', 'NOT_FOUND', 404)
 
     exists = QuestionListItem.query.filter_by(list_id=lid, question_id=qid).first()
     if exists is not None:
@@ -217,7 +204,7 @@ def add_item(lid):
     except Exception:
         db.session.rollback()
         current_app.logger.exception('题单加题失败 list=%s question=%s', lid, qid)
-        return _fail('加题失败,请稍后重试', 'SERVER_ERROR', 500)
+        return _err('加题失败,请稍后重试', 'SERVER_ERROR', 500)
 
     return _ok({'list_id': lid, 'question_id': qid, 'position': next_pos},
                message='已加入题单')
@@ -229,13 +216,13 @@ def remove_item(lid, qid):
     """从题单移除题目。仅 owner 或 admin 可改。"""
     lst = db.session.get(QuestionList, lid)
     if lst is None:
-        return _fail('题单不存在', 'NOT_FOUND', 404)
+        return _err('题单不存在', 'NOT_FOUND', 404)
     if not _can_edit(lst):
-        return _fail('无权修改此题单', 'FORBIDDEN', 403)
+        return _err('无权修改此题单', 'FORBIDDEN', 403)
 
     item = QuestionListItem.query.filter_by(list_id=lid, question_id=qid).first()
     if item is None:
-        return _fail('该题不在此题单中', 'NOT_FOUND', 404)
+        return _err('该题不在此题单中', 'NOT_FOUND', 404)
     db.session.delete(item)
     db.session.commit()
     return _ok({'list_id': lid, 'question_id': qid}, message='已移除')
@@ -249,14 +236,14 @@ def reorder_items(lid):
     """按给定 question_ids 顺序重排 position。仅 owner 或 admin 可改。"""
     lst = db.session.get(QuestionList, lid)
     if lst is None:
-        return _fail('题单不存在', 'NOT_FOUND', 404)
+        return _err('题单不存在', 'NOT_FOUND', 404)
     if not _can_edit(lst):
-        return _fail('无权修改此题单', 'FORBIDDEN', 403)
+        return _err('无权修改此题单', 'FORBIDDEN', 403)
 
     data = request.get_json(silent=True) or {}
     order = data.get('question_ids')
     if not isinstance(order, list) or len(order) > _MAX_REORDER:
-        return _fail('question_ids 必须是列表')
+        return _err('question_ids 必须是列表')
 
     items = {it.question_id: it for it in
              QuestionListItem.query.filter_by(list_id=lid).all()}
@@ -264,11 +251,11 @@ def reorder_items(lid):
     pos = 0
     for raw in order:
         if isinstance(raw, bool):
-            return _fail('question_ids 含非法元素')
+            return _err('question_ids 含非法元素')
         try:
             qid = int(raw)
         except (TypeError, ValueError):
-            return _fail('question_ids 含非法元素')
+            return _err('question_ids 含非法元素')
         if qid in seen:
             continue
         seen.add(qid)

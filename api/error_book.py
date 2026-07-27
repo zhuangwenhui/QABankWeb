@@ -16,15 +16,15 @@ import config
 from auth import login_required
 from models import ErrorBook, GeneratedFile, Question, db
 from pdf_gen import generate_pdf
-from api._helpers import (ok as _ok, err as _err, escape_like as _escape_like,
-                          apply_question_search)
+from api._helpers import (ok as _ok, err as _err, parse_id_list as _parse_id_list,
+                          parse_question_id as _parse_question_id,
+                          apply_basic_filters as _apply_basic_filters)
 
 bp = Blueprint('api_error_book', __name__, url_prefix='/api/error_book')
 
 MAX_NOTES_LEN = 5000     # 备注长度上限
 MAX_TEXT_LEN = 200       # 标题/副标题长度上限
 MAX_NOTICE_LEN = 2000    # 注意事项长度上限
-MAX_BATCH_SIZE = 2000    # 批量操作 ID 数上限
 
 DEFAULT_NOTICE = ('1. 请独立完成全部题目,不要提前翻看解答;'
                   '2. 解题过程务必书写规范、条理清晰;'
@@ -32,8 +32,9 @@ DEFAULT_NOTICE = ('1. 请独立完成全部题目,不要提前翻看解答;'
 
 
 # ---------------------------------------------------------------- 工具函数
-# 响应信封 _ok/_err、LIKE 转义 _escape_like、多词搜索 apply_question_search 均来自
-# api/_helpers.py(见顶部别名导入),与 questions 共用,杜绝搜索覆盖面漂移。
+# 响应信封 _ok/_err、ID 解析 _parse_id_list/_parse_question_id、基础筛选 _apply_basic_filters
+# 均来自 api/_helpers.py(见顶部别名导入),与 questions 共用同一实现,杜绝行为漂移 ——
+# 错题本此前就漏过 solution_ja 与知识点标签的搜索命中。
 
 
 class _FieldError(ValueError):
@@ -51,39 +52,6 @@ def _str_field(data, key, max_len):
     if len(s) > max_len:
         raise _FieldError(f'字段 {key} 长度超出上限({max_len} 字符)')
     return s
-
-
-def _parse_int_list(value, max_size=MAX_BATCH_SIZE):
-    """把请求中的 ID 列表转换为去重后的正整数列表(保持顺序);非法时返回 None。"""
-    if not isinstance(value, list) or len(value) > max_size:
-        return None
-    result, seen = [], set()
-    for item in value:
-        # bool 是 int 的子类,需显式排除
-        if isinstance(item, bool):
-            return None
-        try:
-            n = int(item)
-        except (TypeError, ValueError):
-            return None
-        if n <= 0:
-            return None
-        if n not in seen:
-            seen.add(n)
-            result.append(n)
-    return result
-
-
-def _parse_question_id(data):
-    """从请求 JSON 中解析单个 question_id,非法时返回 None。"""
-    value = data.get('question_id')
-    if isinstance(value, bool):
-        return None
-    try:
-        qid = int(value)
-    except (TypeError, ValueError):
-        return None
-    return qid if qid > 0 else None
 
 
 def _split_scores(total_score, count):
@@ -140,24 +108,9 @@ def list_entries():
              .join(Question, ErrorBook.question_id == Question.id)
              .options(selectinload(ErrorBook.question)))
 
-    subject = request.args.get('subject', '').strip()
-    chapter = request.args.get('chapter', '').strip()
-    difficulty = request.args.get('difficulty', '').strip()
-    source = request.args.get('source', '').strip()
-    search = request.args.get('search', '').strip()
-
-    if subject:
-        query = query.filter(Question.subject == subject)
-    if chapter:
-        query = query.filter(Question.chapter == chapter)
-    if difficulty:
-        query = query.filter(Question.difficulty == difficulty)
-    if source:
-        pattern = f'%{_escape_like(source)}%'
-        query = query.filter(Question.source.like(pattern, escape='\\'))
-    if search:
-        # 与主列表共用同一多词全文搜索(补齐 solution_ja 与知识点标签命中,修复此前的搜索漂移)
-        query = apply_question_search(query, search)
+    # 基础五项与题库主列表共用单一实现(见 api/_helpers.py),杜绝筛选行为漂移 ——
+    # 错题本此前就漏过 solution_ja 与知识点标签的命中。
+    query = _apply_basic_filters(query, request.args)
 
     page = request.args.get('page', 1, type=int)
     if page < 1:
@@ -241,9 +194,12 @@ def add_entry():
 def add_batch():
     """批量加入错题本:返回实际新增数与跳过数(已存在/不存在的题目跳过)。"""
     data = request.get_json(silent=True) or {}
-    ids = _parse_int_list(data.get('question_ids'))
+    try:
+        ids = _parse_id_list(data.get('question_ids'))
+    except ValueError as exc:
+        return _err(str(exc))
     if not ids:
-        return _err('question_ids 必须是非空的正整数列表')
+        return _err('question_ids 不能为空')
 
     valid_ids = {row[0] for row in
                  db.session.query(Question.id).filter(Question.id.in_(ids)).all()}
@@ -280,9 +236,12 @@ def remove_entries():
     """从错题本移出:支持 {question_id} 单个或 {question_ids} 批量两种形式。"""
     data = request.get_json(silent=True) or {}
     if 'question_ids' in data:
-        ids = _parse_int_list(data.get('question_ids'))
+        try:
+            ids = _parse_id_list(data.get('question_ids'))
+        except ValueError as exc:
+            return _err(str(exc))
         if not ids:
-            return _err('question_ids 必须是非空的正整数列表')
+            return _err('question_ids 不能为空')
     else:
         qid = _parse_question_id(data)
         if qid is None:
@@ -307,9 +266,11 @@ def remove_entries():
 def check_batch():
     """批量查询题目是否已在错题本中,用于列表页回填书签状态。"""
     data = request.get_json(silent=True) or {}
-    ids = _parse_int_list(data.get('question_ids'))
-    if ids is None:
-        return _err('question_ids 必须是正整数列表')
+    try:
+        ids = _parse_id_list(data.get('question_ids'))
+    except ValueError as exc:
+        return _err(str(exc))
+    # 空列表答空结果而非 400:列表页渲染后回填书签,列表为空是常态,报错会在控制台刷红。
     if not ids:
         return _ok({'in_error_book': []})
 
@@ -383,9 +344,12 @@ def generate_pdf_route():
     # 范围:显式传 question_ids 则按传入顺序取,否则取当前用户全部错题
     raw_ids = data.get('question_ids')
     if raw_ids is not None:
-        ids = _parse_int_list(raw_ids)
+        try:
+            ids = _parse_id_list(raw_ids)
+        except ValueError as exc:
+            return _err(str(exc), 'INVALID_INPUT')
         if not ids:
-            return _err('question_ids 必须是非空的正整数列表', 'INVALID_INPUT')
+            return _err('question_ids 不能为空', 'INVALID_INPUT')
         entries = (ErrorBook.query
                    .filter(ErrorBook.user_id == g.user.id,
                            ErrorBook.question_id.in_(ids))

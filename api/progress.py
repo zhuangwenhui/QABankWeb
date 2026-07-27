@@ -12,12 +12,12 @@ from sqlalchemy.exc import IntegrityError
 import config
 from auth import login_required
 from models import Question, QuestionProgress, db
-from api._helpers import ok as _ok, err as _err
+from api._helpers import (ok as _ok, err as _err, parse_id_list as _parse_id_list,
+                          parse_question_id as _parse_question_id)
 
 bp = Blueprint('api_progress', __name__, url_prefix='/api/progress')
 
 VALID_STATUSES = ('done', 'mastered')  # 可持久化的状态;'none' 表示删除记录
-MAX_BATCH_SIZE = 2000
 MAX_CALENDAR_DAYS = 366
 
 
@@ -25,39 +25,6 @@ MAX_CALENDAR_DAYS = 366
 
 # 响应信封 _ok/_err 已抽到 api/_helpers.py(见顶部别名导入)。
 
-
-def _parse_question_id(data):
-    value = data.get('question_id')
-    if isinstance(value, bool):
-        return None
-    try:
-        qid = int(value)
-    except (TypeError, ValueError):
-        return None
-    return qid if qid > 0 else None
-
-
-def _parse_int_list(value, max_size=MAX_BATCH_SIZE):
-    """把请求中的 ID 列表转换为去重后的正整数列表(保持顺序);非法时返回 None。"""
-    if not isinstance(value, list) or len(value) > max_size:
-        return None
-    result, seen = [], set()
-    for item in value:
-        if isinstance(item, bool):  # bool 是 int 子类,需显式排除
-            return None
-        try:
-            n = int(item)
-        except (TypeError, ValueError):
-            return None
-        if n <= 0:
-            return None
-        if n not in seen:
-            seen.add(n)
-            result.append(n)
-    return result
-
-
-# ---------------------------------------------------------------- 设置状态
 
 @bp.route('/set', methods=['POST'])
 @login_required
@@ -115,9 +82,11 @@ def set_progress():
 def check_batch():
     """批量查询题目的掌握状态,用于列表页回填。返回 {statuses: {qid: status}}。"""
     data = request.get_json(silent=True) or {}
-    ids = _parse_int_list(data.get('question_ids'))
-    if ids is None:
-        return _err('question_ids 必须是正整数列表')
+    try:
+        ids = _parse_id_list(data.get('question_ids'))
+    except ValueError as exc:
+        return _err(str(exc))
+    # 空列表答空结果而非 400:同 error_book.check_batch,列表页回填用,空列表是常态。
     if not ids:
         return _ok({'statuses': {}})
 

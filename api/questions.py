@@ -19,8 +19,9 @@ from auth import admin_required, login_required
 from logging_setup import audit
 from models import (Question, QuestionBookmark, QuestionProgress, QuestionTag,
                     Tag, ViewLog, db)
-from api._helpers import (ok as _ok, err as _fail, escape_like as _escape_like,
-                          apply_question_search, prune_view_logs)
+from api._helpers import (ok as _ok, err as _err, escape_like as _escape_like,
+                          upload_folder as _upload_folder, prune_view_logs,
+                          apply_basic_filters as _apply_basic_filters)
 
 bp = Blueprint('api_questions', __name__, url_prefix='/api')
 
@@ -49,8 +50,9 @@ def _parse_exam_label(source):
     return (m.group(1), m.group(2), m.group(3)) if m else None
 
 
-# 响应信封(_ok/_fail)、LIKE 转义(_escape_like)、多词搜索(apply_question_search)、
-# view_logs 保留期清理(prune_view_logs)均已抽到 api/_helpers.py,此处经别名导入复用。
+# 响应信封(_ok/_err)、LIKE 转义(_escape_like)、上传目录(_upload_folder)、基础五项筛选
+# (_apply_basic_filters,内含多词搜索)、view_logs 保留期清理(prune_view_logs)
+# 均已抽到 api/_helpers.py,此处经别名导入复用。
 
 
 def _parse_date(raw, field):
@@ -59,21 +61,6 @@ def _parse_date(raw, field):
         return datetime.strptime(raw, '%Y-%m-%d')
     except (TypeError, ValueError):
         raise ValueError(f'{field} 日期格式应为 YYYY-MM-DD')
-
-
-def _parse_id_list(value, field='ids'):
-    """校验并规整 id 数组:非空、元素为整数、去重保序。"""
-    if not isinstance(value, list) or not value:
-        raise ValueError(f'{field} 必须为非空数组')
-    ids = []
-    for item in value:
-        if isinstance(item, bool):
-            raise ValueError(f'{field} 中的元素必须为整数')
-        try:
-            ids.append(int(item))
-        except (TypeError, ValueError):
-            raise ValueError(f'{field} 中的元素必须为整数')
-    return list(dict.fromkeys(ids))
 
 
 def _clean_tags(value):
@@ -158,10 +145,6 @@ def _apply_fields(question, fields):
 
 # ---------------------------------------------------------------- 文件辅助
 
-def _upload_folder():
-    return current_app.config['UPLOAD_FOLDER']
-
-
 def _remove_image_files(filenames):
     """删除 uploads 中不再被任何题目引用的图片文件(须在 commit 之后调用)。"""
     for raw in set(f for f in filenames if f):
@@ -209,45 +192,25 @@ def list_questions():
     try:
         page = max(int(args.get('page', 1)), 1)
     except (TypeError, ValueError):
-        return _fail('page 参数必须为整数')
+        return _err('page 参数必须为整数')
     try:
         per_page = int(args.get('per_page', 20))
     except (TypeError, ValueError):
-        return _fail('per_page 参数必须为整数')
+        return _err('per_page 参数必须为整数')
     if per_page not in config.PER_PAGE_OPTIONS:
         per_page = 20
 
     query = Question.query
 
-    subject = (args.get('subject') or '').strip()
-    if subject:
-        query = query.filter(Question.subject == subject)
-
-    chapter = (args.get('chapter') or '').strip()
-    if chapter:
-        query = query.filter(Question.chapter == chapter)
-
-    difficulty = (args.get('difficulty') or '').strip()
-    if difficulty:
-        query = query.filter(Question.difficulty == difficulty)
-
-    source = (args.get('source') or '').strip()
-    if source:
-        pattern = f'%{_escape_like(source)}%'
-        query = query.filter(Question.source.like(pattern, escape='\\'))
-
-    search = (args.get('search') or '').strip()
-    if search:
-        # 多词 AND 全文搜索(双轨题解+出处+章节+知识点标签名),单一实现见 api/_helpers.py,
-        # 与错题本(error_book)共用同一函数,杜绝搜索覆盖面漂移。
-        query = apply_question_search(query, search)
+    # 基础五项(课程/章节/难度/出处/关键词)与错题本共用单一实现,杜绝筛选行为漂移。
+    query = _apply_basic_filters(query, args)
 
     question_id = (args.get('questionId') or '').strip()
     if question_id:
         try:
             qid = int(question_id.lstrip('#'))
         except ValueError:
-            return _fail('题目 ID 必须为整数')
+            return _err('题目 ID 必须为整数')
         query = query.filter(Question.id == qid)
 
     tag_filter = (args.get('tagFilter') or '').strip()
@@ -269,7 +232,7 @@ def list_questions():
             query = query.filter(
                 Question.created_at < _parse_date(date_to, '截止') + timedelta(days=1))
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
 
     # 院試定位筛选(2026-07-19):院校/専攻走 source 前缀锚定,年份走 chapter(exam-harvest
     # 恒 chapter==年份),学科范围走 subject 归组。専攻在 UI 上从属院校,故与院校联合锚定。
@@ -349,7 +312,7 @@ def get_question(qid):
     """单题详情。附 knowledge_tags(规范化知识点标签名),供详情页出可点标签。"""
     question = db.session.get(Question, qid)
     if question is None:
-        return _fail('题目不存在', code='NOT_FOUND', status=404)
+        return _err('题目不存在', code='NOT_FOUND', status=404)
     d = question.to_dict()
     d['knowledge_tags'] = _knowledge_tag_names([qid]).get(qid, [])
     return _ok({'question': d})
@@ -366,7 +329,7 @@ def related_questions(qid):
     """
     target = db.session.get(Question, qid)
     if target is None:
-        return _fail('题目不存在', code='NOT_FOUND', status=404)
+        return _err('题目不存在', code='NOT_FOUND', status=404)
     try:
         limit = int(request.args.get('limit', 6))
     except (TypeError, ValueError):
@@ -439,11 +402,11 @@ def create_question():
     """新建题目。"""
     data = request.get_json(silent=True)
     if data is None:
-        return _fail('请求体必须为 JSON')
+        return _err('请求体必须为 JSON')
     try:
         fields = _extract_question_fields(data, partial=False)
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
 
     question = Question()
     _apply_fields(question, fields)
@@ -453,7 +416,7 @@ def create_question():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('创建题目失败')
-        return _fail('创建题目失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('创建题目失败,请稍后重试', code='SERVER_ERROR', status=500)
     return _ok({'question': question.to_dict()}, message='创建成功')
 
 
@@ -463,15 +426,15 @@ def update_question(qid):
     """更新题目(部分字段可省略,省略则不改)。"""
     question = db.session.get(Question, qid)
     if question is None:
-        return _fail('题目不存在', code='NOT_FOUND', status=404)
+        return _err('题目不存在', code='NOT_FOUND', status=404)
 
     data = request.get_json(silent=True)
     if data is None:
-        return _fail('请求体必须为 JSON')
+        return _err('请求体必须为 JSON')
     try:
         fields = _extract_question_fields(data, partial=True)
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
 
     # 记录被替换/清除的旧附件,提交成功后清理孤儿文件
     replaced_images = []
@@ -486,7 +449,7 @@ def update_question(qid):
     except Exception:
         db.session.rollback()
         current_app.logger.exception('更新题目失败 id=%s', qid)
-        return _fail('更新题目失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('更新题目失败,请稍后重试', code='SERVER_ERROR', status=500)
 
     _remove_image_files(replaced_images)
     return _ok({'question': question.to_dict()}, message='保存成功')
@@ -498,7 +461,7 @@ def delete_question(qid):
     """删除题目(错题本关联、查看日志由级联清理;附件文件一并删除)。"""
     question = db.session.get(Question, qid)
     if question is None:
-        return _fail('题目不存在', code='NOT_FOUND', status=404)
+        return _err('题目不存在', code='NOT_FOUND', status=404)
 
     images = [question.question_image, question.solution_image]
     try:
@@ -507,7 +470,7 @@ def delete_question(qid):
     except Exception:
         db.session.rollback()
         current_app.logger.exception('删除题目失败 id=%s', qid)
-        return _fail('删除题目失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('删除题目失败,请稍后重试', code='SERVER_ERROR', status=500)
 
     audit('question_delete', target=qid)
     _remove_image_files(images)
@@ -522,9 +485,11 @@ def batch_delete():
     """批量删除题目。"""
     data = request.get_json(silent=True) or {}
     try:
-        ids = _parse_id_list(data.get('ids'))
+        ids = _parse_id_list(data.get('ids'), 'ids')
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
+    if not ids:
+        return _err('ids 不能为空')
 
     questions = Question.query.filter(Question.id.in_(ids)).all()
     if not questions:
@@ -540,7 +505,7 @@ def batch_delete():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('批量删除题目失败')
-        return _fail('批量删除失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('批量删除失败,请稍后重试', code='SERVER_ERROR', status=500)
 
     audit('question_batch_delete', target=','.join(map(str, ids[:50])), detail=f'count={len(questions)}')
     _remove_image_files(images)
@@ -553,16 +518,18 @@ def batch_update_tags():
     """批量编辑标签:replace 整体替换 / add 追加去重。"""
     data = request.get_json(silent=True) or {}
     try:
-        ids = _parse_id_list(data.get('ids'))
+        ids = _parse_id_list(data.get('ids'), 'ids')
         tags = _clean_tags(data.get('tags'))
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
+    if not ids:
+        return _err('ids 不能为空')
 
     mode = data.get('mode') or 'replace'
     if mode not in ('replace', 'add'):
-        return _fail("mode 只能为 'replace' 或 'add'")
+        return _err("mode 只能为 'replace' 或 'add'")
     if mode == 'add' and not tags:
-        return _fail('追加模式下请至少提供一个标签')
+        return _err('追加模式下请至少提供一个标签')
 
     questions = Question.query.filter(Question.id.in_(ids)).all()
     try:
@@ -576,7 +543,7 @@ def batch_update_tags():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('批量编辑标签失败')
-        return _fail('批量编辑标签失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('批量编辑标签失败,请稍后重试', code='SERVER_ERROR', status=500)
     return _ok({'updated': len(questions)}, message=f'已更新 {len(questions)} 道题目的标签')
 
 
@@ -586,15 +553,17 @@ def batch_update_source():
     """批量修改来源。"""
     data = request.get_json(silent=True) or {}
     try:
-        ids = _parse_id_list(data.get('ids'))
+        ids = _parse_id_list(data.get('ids'), 'ids')
     except ValueError as exc:
-        return _fail(str(exc))
+        return _err(str(exc))
+    if not ids:
+        return _err('ids 不能为空')
 
     source = str(data.get('source') or '').strip()
     if not source:
-        return _fail('来源不能为空')
+        return _err('来源不能为空')
     if len(source) > _MAX_SOURCE_LEN:
-        return _fail(f'来源长度不能超过 {_MAX_SOURCE_LEN} 个字符')
+        return _err(f'来源长度不能超过 {_MAX_SOURCE_LEN} 个字符')
 
     questions = Question.query.filter(Question.id.in_(ids)).all()
     try:
@@ -604,7 +573,7 @@ def batch_update_source():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('批量修改来源失败')
-        return _fail('批量修改来源失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('批量修改来源失败,请稍后重试', code='SERVER_ERROR', status=500)
     return _ok({'updated': len(questions)}, message=f'已更新 {len(questions)} 道题目的来源')
 
 
@@ -720,7 +689,7 @@ def source_exists():
         try:
             query = query.filter(Question.id != int(exclude_raw))
         except ValueError:
-            return _fail('exclude_id 必须为整数')
+            return _err('exclude_id 必须为整数')
     exists = db.session.query(query.exists()).scalar()
     return _ok({'exists': bool(exists)})
 
@@ -734,15 +703,15 @@ def log_view_question():
     data = request.get_json(silent=True) or {}
     raw = data.get('question_id')
     if isinstance(raw, bool):
-        return _fail('question_id 必须为整数')
+        return _err('question_id 必须为整数')
     try:
         question_id = int(raw)
     except (TypeError, ValueError):
-        return _fail('question_id 必须为整数')
+        return _err('question_id 必须为整数')
 
     question = db.session.get(Question, question_id)
     if question is None:
-        return _fail('题目不存在', code='NOT_FOUND', status=404)
+        return _err('题目不存在', code='NOT_FOUND', status=404)
 
     try:
         vl = ViewLog(user_id=g.user.id, question_id=question_id)
@@ -751,7 +720,7 @@ def log_view_question():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('写入查看日志失败 question_id=%s', question_id)
-        return _fail('记录查看日志失败', code='SERVER_ERROR', status=500)
+        return _err('记录查看日志失败', code='SERVER_ERROR', status=500)
     # 保留期清理:按 id 采样(约每 500 次写触发一次),删超期日志防 view_logs 无界增长(rank17)
     if vl.id and vl.id % 500 == 0:
         prune_view_logs(180)
@@ -766,17 +735,17 @@ def upload_question_image():
     """上传题目/解答附件(image/* 与 PDF;uuid 重命名,扩展名白名单)。"""
     file = request.files.get('file')
     if file is None or not (file.filename or '').strip():
-        return _fail('未选择文件')
+        return _err('未选择文件')
 
     filename = file.filename
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     allowed = current_app.config.get('ALLOWED_UPLOAD_EXTENSIONS', set())
     if not ext or ext not in allowed:
-        return _fail('不支持的文件类型,仅允许:' + '、'.join(sorted(allowed)))
+        return _err('不支持的文件类型,仅允许:' + '、'.join(sorted(allowed)))
 
     mimetype = (file.mimetype or '').lower()
     if mimetype and not (mimetype.startswith('image/') or mimetype == 'application/pdf'):
-        return _fail('仅支持图片或 PDF 文件')
+        return _err('仅支持图片或 PDF 文件')
 
     new_name = uuid.uuid4().hex + '.' + ext
     try:
@@ -784,7 +753,7 @@ def upload_question_image():
         file.save(os.path.join(_upload_folder(), new_name))
     except OSError:
         current_app.logger.exception('保存上传文件失败')
-        return _fail('文件保存失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('文件保存失败,请稍后重试', code='SERVER_ERROR', status=500)
     return _ok({'filename': new_name, 'url': f'/uploads/{new_name}'}, message='上传成功')
 
 
@@ -798,21 +767,21 @@ def delete_question_image():
     data = request.get_json(silent=True) or {}
     raw = str(data.get('filename') or '').strip()
     if not raw:
-        return _fail('缺少文件名')
+        return _err('缺少文件名')
 
     name = os.path.basename(raw)
     if not name or name in ('.', '..'):
-        return _fail('文件名不合法')
+        return _err('文件名不合法')
 
     folder = os.path.realpath(_upload_folder())
     path = os.path.realpath(os.path.join(folder, name))
     if not path.startswith(folder + os.sep):
-        return _fail('文件名不合法')
+        return _err('文件名不合法')
 
     try:
         if os.path.isfile(path):
             os.remove(path)
     except OSError:
         current_app.logger.exception('删除附件文件失败 %s', name)
-        return _fail('删除文件失败,请稍后重试', code='SERVER_ERROR', status=500)
+        return _err('删除文件失败,请稍后重试', code='SERVER_ERROR', status=500)
     return _ok(message='已删除')

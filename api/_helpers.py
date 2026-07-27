@@ -1,6 +1,6 @@
 """蓝图共用小工具。
 
-集中此前在各 api/*.py 各抄一份的响应信封(曾命名分裂 _err/_fail)、LIKE 转义,
+集中此前在各 api/*.py 各抄一份的响应信封、LIKE 转义,
 并提供**单一实现**的题目全文搜索,消除 questions/error_book 的搜索行为漂移
 (错题本此前漏了 solution_ja 与知识点标签命中)。
 
@@ -8,7 +8,7 @@
 """
 from datetime import datetime, timedelta
 
-from flask import jsonify
+from flask import current_app, jsonify
 from sqlalchemy import or_
 
 from models import Question, QuestionTag, Tag, ViewLog, db
@@ -27,6 +27,72 @@ def ok(data=None, message=None, status=200):
 def err(error, code='INVALID_INPUT', status=400):
     """失败信封:{success:False, error, code}。"""
     return jsonify(success=False, error=error, code=code), status
+
+
+# 批量端点单次可处理的 ID 数上限。挡的是"一个请求让数据库扫十万行"这类放大攻击,
+# 不是业务约束 —— 前端跨页全选最多也就几百条。
+MAX_BATCH_SIZE = 2000
+
+
+def parse_id_list(value, field='question_ids', max_size=MAX_BATCH_SIZE):
+    """把请求里的 ID 数组规整成**去重保序的正整数列表**;非法输入抛 ValueError。
+
+    此前 questions 与 error_book/progress 各有一套解析器,在四点上语义相反:失败方式
+    (抛异常 vs 返回 None)、空列表(拒绝 vs 接受)、非正数(接受 vs 拒绝)、批量上限
+    (无 vs 2000)。同一个 `{"ids": [-1]}` 在两边一个 200 一个 400,没人说得清哪个对。
+    V1 收尾时统一到**最严格的那套**:抛异常、拒非正数、有上限。
+
+    **空列表不在这里判**:它返回 `[]`,由调用点决定该答什么 —— 写入类端点答
+    「你没选东西」(400),查询类端点(check_batch)答空结果(200)。那是端点语义,
+    不是解析语义,塞进解析器会逼着两类端点二选一。
+
+    `isinstance(item, bool)` 那行不能省:Python 的 bool 是 int 的子类,少了它
+    `{"question_ids": [true]}` 会被静静地当成题号 1 处理。
+
+    已知的保留行为:`int(1.9)` 不抛异常,小数被**静默截断**成 1。合并前七份拷贝都是这样,
+    统一的授权范围只覆盖上述四点,故原样保留;要收紧留给 V2.0。见
+    tests/test_helpers_parsers.py 的 test_parse_id_list_truncates_float。
+    """
+    if not isinstance(value, list):
+        raise ValueError(f'{field} 必须为数组')
+    if len(value) > max_size:
+        raise ValueError(f'{field} 单次最多 {max_size} 项')
+    ids, seen = [], set()
+    for item in value:
+        if isinstance(item, bool):
+            raise ValueError(f'{field} 的元素必须为正整数')
+        try:
+            n = int(item)
+        except (TypeError, ValueError):
+            raise ValueError(f'{field} 的元素必须为正整数')
+        if n <= 0:
+            raise ValueError(f'{field} 的元素必须为正整数')
+        if n not in seen:
+            seen.add(n)
+            ids.append(n)
+    return ids
+
+
+def parse_question_id(data, field='question_id'):
+    """从请求 JSON 里取单个正整数题号;非法时返回 None(不抛)。
+
+    与 parse_id_list 的失败方式不同是**刻意**的:调用点全是
+    `if qid is None: return _err('缺少 question_id')` 这种单值校验,给它套 try/except
+    只会让每处多两行。此前 error_book/lists/progress/review 各抄了一份逐字节相同的实现。
+    """
+    value = data.get(field)
+    if isinstance(value, bool):      # 同上:bool 是 int 子类,不拦则 true → 题号 1
+        return None
+    try:
+        qid = int(value)
+    except (TypeError, ValueError):
+        return None
+    return qid if qid > 0 else None
+
+
+def upload_folder():
+    """上传目录的绝对路径。questions 与 submissions 共用同一目录(题面图与作答图同盘)。"""
+    return current_app.config['UPLOAD_FOLDER']
 
 
 def escape_like(term):
@@ -58,6 +124,40 @@ def apply_question_search(query, search):
             Question.chapter.like(pattern, escape='\\'),
             Question.id.in_(tag_match),
         ))
+    return query
+
+
+def apply_basic_filters(query, args):
+    """把 subject/chapter/difficulty/source/search 五个基础筛选施加到已含 Question 的 query。
+
+    questions(题库列表)与 error_book(错题本列表)此前各写一份,逐条比对下来行为等价,
+    只是取值写法不同:一处 `(args.get(k) or '').strip()`,一处 `args.get(k, '').strip()` ——
+    参数缺失与传空串两种情形下两者都得 ''。合并取前者(对 args.get 返回 None 也稳)。
+
+    source 走模糊、其余走精确,search 交给 apply_question_search 的多词 AND 实现。
+    这条边界别动:source 是「東大 情報理工 2021」这类拼接串,精确匹配等于不可用。
+    """
+    subject = (args.get('subject') or '').strip()
+    if subject:
+        query = query.filter(Question.subject == subject)
+
+    chapter = (args.get('chapter') or '').strip()
+    if chapter:
+        query = query.filter(Question.chapter == chapter)
+
+    difficulty = (args.get('difficulty') or '').strip()
+    if difficulty:
+        query = query.filter(Question.difficulty == difficulty)
+
+    source = (args.get('source') or '').strip()
+    if source:
+        pattern = f'%{escape_like(source)}%'
+        query = query.filter(Question.source.like(pattern, escape='\\'))
+
+    search = (args.get('search') or '').strip()
+    if search:
+        query = apply_question_search(query, search)
+
     return query
 
 
