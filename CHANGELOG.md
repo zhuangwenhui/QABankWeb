@@ -3,6 +3,59 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
+## [v1.17.0] V1 收尾:代码精简合并与注释补齐(2026-07-27)
+
+不改变任何用户可见功能的前提下做去重与清理,并补齐关键 What 注释。V2.0 才铺开自动判题。
+唯一的对外可见变化是批量端点的**错误文案统一**(见下)。用例 316 → 351,净减约 480 行。
+
+**去重**
+
+- **七份 ID 解析器合并为一份**。questions 有 `_parse_id_list`、error_book 与 progress 各有一份
+  `_parse_int_list`、四个模块各有一份 `_parse_question_id`。三种语义在四点上互相冲突:失败方式
+  (抛异常 vs 返回 None)、空列表(拒绝 vs 接受)、非正数(接受 vs 拒绝)、批量上限(无 vs 2000)——
+  同一个 `{"ids": [-1]}` 在题库端点返 200、在错题本端点返 400。统一到 `_helpers.parse_id_list`:
+  抛异常、拒非正数、2000 上限、去重保序。**空列表交调用点判**,保住两个 check_batch 的 200 空结果。
+  ⚠️ 八个批量端点的错误文案随之统一(前端 `showToast` 直接显示后端消息),这是本轮唯一对外变化。
+- `_err` 与 `_fail` 归一(56 处调用点,本是同一函数的两个别名);overview 的 10 处手写错误信封改用
+  `_err`;submissions 的响应信封与 `_upload_folder` 改从 `_helpers` 导入;questions 与 error_book
+  的基础五项筛选合并为 `apply_basic_filters`;`models._fmt` 提升为 `fmt_dt`,六处手抄的 strftime 复用之。
+- 前端 `pageNumbers` / `pageWindow` 合并(3240 组穷举验证输出等价);日期补零与 localStorage 封装复用;
+  四份面包屑与五张统计卡外壳抽成 Jinja 宏(新增 `templates/_macros.html`)。
+
+**清理**
+
+- 删除过时的《题库系统技术文档.md》(七处硬事实已被代码推翻,其中课程分类一条正被 `config.py`
+  的注释引为权威);SPEC.md §0 按现状重写并加 §2 覆盖范围声明;`PRODUCTION_READINESS.md` 加档案头。
+- 删除零引用的渲染管线预览稿、无人消费的返回值、全站无引用的 CSS 规则、模板死分支与恒不触发的
+  CSS 变量回退值;`.vscode/` 移出版本库。
+- 删除三处被更强断言严格包含的重复测试(含 `test_migrations.py` 那 60 行手工表列清单)。
+- `scripts/` **一个不删**,改为新增用途索引 README:19 个脚本全部仍在役,`audit_X` 与 `fix_X`
+  成对使用、默认只试算。删修复类等于留下探测器扔掉解药。
+
+**注释**
+
+- 后端 186 个函数补至 184 个有 docstring,前端 231 个 function 补至 225 个有说明。
+- 重点补了几处一直没人写的:`sm2_schedule` 的 11 个魔法常数(出处与偏离 SM-2 原版的理由)、
+  导入通道提前 return **跳过 CSRF 校验**这条安全相关的控制流事实、SQLite `synchronous=NORMAL`
+  拿持久性换性能的取舍、五处 upsert 用 SAVEPOINT 的原因。
+- 修正三类错的注释:两处 JSDoc 贴错了函数、两个文件头声称依赖走 CDN(早已自托管)、
+  同一约束写两遍且前一份是被取代的旧版。
+- 标注两处跨文件不变量:作答图上限 4 与后端 `MAX_IMAGES`、前端最多收 5000 个 id 与后端上限 2000。
+
+**新增护栏**
+
+- `tests/test_helpers_parsers.py`:37 条纯函数单测,是那八个无端点测试的批量端点唯一的自动化护栏。
+- `tests/test_template_macros.py`:把抽宏前的标记钉进断言,templates/ 此前零覆盖。
+- `test_math_render_wiring.py` 的四处源码切片改用安全查找 —— 函数改名后从抛
+  `ValueError: substring not found` 变成一句指明标记与出处的人话。
+
+**发现但未修(记录在案)**
+
+- `scripts/audit_render.py` **不会登录**:内容页都带 `@login_required`,未登录时它扫的是登录页,
+  却照样打印「全页干净」。判据见 `scripts/README.md`。
+- `parse_id_list` 会把小数静默截断(`int(1.9) → 1`),是合并前七份拷贝共有的既存行为,原样保留。
+- 补齐约 500 行无测试写路径的端点测试,列为 V2.0 前置条件。
+
 ## [v1.16.0] 全库逐页核查:122 道题页面上露着字面 `**`(2026-07-27)
 
 v1.15.0 只在浏览器里逐页看过 40 道(11%),其余靠静态检查。把 **358 道一道不落**地在

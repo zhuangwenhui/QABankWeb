@@ -18,7 +18,8 @@
 - `auth.py` — `login_required`、`admin_required` 装饰器(API 路径下返回 JSON 401/403);CSRF 已由全局 before_request 校验,前端需在请求头带 `X-CSRFToken`(`apiFetch` 已自动处理)
 - `api/_helpers.py` — 响应信封 `ok()` / `err()`、`escape_like()`、`apply_question_search()`、`prune_view_logs()`。**7 个蓝图都从这里导入**,新增共享逻辑放这里
 - `templates/base.html` — 固定顶部导航、flash 消息;**Bootstrap 5.1.3 与 Font Awesome 6.4.0 已自托管**在 `static/vendor/`(不再走 CDN);**MathJax 4.1.3**(tex-svg,仍走 jsdelivr CDN,开场自动排版已关闭 `typeset: false`);子模板可用块:`{% block title %}`、`{% block head %}`、`{% block content %}`、`{% block scripts %}`
-- `static/js/utils.js` — `getCsrfToken()`、`apiFetch(url, opts)`(自动 CSRF/JSON,失败抛 Error)、`buildQuery(params)`、`escapeHtml`、`debounce`、`typesetMath(el)`(有共享管线时一律委托 `QDRender`)、`difficultyClass(d)`、`difficultyBadge(d)`、`tagBadges(tags)`、`formatDate(s, withTime=false)`
+- `static/js/utils.js` — `getCsrfToken()`、`apiFetch(url, opts)`(自动 CSRF/JSON,失败抛 Error)、`buildQuery(params)`、`escapeHtml`、`debounce`、`typesetMath(el)`(有共享管线时一律委托 `QDRender`)、`difficultyClass(d)`、`difficultyBadge(d)`、`tagBadges(tags)`、`formatDate(s, withTime=false)`、`pad2(n)`、`formatLocalDate(d)`、`pageNumbers(current, total)`
+- `templates/_macros.html` — 页面级共用片段:`breadcrumb(current)`、`stat_card(icon, title, body_id, card_class)`。用 `{% from '_macros.html' import ... %}` 引入
 - `static/js/qd_render.js` — 富文本/数学渲染管线(`QDRender`)。凡把题目内容写进 DOM 的页面都必须经它,由 `templates/_render_pipeline.html` 统一 include。⚠️ 其中三段被 `tests/test_math_render_wiring.py` 按源码文本切片保护,改前先读该文件
 - `static/js/toast.js` — `showToast(message, type)`,type: success|danger|warning|info
 - `static/css/style.css` — 全部公共样式类(见 §4)
