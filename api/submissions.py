@@ -7,8 +7,9 @@ import os
 import uuid
 from datetime import datetime
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, request
 
+from api._helpers import (ok as _ok, err as _err, upload_folder as _upload_folder)
 from auth import login_required
 from grading import GradingError, get_grader
 from models import AnswerSubmission, Question, db
@@ -16,23 +17,6 @@ from models import AnswerSubmission, Question, db
 bp = Blueprint('api_submissions', __name__, url_prefix='/api')
 
 MAX_IMAGES = 4  # 单次提交作答图上限
-
-
-def _ok(data=None, message=None, status=200):
-    payload = {'success': True}
-    if data is not None:
-        payload['data'] = data
-    if message:
-        payload['message'] = message
-    return jsonify(payload), status
-
-
-def _err(error, code='INVALID_INPUT', status=400):
-    return jsonify(success=False, error=error, code=code), status
-
-
-def _upload_folder():
-    return current_app.config['UPLOAD_FOLDER']
 
 
 def _image_exts():

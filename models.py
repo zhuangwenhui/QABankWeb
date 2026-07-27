@@ -8,7 +8,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
-def _fmt(dt):
+def fmt_dt(dt):
+    """datetime → 'YYYY-MM-DD HH:MM:SS';None 原样返回 None。
+
+    全站对外的时间格式在此单点定义 —— SPEC §1 的 created_at 契约、前端 utils.js 的
+    formatDate() 都按这个串来。api/ 下曾有六处手抄同一个 strftime 三元式,已改为复用本函数。
+    """
     return dt.strftime('%Y-%m-%d %H:%M:%S') if dt else None
 
 
@@ -133,7 +138,7 @@ class Question(db.Model):
             'question_latex': self.question_latex or '',
             'question_image': self.question_image,
             'question_image_url': f'/uploads/{self.question_image}' if self.question_image else None,
-            'created_at': _fmt(self.created_at),
+            'created_at': fmt_dt(self.created_at),
         }
         if with_solution:
             d.update({
@@ -168,7 +173,7 @@ class ErrorBook(db.Model):
             'id': self.id,
             'question_id': self.question_id,
             'notes': self.notes or '',
-            'created_at': _fmt(self.created_at),
+            'created_at': fmt_dt(self.created_at),
             'question': self.question.to_dict() if self.question else None,
         }
 
@@ -250,7 +255,7 @@ class Feedback(db.Model):
             'content': self.content or '',
             'status': self.status,
             'reply': self.reply or '',
-            'created_at': _fmt(self.created_at),
+            'created_at': fmt_dt(self.created_at),
             'username': self.user.username if self.user else None,
             'user_id': self.user_id,
         }
@@ -365,8 +370,8 @@ class AnswerSubmission(db.Model):
             'grader': self.grader,
             'model': self.model,
             'error': self.error or '',
-            'created_at': _fmt(self.created_at),
-            'graded_at': _fmt(self.graded_at),
+            'created_at': fmt_dt(self.created_at),
+            'graded_at': fmt_dt(self.graded_at),
         }
 
 

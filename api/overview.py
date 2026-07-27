@@ -12,9 +12,10 @@ from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import func
 
 import config
+from api._helpers import err as _err
 from auth import admin_required
 from logging_setup import audit
-from models import ErrorBook, Feedback, Question, User, ViewLog, db
+from models import ErrorBook, Feedback, Question, User, ViewLog, db, fmt_dt
 
 bp = Blueprint('api_overview', __name__, url_prefix='/api/overview')
 
@@ -113,8 +114,7 @@ def stats():
         })
     except Exception:
         current_app.logger.exception('总览统计查询失败')
-        return jsonify(success=False, error='统计数据加载失败,请稍后重试',
-                       code='SERVER_ERROR'), 500
+        return _err('统计数据加载失败,请稍后重试', 'SERVER_ERROR', 500)
 
 
 # ---------------------------------------------------------------- 用户管理
@@ -131,7 +131,7 @@ def _gen_initial_password(length=None):
 def _user_row(u):
     return {'id': u.id, 'username': u.username, 'role': u.role,
             'is_active': u.is_active, 'must_change_password': u.must_change_password,
-            'created_at': u.created_at.strftime('%Y-%m-%d %H:%M:%S') if u.created_at else None}
+            'created_at': fmt_dt(u.created_at)}
 
 
 @bp.route('/users', methods=['GET'])
@@ -148,13 +148,11 @@ def create_user():
     username = str(data.get('username') or '').strip()
     role = data.get('role')
     if not _USERNAME_RE.match(username):
-        return jsonify(success=False, error='用户名需为 3-32 位字母/数字/下划线/连字符',
-                       code='INVALID_INPUT'), 400
+        return _err('用户名需为 3-32 位字母/数字/下划线/连字符')
     if role not in ('student', 'admin'):
-        return jsonify(success=False, error='角色必须是 student 或 admin',
-                       code='INVALID_INPUT'), 400
+        return _err('角色必须是 student 或 admin')
     if User.query.filter_by(username=username).first():
-        return jsonify(success=False, error='用户名已存在', code='INVALID_INPUT'), 400
+        return _err('用户名已存在')
     password = _gen_initial_password()
     try:
         user = User(username=username, role=role, must_change_password=True)
@@ -164,11 +162,15 @@ def create_user():
     except Exception:
         db.session.rollback()
         current_app.logger.exception('创建用户失败')
-        return jsonify(success=False, error='创建用户失败', code='SERVER_ERROR'), 500
+        return _err('创建用户失败', 'SERVER_ERROR', 500)
     audit('user_created', target=username, detail=f'role={role}')
+    # ⚠️ 这里**不能**换成 _ok():响应体里带明文初始密码,必须挂 Cache-Control: no-store。
+    # _ok() 返回的是 (Response, status) 二元组,拿不到 Response 去设头 —— 换过去不会报错,
+    # 只会静默丢掉这个头,明文凭据从此可被浏览器与中间层缓存。本模块的**错误**路径没有这个
+    # 约束,已统一走 _err();唯独这两处成功路径保持裸 jsonify。
     resp = jsonify(success=True, message='创建成功,初始密码仅本次展示',
                    data={'user': _user_row(user), 'initial_password': password})
-    resp.headers['Cache-Control'] = 'no-store'  # 明文凭据过线,禁缓存/存盘
+    resp.headers['Cache-Control'] = 'no-store'
     return resp
 
 
@@ -177,7 +179,7 @@ def create_user():
 def reset_password(uid):
     user = db.session.get(User, uid)
     if user is None:
-        return jsonify(success=False, error='用户不存在', code='NOT_FOUND'), 404
+        return _err('用户不存在', 'NOT_FOUND', 404)
     password = _gen_initial_password()
     try:
         user.set_password(password)
@@ -186,11 +188,12 @@ def reset_password(uid):
     except Exception:
         db.session.rollback()
         current_app.logger.exception('重置密码失败')
-        return jsonify(success=False, error='重置密码失败', code='SERVER_ERROR'), 500
+        return _err('重置密码失败', 'SERVER_ERROR', 500)
     audit('password_reset', target=user.username)
+    # ⚠️ 同 create_user:带明文密码,不能换 _ok(),换了会静默丢掉 no-store 头。
     resp = jsonify(success=True, message='已重置,初始密码仅本次展示',
                    data={'initial_password': password})
-    resp.headers['Cache-Control'] = 'no-store'  # 明文凭据过线,禁缓存/存盘
+    resp.headers['Cache-Control'] = 'no-store'
     return resp
 
 
@@ -199,16 +202,16 @@ def reset_password(uid):
 def toggle_active(uid):
     user = db.session.get(User, uid)
     if user is None:
-        return jsonify(success=False, error='用户不存在', code='NOT_FOUND'), 404
+        return _err('用户不存在', 'NOT_FOUND', 404)
     if user.id == g.user.id:
-        return jsonify(success=False, error='不能停用自己', code='INVALID_INPUT'), 400
+        return _err('不能停用自己')
     try:
         user.is_active = not user.is_active
         db.session.commit()
     except Exception:
         db.session.rollback()
         current_app.logger.exception('切换用户状态失败')
-        return jsonify(success=False, error='操作失败', code='SERVER_ERROR'), 500
+        return _err('操作失败', 'SERVER_ERROR', 500)
     audit('user_disabled' if not user.is_active else 'user_enabled', target=user.username)
     return jsonify(success=True, message=('已停用' if not user.is_active else '已启用'),
                    data={'user': _user_row(user)})
