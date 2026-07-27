@@ -38,23 +38,38 @@ HEADING = re.compile(r'(?m)^(#{2,6})[ \t]*(.+?)[ \t]*$')
 
 CJK = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]')
 KANA = re.compile(r'[\u3040-\u309f\u30a0-\u30fa\u30fc]')     # 不含 ・(U+30FB),它两语通用
+KANA_RUN = re.compile(r'[\u3040-\u309f\u30a0-\u30fa\u30fc]{2,}')
 CJK_OR_KANA = r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]'
 
 
+TABLE_ROW = re.compile(r'(?m)^\|.*\|[ \t]*$')
+
+
 def strip_noise(text):
-    """去掉数学/代码/链接,只留自然语言;用等长空白替换以保留偏移。"""
+    """去掉数学/代码/链接/表格,只留自然语言;用等长空白替换以保留偏移。
+
+    表格行也要去掉:单元格是并列的条目而不是句子,里面的半角逗号
+    (`` `'+'`, `'-'` `` 这样分隔代码片段的)不是日文的読点。
+    """
     def blank(m):
         return ' ' * len(m.group(0))
     out = CODE.sub(blank, text or '')
     out = MATH_BLOCK.sub(blank, out)
     out = MATH_INLINE.sub(blank, out)
+    out = TABLE_ROW.sub(blank, out)
     return LINK.sub(blank, out)
 
 
 def math_spans(text):
+    """行间公式必须**先**取走再找行内。
+
+    否则 `$$…\\text{$A$ 中の $v$ の個数}…$$` 里的内层 `$` 会被当成一对行内定界符,
+    切出 `$ 中の $` 这种根本不存在的"公式",再拿去做记法检查就全是幻觉。
+    """
     body = CODE.sub(lambda m: ' ' * len(m.group(0)), text or '')
-    return [m.group(0) for m in MATH_BLOCK.finditer(body)] + \
-           [m.group(0) for m in MATH_INLINE.finditer(body)]
+    blocks = [m.group(0) for m in MATH_BLOCK.finditer(body)]
+    body = MATH_BLOCK.sub(lambda m: ' ' * len(m.group(0)), body)
+    return blocks + [m.group(0) for m in MATH_INLINE.finditer(body)]
 
 
 def sections(text):
@@ -145,24 +160,80 @@ JA_WORDS_IN_ZH = {
     '微分可能': '可微', '積分可能': '可积', '近傍': '邻域', '無限': '无穷',
     '次元': '维数', '直交': '正交', '内積': '内积',
     '再帰': '递归', '計算量': '复杂度', '頂点': '顶点', '対角化': '对角化',
-    '行列': '矩阵',
 }
-# 「行列式」在中文里完全正当,不能算作「行列」的日文残留
-JA_WORD_GUARD = {'行列': ('行列式',)}
+# 「行列」不在表里:中文的"行列"(行与列)本身就是正当用词 ——「按行列展开」「稀疏行列」
+# 「行列式」都是中文,与日语的「行列」(=矩阵)同形。信号太弱,收进来只会一路误报。
+
+# 有些词同形不同义,整词计数会误伤,只在特定语境里才算错
+CN_WORD_CONTEXT = {
+    # 日语的「所以(ゆえん)」是名词"缘由",「〜する所以である」完全正当;
+    # 只有出现在句首(接续词用法)时才是中文的"所以"。
+    '所以': re.compile(r'(?:^|[。．\n])\s*所以'),
+}
 
 # ---------------------------------------------------------------- 数学记法
 
-MATHBB_WRAP = re.compile(r'\\math(?:bb|bf|cal|rm|scr|frak)\s*\{\s*[RNZQC]\s*\}')
-BARE_SET = re.compile(r'\\(?:in|notin|subset|subseteq|supset|supseteq|to|times|colon)\s*'
-                      r'(?![\\{])([RNZQC])(?![A-Za-z])')
 BARE_OPS = re.compile(r'(?<![\\A-Za-z])(sin|cos|tan|cot|sec|csc|log|ln|exp|lim|max|min|sup|inf|'
                       r'det|dim|ker|deg|gcd|arg|rank|tr|mod)(?![A-Za-z])')
 OP_NEEDS_OPERATORNAME = {'rank', 'tr'}     # MathJax 无同名宏,不加 \operatorname 会排成变量连乘
-WRAPPED = re.compile(r'\\(?:operatorname\*?|mathrm|text|mathop)\s*\{[^{}]*$')
-ASCII_REL = re.compile(r'(?<![<>!=\\])(<=|>=|!=|=<)(?![<>=])')
-ASCII_ARROW = re.compile(r'(?<![<\-=\\])(->|=>)(?![>])')
+# `!` 紧跟在操作数(数字/字母/右括号/另一个 `!`)之后是**阶乘**,`6!=720` 里的 `!=` 不是不等号;
+# 前面是反斜杠的 `\!` 是负细空格,`\!=` 同样不是不等号
+ASCII_REL = re.compile(r'(?<![<>=\\])(?:<=|>=|=<)(?![<>=])'
+                       r'|(?<![\w)\}\]!\\])!=(?!=)')
+ASCII_ARROW = re.compile(r'(?<![<\-=\\])(?:->|=>)(?![>])')
 CJK_IN_MATH = re.compile(CJK_OR_KANA)
-TEXTISH = re.compile(r'\\(?:text|mathrm|mbox|textbf|textit|operatorname\*?|hbox)\s*\{[^{}]*\}')
+
+# 文本域命令:其花括号里的内容是**文字**,不是公式。`\texttt`/`\verb` 里更是源代码,
+# `x<=0`、`current->next`、类型名 `exp` 都是原文该有的样子,不能按数学记法去纠。
+TEXT_CMD = re.compile(r'\\(?:text|textbf|textit|textrm|texttt|verb|mathrm|mbox|hbox'
+                      r'|operatorname\*?)\s*\{')
+CMD_ANY = re.compile(r'\\[A-Za-z]+\s*')
+
+
+def math_only(math):
+    """把公式里的**文本域**(\\text{…}/\\texttt{…} 之类)抹成空白,只留真正的数学。
+
+    必须做括号配对,不能用 `\\text\\{[^{}]*\\}` 那种正则:遇到 `\\text{木の構築($n$ 回)}`
+    这种嵌套了花括号或内层 `$` 的写法就会失配,把本来正确的地方报成问题
+    (2026-07-27 之前 math-raw-cjk 的 27 处命中里多数即此)。
+    """
+    out = list(math)
+    stack, depth, i = [], 0, 0
+    while i < len(math):
+        m = TEXT_CMD.match(math, i)
+        if m:
+            for k in range(i, m.end()):
+                out[k] = ' '
+            stack.append('text')
+            depth += 1
+            i = m.end()
+            continue
+        m = CMD_ANY.match(math, i)
+        if m:
+            if depth:
+                for k in range(i, m.end()):
+                    out[k] = ' '
+            i = m.end()
+            continue
+        ch = math[i]
+        if ch == '\\' and i + 1 < len(math):
+            if depth:
+                out[i] = out[i + 1] = ' '
+            i += 2
+            continue
+        if ch == '{':
+            stack.append('plain')
+        elif ch == '}':
+            if stack and stack.pop() == 'text':
+                depth -= 1
+        elif ch == '$' and depth:
+            j = math.find('$', i + 1)      # \text{…$x$…}:内层 $…$ 又是数学
+            i = (len(math) if j == -1 else j) + 1
+            continue
+        if depth:
+            out[i] = ' '
+        i += 1
+    return ''.join(out)
 
 # ---------------------------------------------------------------- 标点
 
@@ -206,7 +277,8 @@ def check_ja(text):
     # 3. 中文措辞/非日语术语
     words = []
     for w, good in CN_WORDS_IN_JA.items():
-        n = plain.count(w)
+        pat = CN_WORD_CONTEXT.get(w)
+        n = len(pat.findall(plain)) if pat else plain.count(w)
         if n:
             words.append(f'{w}×{n}→{good}')
     if words:
@@ -220,8 +292,11 @@ def check_ja(text):
     # 5. 句读体例:同一篇里混用两种以上逗号/句点体例
     commas = Counter(ch for ch in plain if ch in JA_COMMA_STYLES)
     periods = Counter(ch for ch in plain if ch in JA_PERIOD_STYLES)
-    # ASCII 的 , . 只有紧贴日文字符时才算句读(否则多半是 (1), (2) 或小数)
-    for ch, pat in ((',', r'%s\s*,' % CJK_OR_KANA), ('.', r'%s\s*\.' % CJK_OR_KANA)):
+    # ASCII 的 , . 只有**紧贴日文字符、且后面不是拉丁词**时才算句读。
+    # 排除小数与 (1), (2) 之外,还要放过「反復補題(ポンピング補題, pumping lemma)」这类
+    # 括注:逗号右边是英文术语时,半角逗号属于那段拉丁文,不是日文的読点。
+    for ch, pat in ((',', r'%s\s*,(?!\s*[A-Za-z])' % CJK_OR_KANA),
+                    ('.', r'%s\s*\.(?!\s*[A-Za-z])' % CJK_OR_KANA)):
         n = len(re.findall(pat, plain))
         if ch in commas:
             commas[ch] = n
@@ -262,17 +337,17 @@ def check_zh(text):
                          ' '.join(f'{c}×{n}' for c, n in bad.most_common(10))
                          + (' | ' + snippet(plain, m.start(), m.end()) if m else '')))
 
-        m = KANA.search(plain)
+        # 单个假名不算"日文混入":東京科学大学一系的填空题用「ア」「い」当空栏记号,
+        # 那是原卷的编号,必须原样保留。连着两个以上假名才可能是真的日语词。
+        m = KANA_RUN.search(plain)
         if m:
-            n = len(KANA.findall(plain))
-            hits.append(('zh-kana', f'{where} 中文正文里出现假名',
+            n = len(KANA_RUN.findall(plain))
+            hits.append(('zh-kana', f'{where} 中文正文里出现假名词',
                          f'×{n} | ' + snippet(plain, m.start(), m.end())))
 
         words = []
         for w, good in JA_WORDS_IN_ZH.items():
             n = plain.count(w)
-            for guard in JA_WORD_GUARD.get(w, ()):
-                n -= plain.count(guard)
             if n > 0:
                 words.append(f'{w}×{n}→{good}')
         if words:
@@ -287,24 +362,30 @@ def check_zh(text):
     return hits
 
 
-DOLLAR = re.compile(r'(?<!\\)\$\$?')
+STRAY_DOLLAR = re.compile(r'(?<!\\)\$')
 
 
 def check_delimiters(text):
-    """未配对的 $ —— 它会把后面整段正文吞进数学模式,直到遇到下一个 $。
+    """落单的 $ —— 前端的 protectMath 认不出它,那段公式就会漏出保护罩。
 
-    这是最贵的一类排版错:页面上不报错,只是好端端的日文/中文突然变成一串斜体符号。
-    逐行数(数学不跨行,`$$` 除外),奇数即为可疑。
+    判法与前端 `qd_render.js` 的 protectMath **完全同构**:先挡掉代码,再依次吃掉
+    `$$…$$` 与行内 `$…$`(行内**不跨行**,这是前端正则的硬约束),此时还剩下的 `$`
+    就是前端也保护不了的。两种成因:
+
+      · 真的少写一个 `$`;
+      · 把块级公式写成了**跨行的行内** `$…$` —— 页面上的表现是 markdown 先把
+        `\\\\[4pt]` 转义成 `\\[`,MathJax 再把它当成 display 公式的起始符,
+        整块 cases 不排版,只在正文里留下一个孤零零的 `\\[`。
+
+    第二种在 2026-07 的巡检里真实发生过(q136 / q344),而按行数奇偶的老判法
+    只报"某行 $ 数为奇数"、且每篇只报一条,既说不清病因也盖不全,故改成这个。
     """
-    hits = []
     body = CODE.sub(lambda m: ' ' * len(m.group(0)), text or '')
     body = MATH_BLOCK.sub(lambda m: ' ' * len(m.group(0)), body)
-    for lineno, line in enumerate(body.split('\n'), 1):
-        if len(DOLLAR.findall(line)) % 2:
-            hits.append(('math-unbalanced-dollar', '本行的 $ 没有配对,其后的正文会被当成公式排版',
-                         f'第 {lineno} 行:{line.strip()[:90]}'))
-            break
-    return hits
+    body = MATH_INLINE.sub(lambda m: ' ' * len(m.group(0)), body)
+    return [('math-stray-dollar', '落单的 $:前端 protectMath 保护不到,该处公式会漏排',
+             snippet(text, m.start(), m.start() + 1, w=40))
+            for m in STRAY_DOLLAR.finditer(body)]
 
 
 def check_math(text, track):
@@ -312,25 +393,17 @@ def check_math(text, track):
     spans = math_spans(text)
     if not spans:
         return hits
-    bare_sets, bare_ops, ascii_rel, ascii_arrow, cjk_raw = [], Counter(), set(), set(), []
+    bare_ops, ascii_rel, ascii_arrow, cjk_raw = Counter(), set(), set(), []
     for s in spans:
         inner = s.strip('$').strip()
-        masked = MATHBB_WRAP.sub(lambda m: ' ' * len(m.group(0)), inner)
-        for m in BARE_SET.finditer(masked):
-            bare_sets.append(m.group(0).strip())
-        for m in BARE_OPS.finditer(inner):
-            if WRAPPED.search(inner[max(0, m.start() - 20):m.start()]):
-                continue
+        maths = math_only(inner)         # 文本域(含 \texttt 里的源代码)一律不按数学记法纠
+        for m in BARE_OPS.finditer(maths):
             bare_ops[m.group(1)] += 1
-        ascii_rel |= set(ASCII_REL.findall(inner))
-        ascii_arrow |= set(ASCII_ARROW.findall(inner))
-        stripped = TEXTISH.sub(' ', inner)
-        if CJK_IN_MATH.search(stripped):
+        ascii_rel |= set(ASCII_REL.findall(maths))
+        ascii_arrow |= set(ASCII_ARROW.findall(maths))
+        if CJK_IN_MATH.search(maths):
             cjk_raw.append(inner[:70])
 
-    if bare_sets:
-        hits.append(('math-bare-set', '数集用了裸字母而非 \\mathbb{}',
-                     f'×{len(bare_sets)} | ' + ' '.join(sorted(set(bare_sets))[:6])))
     strong = {k: v for k, v in bare_ops.items() if k in OP_NEEDS_OPERATORNAME}
     weak = {k: v for k, v in bare_ops.items() if k not in OP_NEEDS_OPERATORNAME}
     if strong:
@@ -353,16 +426,44 @@ def check_math(text, track):
 
 # ---------------------------------------------------------------- 主流程
 
+def json_strings(raw):
+    """采点结构化/渐进提示存的是 JSON,取出其中所有字符串**值**(结构本身不看)。"""
+    out = []
+
+    def walk(node):
+        if isinstance(node, str):
+            out.append(node)
+        elif isinstance(node, list):
+            for x in node:
+                walk(x)
+        elif isinstance(node, dict):
+            for v in node.values():
+                walk(v)
+
+    if (raw or '').strip():
+        try:
+            walk(json.loads(raw))
+        except Exception:
+            pass
+    return out
+
+
 def audit(con):
     findings = defaultdict(list)
-    for qid, source, zh, ja in con.execute(
+    for qid, source, zh, ja, struct, hints in con.execute(
             "SELECT id, COALESCE(source,''), COALESCE(solution_latex,''), "
-            "COALESCE(solution_ja,'') FROM questions ORDER BY id"):
+            "COALESCE(solution_ja,''), COALESCE(solution_structured,''), "
+            "COALESCE(hints,'') FROM questions ORDER BY id"):
         for rule, desc, ev in check_zh(zh) + check_math(zh, 'zh'):
             findings[qid].append(('zh', rule, desc, ev, source))
         if ja.strip():
             for rule, desc, ev in check_ja(ja) + check_math(ja, 'ja'):
                 findings[qid].append(('ja', rule, desc, ev, source))
+        # 采点/提示也会漏排公式,同样要查定界符;措辞类规则不在这两列上跑。
+        for track, raw in (('struct', struct), ('hints', hints)):
+            for text in json_strings(raw):
+                for rule, desc, ev in check_delimiters(text):
+                    findings[qid].append((track, rule, desc, ev, source))
     return findings
 
 
@@ -387,7 +488,8 @@ def main():
     for (track, rule), rows in sorted(by_rule.items(), key=lambda kv: -len(kv[1])):
         if args.rule and rule != args.rule:
             continue
-        label = {'zh': '中文轨', 'ja': '日文轨'}[track]
+        label = {'zh': '中文轨', 'ja': '日文轨',
+                 'struct': '采点结构化', 'hints': '渐进提示'}[track]
         print(f'[{label}] {rule} —— {rows[0][1].split("] ")[-1]}   命中 {len(rows)} 处')
         for qid, _d, ev, source in rows[:args.limit]:
             print(f'    id={qid:<4} {source[:24]:<26} {ev[:110]}')

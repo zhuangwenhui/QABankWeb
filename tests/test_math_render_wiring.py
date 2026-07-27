@@ -3,9 +3,17 @@
 真正的端到端验证在 scripts/e2e_math_render.py(需要 Chrome,CI 单独一个 job)。
 这里只钉住那条让 2026-07-25 线上事故成立的前提:排版不能只依赖 MathJax 的 Promise 版 API。
 """
+import importlib.util
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def _load(name, relpath):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relpath)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _read(p):
@@ -66,6 +74,35 @@ def test_escaped_dollar_cannot_open_math():
     protect = src[src.index('function protectMath'):]
     protect = protect[:protect.index('function restoreMath')]
     assert protect.count('(?<!\\\\)') >= 2, 'protectMath 的定界符没有排除转义的 \\$'
+
+
+def test_inline_math_regex_forbids_newline():
+    """行内 `$…$` 的正则必须排除换行 —— 允许跨行,一个漏写的 `$` 就能吞掉后面整段正文。
+
+    这条约束反过来要求**内容侧**不能把块级公式写成跨行的行内公式,由下一条测试盯住。
+    """
+    src = _read('static/js/qd_render.js')
+    protect = src[src.index('function protectMath'):]
+    protect = protect[:protect.index('function restoreMath')]
+    assert '[^\\$\\\\\\n]' in protect, '行内公式正则没有排除换行'
+
+
+def test_lint_catches_cross_line_inline_math():
+    """盘查必须认出"跨行的行内 `$…$`"。
+
+    前端的 protectMath 保护不到它:markdown 先把 `\\\\[4pt]` 转义成 `\\[`,MathJax 再把
+    `\\[` 当成 display 公式的起始符,整块 cases 不排版,正文里只留下一个孤零零的 `\\[`
+    (2026-07-27 q136 / q344 线上即此)。按行数奇偶的老判法说不清病因、且每篇只报一条。
+    """
+    audit = _load('audit_language', 'scripts/audit_language.py')
+    broken = ('**(2)** $\\displaystyle\n'
+              'P(Z\\le u)=\n\\begin{cases}\n0, & u<-2,\\\\[4pt]\n1, & u>2.\n\\end{cases}$\n')
+    fixed = broken.replace('**(2)** $\\displaystyle\n', '**(2)**\n$$\n').replace('\\end{cases}$',
+                                                                                '\\end{cases}\n$$')
+    assert audit.check_delimiters(broken), '盘查没有认出跨行的行内公式'
+    assert not audit.check_delimiters(fixed), '改成 $$…$$ 之后不该再报'
+    assert not audit.check_delimiters('文字 $a+b$ と $$c$$ と `$5` と \\$100。'), \
+        '行内/行间/代码/转义美元号都不该误报'
 
 
 def test_a11y_render_actions_are_removed():
