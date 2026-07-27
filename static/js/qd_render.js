@@ -102,6 +102,12 @@
     }
   }
 
+  /**
+   * 注册一个 `:::name` 容器,渲染成带标题的色块(callout / conclusion)。
+   *
+   * 标题按 activeTrack 取 LABELS 里的对应文案,写 `:::note 自定义标题` 可覆盖。
+   * 标题一律经 escapeHtml —— 它来自题解正文,是不可信输入。
+   */
   function registerContainer(name, klass) {
     md.use(window.markdownitContainer, name, {
       validate: function (params) {
@@ -124,6 +130,9 @@
     });
   }
 
+  // 数学与代码的占位符。刻意用**纯字母数字**:markdown-it 不会对它做任何变换,
+  // 而带符号的占位符(如 @@0@@)会被 typographer/emphasis 规则啃掉。
+  // 副作用是占位符在 flanking 判定里算「普通字符」而非标点,由 PH_HEAD/PH_TAIL 补偿(见上)。
   function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
   function cph(i) { return 'QDCODEPLACEHOLDER' + i + 'ENDQD'; }
 
@@ -200,6 +209,12 @@
   }
 
   var STEP_RE = /^\s*(第[一二三四五六七八九十百千]+步|Step\s*\d+|\d+)\s*[:：.、)]?\s*/;
+  /**
+   * 把题解里形如「第3步 …」「(2) …」的 h3 标题前缀包成 .n 徽标,其余 h3 退化为左标尺。
+   *
+   * 只动 h3 的第一个**文本**子节点(nodeType===3):标题里可能已经有 <em>/<code> 等元素,
+   * 整体 innerHTML 重写会把它们弄丢。
+   */
   function enhanceSteps(node) {
     node.querySelectorAll('h3').forEach(function (h) {
       var tn = h.firstChild;
@@ -244,6 +259,13 @@
   // startup.promise 实测常常不 settle(它是 MathJax 的滚动队列头,被任一未完成操作占住),
   // 所以只给它很短的礼让时间,别让整页公式为它干等。
   var STARTUP_WAIT_MS = 1500;
+  /**
+   * 轮询等 MathJax 就绪,返回 Promise<bool>(超时返回 false 而不是 reject)。
+   *
+   * 不 await MathJax.startup.promise:那个 promise 常被未完成的操作占住而永不 settle,
+   * 无上限地等它等于全站没有数学(2026-07-25 线上事故)。所以这里改成有上限的轮询,
+   * 超时就放弃排版、让公式保持源码态 —— 难看,但页面还能用。
+   */
   function mathReady(maxWaitMs) {
     var deadline = Date.now() + (maxWaitMs || 20000);
     return new Promise(function (res) {
@@ -286,6 +308,13 @@
   var pendingTimer = null;
   var pendingResolvers = [];
 
+  /**
+   * 整页排版一次:先 typesetClear() 再 typesetPromise()。
+   *
+   * 必须整页而不是逐块:逐块排版试过三种写法都不可靠(同页只有第一块排得出,
+   * 失败的块每次还不一样)。typesetClear 也不能省 —— 我们是整块换 innerHTML 更新内容的,
+   * MathJax 文档里还留着上一轮的 MathItem,不清就抛 splitText offset 错。
+   */
   function typesetAll() {
     var MJ = window.MathJax;
     if (!MJ || !MJ.typesetPromise) return Promise.resolve();
@@ -303,6 +332,12 @@
     });
   }
 
+  /**
+   * 防抖窗口到点:把这一窗内攒下的所有排版请求合并成**一次**整页排版。
+   *
+   * 全站只有这一条排版链(chain),串行执行 —— 两次排版并发作用于同一批文本节点会让
+   * MathJax 抛 splitText offset 错,那次 Promise 未处理地 reject,整块公式停在源码态。
+   */
   function flush() {
     pendingTimer = null;
     var waiting = pendingResolvers;
@@ -336,6 +371,12 @@
    * 返回 {restatement, body};题解不以重述开头时原样返回。
    */
   var RESTATE_RE = /^##[ \t]*(問題重述|题目重述|問題文)[ \t]*$/m;
+  /**
+   * 把题解开头的「## 問題重述」一节切出来,返回 {restatement, body}。
+   *
+   * 只认**开头 60 字符内**的重述标题:正文中间出现同名小标题的是正常章节,切了会把题解腰斩。
+   * 转载题不放原题面时,题目正文就在这一节里,由调用方还给题面区。
+   */
   function splitRestatement(mdSrc) {
     var src = mdSrc || '';
     var m = RESTATE_RE.exec(src);
@@ -381,6 +422,11 @@
     return splitRestatement(q.solution_ja || '').restatement || own;
   }
 
+  /**
+   * 预览该显示哪段文字:题面(或重述)去掉裸 URL 与空括号。
+   *
+   * 去 URL 是因为转载题的题面常以一行出处网址收尾,列表卡片上显示一行网址既占地方又无信息。
+   */
   function previewSource(q) {
     return questionText(q)
       .replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*[)）]/g, '').trim();
@@ -428,6 +474,12 @@
     { key: 'shitten', label: '典型失点', kind: 'shitten' },
     { key: 'haiten',  label: '部分点分布', kind: 'haiten' }
   ];
+  /**
+   * 渲染采点结构化题解(解答方針 / 答案例 / 典型失点 / 部分点分布)。四段全空则整块隐藏。
+   *
+   * 每段按**有没有假名**决定用日文轨还是中文轨渲染:区块小标题是日语采点术语,
+   * 但正文几乎全是中文(全库 358 道里 357 道如此),一律按 ja 渲染会让中文正文吃日文字形。
+   */
   function renderStructuredInto(node, s) {
     if (!node) return;
     s = s || {};

@@ -16,11 +16,17 @@
   const mineGrid = document.getElementById('mineGrid');
   const mineEmpty = document.getElementById('mineEmpty');
 
+  /** 算进度条百分比,并夹到 0-100。total 为 0 时回 0 —— 空题单不能除零。 */
   function pct(n, total) {
     if (!total) return 0;
     return Math.max(0, Math.min(100, (n / total) * 100));
   }
 
+  /**
+   * 题单广场上的一张卡:标题、官方徽标、描述、题数与两段进度条。
+   *
+   * progress 缺失时兜一个全零对象:题单刚建、还没有任何题目时后端不回这个字段。
+   */
   function cardHtml(lst) {
     const p = lst.progress || { total: 0, done: 0, mastered: 0 };
     const total = p.total || 0;
@@ -43,6 +49,12 @@
       </a>`;
   }
 
+  /**
+   * 分两栏渲染:官方题单 / 我的题单。
+   *
+   * 「我的」只认 owner_id === currentUserId 且非官方 —— 别人公开的题单不进这一栏,
+   * 否则用户会以为那是自己的、可以编辑。
+   */
   function render(lists) {
     const official = lists.filter((l) => l.is_official);
     const mine = lists.filter((l) => !l.is_official && l.owner_id === currentUserId);
@@ -53,6 +65,7 @@
     mineEmpty.hidden = mine.length > 0;
   }
 
+  /** 拉取可见题单列表并渲染。 */
   async function load() {
     try {
       const resp = await apiFetch('/api/lists');

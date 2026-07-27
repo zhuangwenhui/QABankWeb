@@ -249,6 +249,10 @@
     window.QDRender.typeset(root);
   }
 
+  /**
+   * 错题本一行的 HTML。entry.question 可能为空(题目被删而错题记录还在的孤儿行),
+   * 故整段都要对空对象容错,不能直接解引用。
+   */
   function entryCardHtml(entry) {
     const q = entry.question || {};
     const qid = Number(q.id);
@@ -657,7 +661,17 @@
     }
   }
 
-  /** 收集当前筛选条件下的全部 question_id(逐页拉取,最多 50 页 x 100 条) */
+  /**
+   * 收集当前筛选条件下的全部 question_id,逐页拉取。
+   *
+   * ⚠️ 跨文件不变量:这里最多收 50 页 × 100 条 = **5000** 个 id,而后端
+   * api/_helpers.py 的 MAX_BATCH_SIZE 是 **2000**。两个数对不上 ——
+   * 筛选结果超过 2000 条时,生成 PDF 会被后端以「question_ids 单次最多 2000 项」拒掉。
+   *
+   * 生产目前 358 道题,够不到这个坎,所以没人撞见过,也没有任何测试盯着。
+   * 真要修,是把这里的上限调到与后端一致(或改成分批提交),不是把后端上限抬高 ——
+   * 那个 2000 挡的是"一个请求让数据库扫十万行"。
+   */
   async function collectFilteredIds() {
     const ids = [];
     let page = 1;

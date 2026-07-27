@@ -513,6 +513,7 @@
   // ---- 院試定位筛选:院校→専攻级联 + 年份 + 学科范围(数据来自 /api/questions/facets) ----
   let facets = { schools: [], years: [], subjectGroups: [] };
 
+  /** 拉取院試定位筛选的可选值(院校 / 専攻 / 年份 / 学科组)。失败静默:定位条只是加分项。 */
   async function loadFacets() {
     try {
       const resp = await apiFetch('/api/questions/facets');
@@ -531,6 +532,7 @@
     populateMajors('');
   }
 
+  /** 按选中的院校联动填充専攻下拉。専攻在 UI 上从属院校,换院校要清掉旧専攻。 */
   function populateMajors(school) {
     const entry = (facets.schools || []).find((s) => s.name === school);
     const majors = entry ? entry.majors : [];
@@ -541,6 +543,7 @@
     el.filterMajor.disabled = !majors.length;   // 未选院校或该校单一専攻时禁用
   }
 
+  /** 给已生效的定位筛选项加重描边,一眼看出当前限定了哪些维度。 */
   function markLocatorActive() {
     [['filterSchool'], ['filterMajor'], ['filterYear'], ['filterSubjectGroup']].forEach(([id]) => {
       el[id].classList.toggle('filter-active', !!el[id].value);
@@ -834,17 +837,19 @@
       </div>`;
   }
 
-  /**
-   * 预览格先按转义文本落地(行/卡片模板统一走 escapeHtml),再就地重渲成 markdown。
-   * 从 textContent 取原文即可,不必把原文再存一份到 data 属性。
-   * 不这样做的话列表里会显示裸的 ## / ** / :::,与详情页观感割裂。
-   */
   /** 预览该显示哪段文字:转载题用「問題重述」,并去掉裸 URL(否则卡片上是一行网址)。 */
   function previewText(q) {
     var t = window.QDRender ? window.QDRender.previewSource(q) : (q.question_latex || '');
     return t || '(无内容)';
   }
 
+  /**
+   * 把列表里已落地的预览格就地重渲成 markdown。
+   *
+   * 预览格先按**转义文本**落地(行/卡片模板统一走 escapeHtml),再由本函数从 textContent
+   * 取回原文重渲 —— 原文不必再往 data 属性里存一份。
+   * 少了这一步,列表里会显示裸的 ## / ** / :::,与详情页观感割裂。
+   */
   function renderPreviews(root) {
     if (!window.QDRender) return;
     root.querySelectorAll('.latex-content.js-open-detail').forEach((node) => {
@@ -1190,7 +1195,6 @@
 
   /* ============================================================ 10. 题目详情 Modal */
 
-  /** 打开题目详情弹窗(五区块;打开时记录查看日志) */
   /**
    * 详情弹窗里的正文渲染:走详情页同一套 markdown+数学管线。
    * 早先这里只做 escapeHtml + 排版数学,于是弹窗里满是裸的 ## / ** / :::note,
@@ -1206,6 +1210,10 @@
     else node.innerHTML = escapeHtml(raw);
   }
 
+  /**
+   * 打开题目详情弹窗:题目信息 / 题面 / 题解 / 图片 / 操作五个区块,打开时记一条查看日志。
+   * 富文本区块都经 renderRich() 走共享管线,与 /questions/<id> 详情页同一套渲染。
+   */
   async function openDetail(id) {
     let question;
     try {
@@ -1313,6 +1321,7 @@
     menu.style.top = `${y}px`;
   }
 
+  /** 收起右键菜单。 */
   function hideContextMenu() {
     el.contextMenu.style.display = 'none';
   }
@@ -1673,10 +1682,12 @@
     try { return window.localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  /** 写 localStorage,无痕模式等写不进去时静默忽略(存的都是可有可无的偏好)。 */
   function lsSet(key, value) {
     try { window.localStorage.setItem(key, value); } catch (e) { /* 忽略 */ }
   }
 
+  /** 读 localStorage 里的 JSON;缺失或解析失败回 fallback。 */
   function lsGetJson(key, fallback) {
     try {
       const raw = window.localStorage.getItem(key);
@@ -1688,6 +1699,7 @@
     }
   }
 
+  /** 把对象序列化后写 localStorage,失败静默。 */
   function lsSetJson(key, value) {
     try { window.localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* 忽略 */ }
   }

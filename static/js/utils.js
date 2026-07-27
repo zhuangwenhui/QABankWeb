@@ -67,14 +67,17 @@ function debounce(fn, wait = 300) {
   };
 }
 
-/**
- * 请求重排数学公式。
- *
- * 有共享管线(qd_render.js)时一律委托给它:排版必须全站走**同一条串行队列**,
- * 两条队列并发作用于同一批文本节点会让 MathJax 抛 splitText offset 错,整块公式
- * 停在源码态(2026-07-26 详情弹窗即此)。没有管线的页面才走这里的极简实现。
- */
+// 全站唯一的排版队列。必须是模块级单例 —— 见下面 typesetMath 的说明。
 let __mathChain = Promise.resolve();
+
+/**
+ * 请求排版数学公式,返回 Promise。
+ *
+ * 有共享管线(qd_render.js)时**一律委托给它** —— 全站必须只有一条排版队列,
+ * 两条队列并发作用于同一批文本节点会让 MathJax 抛 splitText offset 错、
+ * 那次 Promise 未处理地 reject,整块公式停在源码态(2026-07-26 详情弹窗即此)。
+ * 没有管线的页面才走下面这条本地极简实现(同样串行,同样带 20 秒超时)。
+ */
 function typesetMath(el) {
   if (window.QDRender && window.QDRender.typeset) return window.QDRender.typeset(el);
   __mathChain = __mathChain.then(() => {

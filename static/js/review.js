@@ -37,6 +37,7 @@
   var pos = 0;           // 当前索引
   var reviewedCount = 0; // 本次已评题数
 
+  /** 题目元信息小标签(科目/难度/出典/章节/自由标签)。与详情页同一套 .qd-chip 样式。 */
   function chipsHtml(q) {
     var out = [];
     if (q.subject) out.push('<span class="qd-chip subject">' + esc(q.subject) + '</span>');
@@ -47,6 +48,7 @@
     return out.join('');
   }
 
+  /** 刷新顶部进度:第几题 / 共几题 + 进度条。按 pos 而非 reviewedCount —— 跳过也算走过。 */
   function updateProgress() {
     el.progress.hidden = false;
     el.bar.hidden = false;
@@ -56,6 +58,10 @@
     el.barFill.style.width = pct.toFixed(1) + '%';
   }
 
+  /**
+   * 收尾态。文案分两种:本次评过题的说「本次复习完成」,一进来就没题的说「今日复习完成」——
+   * 后者容易被误当成「页面坏了」,所以补一句「去做点新题吧」。
+   */
   function showDone() {
     el.progress.hidden = true;
     el.bar.hidden = true;
@@ -69,11 +75,24 @@
       '<a class="rv-link" href="/questions">返回题库</a></div>';
   }
 
+  /**
+   * 渲染一张复习卡:先只出题面(揭示前),点"显示答案"后再出题解。
+   *
+   * ⚠️ 本函数把「题面区要不要用問題重述」这个判定**算了两遍**:
+   *   · 下面第一处(pre)决定**题解正文**要不要把重述剪掉;
+   *   · 后面第二处(noticeOnly / split)决定**题面区**显示什么。
+   * 两处必须同进同退。不一致的后果是二选一:重述被显示两遍(题面一次、题解一次),
+   * 或者揭示前题面区空着、学生根本看不到题目。
+   *
+   * 判定本身还有第三份在 static/js/question_detail.js(详情页),三处口径必须一致。
+   * 之所以没抽成一个函数:三处各自要的返回值不同(有的要 body、有的要 restatement、
+   * 有的两个都要),抽出来会变成一个带 flag 的四不像。合并留给 V2.0 连同复习页重做一起处理。
+   */
   function renderCard(entry) {
     var q = entry.question || {};
     var jaFull = (q.solution_ja || '').trim();
     var zh = (q.solution_latex || '').trim();
-    // 题面区会显示「問題重述」,题解正文里去掉它以免重复
+    // 判定其一(决定题解正文):题面区会显示「問題重述」时,题解里就去掉它以免重复
     var pre = (window.QDRender && window.QDRender.isNoticeOnly(q.question_latex))
       ? window.QDRender.splitRestatement(jaFull) : { restatement: '', body: jaFull };
     var ja = pre.restatement ? pre.body : jaFull;
@@ -107,8 +126,9 @@
       '</div>';
 
     var probEl = document.getElementById('rvProblem');
-    // 转载条件下题面在题解开头的「問題重述」里 —— 复习页同样要把它还给题面,
+    // 判定其二(决定题面区):转载题的题面在题解开头的「問題重述」里 —— 复习页要把它还给题面,
     // 否则揭示答案前学生根本看不到题目。
+    // ⚠️ 这里的条件必须与本函数开头那处(变量 pre)完全一致,理由见函数上方说明。
     var R2 = window.QDRender;
     var noticeOnly = R2 ? R2.isNoticeOnly(q.question_latex) : !(q.question_latex || '').trim();
     var split = (noticeOnly && R2) ? R2.splitRestatement(q.solution_ja || '')
@@ -143,6 +163,12 @@
     });
   }
 
+  /**
+   * 提交本题自评,成功后前进到下一题。
+   *
+   * 失败时把评分按钮**复原为可点**并提示重试 —— 排期没落库就前进的话,这题下次还会到期,
+   * 但学生以为已经评过了。
+   */
   function rate(qid, rating, rateBtns) {
     apiFetch('/api/review/rate', { method: 'POST', body: { question_id: qid, rating: rating } })
       .then(function () {
@@ -155,12 +181,19 @@
       });
   }
 
+  /** 前进到下一题;队列走完则显示收尾态。每题回到页首,免得停在上一题的滚动位置。 */
   function next() {
     if (pos >= queue.length) { showDone(); return; }
     renderCard(queue[pos]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  /**
+   * 拉取到期队列(最多 20 题)并渲染第一题。
+   *
+   * 过滤掉 question 为空的条目:题目被删但错题本记录还在时会出现这种孤儿行,
+   * 不滤会在 renderCard 里抛异常、整页白屏。
+   */
   function load() {
     apiFetch('/api/review/due?limit=20').then(function (resp) {
       queue = ((resp.data && resp.data.entries) || []).filter(function (e) {

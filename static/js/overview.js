@@ -49,6 +49,7 @@
     setText('statPending', d.feedback_pending);
   }
 
+  /** 往指定 id 的元素写文本;元素不存在就跳过。null/undefined 一律显示 0(统计项缺值即 0)。 */
   function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value != null ? value : 0;
@@ -190,6 +191,7 @@
     const createModal = new bootstrap.Modal(document.getElementById('createUserModal'));
     const pwModal = new bootstrap.Modal(document.getElementById('initialPwModal'));
 
+    /** 拉取用户列表并重画表格。建号/改密/停用之后都调它整体刷新,不做增量更新。 */
     async function loadUsers() {
       try {
         const resp = await apiFetch('/api/overview/users');
@@ -211,6 +213,10 @@
       }
     }
 
+    /**
+     * 弹出初始密码。**这是明文密码唯一一次露面** —— 后端不落明文、也不会再发第二次,
+     * 关掉弹窗就只能走「重置密码」再要一个新的。
+     */
     function showInitialPassword(pw) {
       document.getElementById('initialPwValue').value = pw;
       pwModal.show();

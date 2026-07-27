@@ -3,12 +3,15 @@
  *
  * 依赖:
  *   - utils.js:apiFetch / escapeHtml(全站已加载)
- *   - markdown-it / markdown-it-container / DOMPurify(本页 CDN 加载)
- *   - MathJax(base.html 已加载,tex-svg)
+ *   - qd_render.js 的 window.QDRender:**本页不自持渲染管线**,一律委托给它。
+ *     管线脚本由 templates/_render_pipeline.html 统一 include,自 v1.7.0 起
+ *     markdown-it / markdown-it-container / DOMPurify 均**自托管**在 static/vendor/,
+ *     不再走 CDN(此处旧注释曾写"本页 CDN 加载",与实际不符,V1 收尾时更正)。
+ *   - MathJax(base.html 已加载,tex-svg,4.1.3)
  *
- * 渲染管线(见 docs/superpowers/specs/2026-07-11-bilingual-manning-contract.md §3):
- *   raw md → ①保护 $$…$$/$…$ 占位 → ②markdown-it(+container) → ③还原数学
- *          → ④DOMPurify.sanitize → ⑤注入 DOM 后 MathJax.typesetPromise。
+ * 管线的具体步骤不在本文件里,别照着这里的描述去改 —— 唯一实现在 static/js/qd_render.js,
+ * 契约见 docs/superpowers/specs/2026-07-11-bilingual-manning-contract.md §3。
+ * (本页与 review.js 曾各持一份字节等价的副本,改一处漏一处已经发生过,故收归一处。)
  */
 (function () {
   'use strict';
@@ -47,6 +50,7 @@
   // ---------------------------------------------------------------- 掌握状态(做题进度)
   // 与列表页同轴:done/mastered 落库,none 删行(未做)。仅读写进度,不触渲染管线。
   var masteryStatus = null;   // null(未做)| 'done' | 'mastered'
+  /** 按当前 masteryStatus 刷新三个掌握状态按钮的选中态与 aria-pressed。 */
   function paintMastery() {
     el.masteryBtns.forEach(function (b) {
       var s = b.dataset.status;
@@ -55,6 +59,7 @@
       b.setAttribute('aria-pressed', String(on));
     });
   }
+  /** 拉取本题的掌握状态并上色。失败也照样 paint 一次(全部未选中),不阻断页面。 */
   function initMastery() {
     apiFetch('/api/progress/check_batch', { method: 'POST', body: { question_ids: [Number(qid)] } })
       .then(function (resp) {
@@ -117,6 +122,12 @@
     requestAnimationFrame(function () { spyScheduled = false; updateSpy(); });
   }, { passive: true });
 
+  /**
+   * 切换题解语轨(ja / zh)。
+   *
+   * 排版是**惰性**的:某轨首次显示时才 typeset,之后记在 typesetDone 里不再重排。
+   * 一上来就把两轨都排版会让首屏多等一倍时间,而用户通常只看一轨。
+   */
   function pick(track) {
     Object.keys(tracks).forEach(function (k) {
       if (tracks[k]) tracks[k].classList.toggle('on', k === track);
@@ -151,6 +162,11 @@
     return out.join('');
   }
 
+  /**
+   * 拼题面区 HTML:题目正文(或从题解里取回的「問題重述」)+ 出典信息盒 + 原题图。
+   *
+   * 判定条件与本文件下方渲染题解处、以及 review.js 的 renderCard 必须一致,见那两处的说明。
+   */
   function problemHtml(q) {
     var esc = window.escapeHtml;
     // 转载条件下不放原题面时,题目正文写在题解开头的「問題重述」里,把它还给题面区,
@@ -207,11 +223,13 @@
     var listEl = wrap.querySelector('#qdHintsList');
     var moreBtn = wrap.querySelector('#qdHintsMore');
     var shown = 0;
+    /** 刷新「再看一条」按钮:还剩几条、以及全看完后隐藏。 */
     function updateBtn() {
       var left = hints.length - shown;
       moreBtn.hidden = left <= 0;
       if (left > 0) moreBtn.textContent = '再看一条(还剩 ' + left + ' 条)';
     }
+    /** 揭示下一条提示。逐条给而不是一次全给 —— 提示的价值就在于「先自己想」。 */
     function revealNext() {
       if (shown >= hints.length) return;
       var item = document.createElement('div');
@@ -267,7 +285,17 @@
   }
 
   // ---------------------------------------------------------------- 我的作答(采点评分)
-  var answerFiles = [];   // 待提交 File(≤4)
+  // ⚠️ 这个 4 与后端 api/submissions.py:19 的 MAX_IMAGES 是**同一个上限的两份硬编码**,
+  // 两边各写死一次、互不引用。前端放宽了后端也会以 400「最多上传 4 张作答照片」拒掉,
+  // 前端收紧了则用户在 UI 上就传不了 —— 改一处必须改另一处。
+  var answerFiles = [];   // 待提交 File(≤4,见上)
+
+  /**
+   * 「我的作答」区:选图 → 本地预览缩略图 → 提交 → 轮询评分结果。
+   *
+   * 整块对 DOM 元素缺失是容错的(qdAnswer 不存在直接返回)—— 这个区块只在登录且
+   * 该题开放作答时才由模板渲染出来,详情页其余部分不该因它缺席而挂掉。
+   */
   function initAnswer() {
     var sec = document.getElementById('qdAnswer');
     if (!sec) return;
@@ -276,6 +304,7 @@
     var submitBtn = document.getElementById('qdSubmitBtn');
     var thumbs = document.getElementById('qdThumbs');
 
+    /** 重画待提交作答图的缩略图与删除按钮。整块重建而非增量,张数最多 4,不值得做 diff。 */
     function renderThumbs() {
       thumbs.innerHTML = '';
       answerFiles.forEach(function (f, i) {
@@ -329,7 +358,12 @@
     loadHistory();
   }
 
-  // 渲染一份评分结果:总分环 + 采点逐项进度条 + 作答转写(折叠)+ 综合反馈。
+  /**
+   * 渲染一份评分结果:总分环 + 采点逐项进度条 + 作答转写(折叠)+ 综合反馈。
+   *
+   * 综合反馈走共享渲染管线(renderInto + typeset):判题产出的是 Manning 风 markdown,
+   * 里面有公式和 :::note 容器,只做 escapeHtml 会在页面上留下裸记号。
+   */
   function renderGrade(sub) {
     var grade = document.getElementById('qdGrade');
     if (!grade || !sub) return;
@@ -373,6 +407,12 @@
     if (fb) { renderInto(fb, sub.feedback || '', 'ja'); typeset(fb); }
   }
 
+  /**
+   * 拉取本题的历史作答列表,填进折叠区。
+   *
+   * 失败静默:历史记录是锦上添花,接口挂了不该让详情页看起来坏掉 ——
+   * 题面与题解都已经渲染完了。
+   */
   function loadHistory() {
     var box = document.getElementById('qdSubHistory');
     if (!box) return;
@@ -415,6 +455,7 @@
   function initBookmark() {
     var btn = document.getElementById('qdBookmark');
     if (!btn) return;
+    /** 按收藏状态刷新星标按钮的字形、样式与无障碍属性。 */
     function paint(on) {
       btn.textContent = on ? '★' : '☆';
       btn.classList.toggle('active', on);
@@ -433,6 +474,11 @@
     });
   }
 
+  /**
+   * 笔记区:载入已有笔记,输入后**防抖自动保存**(无保存按钮)。
+   *
+   * 另在 beforeunload 时补一次同步保存,避免用户在防抖窗口内关掉页面丢掉最后几个字。
+   */
   function initNotes() {
     var ta = document.getElementById('qdNoteText');
     var status = document.getElementById('qdNoteStatus');
@@ -440,6 +486,7 @@
     apiFetch('/api/questions/' + qid + '/note')
       .then(function (r) { ta.value = (r.data && r.data.content) || ''; }).catch(function () {});
     var t = null, dirty = false;
+    /** 保存笔记正文(整体覆盖)。状态字提示保存中 / 已保存,失败保留 dirty 待下次重试。 */
     function save() {
       if (status) status.textContent = '保存中…';
       apiFetch('/api/questions/' + qid + '/note', { method: 'PUT', body: { content: ta.value } })
@@ -473,9 +520,10 @@
       initNotes();     // 私人笔记(自动保存)
 
       renderStructured(q.solution_structured); // 采点四段(惰性)
-      // 题面区已经显示了「問題重述」,题解里就不再重复一遍
-      // 题面区若已经展示了重述(仅当题面本身只有版权声明时),题解正文就去掉它以免重复;
-      // 题面自带正文时题解保持原样。判定条件必须与 problemHtml 里一致。
+      // 题面区若已经展示了重述(**仅当题面本身只有版权声明时**),题解正文就去掉它以免重复;
+      // 题面自带正文时题解保持原样。判定条件必须与 problemHtml 里一致 ——
+      // 两边不同步会出现「题面和题解各显示一遍重述」或「揭示前根本看不到题目」。
+      // static/js/review.js 的 renderCard 里有同一个判定的第二份,改这里记得同时改那边。
       var jaFull = (q.solution_ja || '').trim();
       var ja = jaFull;
       var QR = window.QDRender;

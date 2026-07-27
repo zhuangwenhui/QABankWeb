@@ -22,11 +22,17 @@
 
   let editable = false;
 
+  /** 算进度条百分比,并夹到 0-100。total 为 0 时回 0 —— 空题单不能除零。 */
   function pct(n, total) {
     if (!total) return 0;
     return Math.max(0, Math.min(100, (n / total) * 100));
   }
 
+  /**
+   * 题单里的一行题目。序号用**在题单中的位置**(idx+1)而不是题号 ——
+   * 题单是有序的,位置才是它在这份清单里的身份。
+   * 移除按钮仅在 editable 时出现(自己的题单或管理员)。
+   */
   function itemHtml(q, idx) {
     const latex = (window.QDRender ? window.QDRender.previewSource(q) : q.question_latex) || '(无题面)';
     const rm = editable
@@ -44,6 +50,12 @@
       </div>`;
   }
 
+  /**
+   * 顶部进度条:已掌握 / 已做两段叠加。
+   *
+   * 第二段宽度用 done - mastered 而不是 done:已掌握的题同时也算已做,
+   * 直接用 done 两段会重叠,总宽超过 100%。
+   */
   function renderProgress(p) {
     const total = p.total || 0;
     ldProgressLine.textContent = `已掌握 ${p.mastered}/${total} · 已做 ${p.done}/${total}`;
@@ -52,6 +64,7 @@
       `<span class="seg-done" style="width:${pct(p.done - p.mastered, total)}%"></span>`;
   }
 
+  /** 渲染整页:标题、编辑权限、进度条、题目列表,最后交给渲染管线排版数学。 */
   function render(data) {
     const lst = data.list;
     editable = isAdmin || lst.owner_id === currentUserId;
@@ -82,6 +95,7 @@
     }
   }
 
+  /** 拉取题单详情并渲染。失败时把标题换成「加载失败」,不留空白页。 */
   async function load() {
     try {
       const resp = await apiFetch('/api/lists/' + lid);
