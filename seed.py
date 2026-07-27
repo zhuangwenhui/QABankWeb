@@ -2,8 +2,11 @@
 """演示数据生成脚本。
 
 用法:
-    .venv/bin/python seed.py          # 首次初始化(库非空则跳过)
-    .venv/bin/python seed.py --drop   # 清空重建
+    .venv/bin/python seed.py                    # 首次初始化(库非空则跳过)
+    .venv/bin/python seed.py --drop --force     # 清空重建
+
+⚠️ 库里已有账号时,只给 --drop 会被拒绝(见 :406-412 的防误清),必须同时给 --force。
+   这道闸门是为了防止在生产库上手滑清空 —— 别为了省事把它去掉。
 """
 import os
 import random

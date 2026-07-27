@@ -11,3 +11,5 @@ generated_pdfs/*
 /fonts_src/
 # 根目录参考资料 PDF(如 复变解答_Manning风格.pdf 排版参考)不入库
 /*.pdf
+# 编辑器个人配置(仅 .venv 路径绑定与一条 debugpy 启动项,与运行/部署/测试无关)
+/.vscode/

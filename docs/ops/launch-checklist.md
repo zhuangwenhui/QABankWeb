@@ -16,7 +16,10 @@
 - [ ] 上传 21MB 文件被 413 拒绝;上传 .exe 被 400 拒绝
 - [ ] PDF 生成:真实编译产出 PDF(服务器已装 xelatex)
 - [ ] PDF 并发限制:同时发 3 个 generate_pdf 请求(3 个终端或 `seq 3 | xargs -P3 -I{} curl ...`),
-      至少 1 个返回 429 且其余正常完成(注:2 worker 部署下全局并发上限为 2,串行连点两次不会触发 429)
+      **恰好 1 个成功、其余 2 个返回 429**。
+      全局并发上限是 **1**:`pdf_gen.py:30` 是 `BoundedSemaphore(1)`,而
+      `deploy/question-bank.service:13` 是 `gunicorn -w 1`(单 worker,信号量在进程内生效)。
+      必须**并发**发,串行连点不会触发 429。
 - [ ] 他人 /generated 链接 404(用两个账号互测)
 - [ ] **X-Accel 生产冒烟(Task15 评审,启用 USE_X_ACCEL=1 前必过)**:
   - [ ] `curl -sI https://<域名>/generated/<真实uuid>.pdf`(已登录 cookie):最终 `Content-Type: application/pdf`、`Content-Length` 为真实大小(非 0)、`Accept-Ranges: bytes` 存在(验证 CT 归属 + Nginx 覆盖 Content-Length + Range 支持)
@@ -29,7 +32,7 @@
 - [ ] UptimeRobot 拨测 /healthz 正常报警链路(手动停服务验证一次告警)
 - [ ] 浏览器控制台无 CSP 拦截报错(题目管理/错题本/反馈/总览/改密各页走查)。CSP 具体必测项(Task 7 评审给出):
   - [ ] 含公式题目页:Network 面板确认 `input/tex/extensions/boldsymbol.js` 从 jsdelivr 200 加载,Console 无 CSP `Refused to load/connect`,`\boldsymbol{}` 渲染为粗体
-  - [ ] 新建/编辑 Modal:CodeMirror + stex 高亮正常(cdnjs 两 script 200),其注入的内联 style 不被 style-src 拦(已放 unsafe-inline,真机确认)
+  - [ ] 新建/编辑 Modal:CodeMirror + stex 高亮正常(v1.7.0 起已自托管在 `static/vendor/js/`,cdnjs 全站移除,不应再有任何 cdnjs 请求),其注入的内联 style 不被 style-src 拦(已放 unsafe-inline,真机确认)
   - [ ] Bootstrap dropdown/tooltip 注入的内联 style 无 style-src 报错
   - [ ] 真浏览器触发一次 500:error.html 完整渲染、MathJax 脚本 nonce 生效(补足 test client 未覆盖的真机一环)
   - [ ] 生产 https:`curl -sI https://域名/login` 有 HSTS 且 CSP 含 `'nonce-...'`;`curl -sI http://域名/login` 302→https;确认 Nginx 转 `X-Forwarded-Proto=https`(否则 /api/* 客户端会吃到 302)

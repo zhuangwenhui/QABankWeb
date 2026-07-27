@@ -26,7 +26,9 @@ jobs:
           pip-audit -r requirements.txt
 
   jssyntax:
-    # 前端 4326 行 JS 无自动化测试,此为最低护栏:抓语法/引用错(如 qd_render 抽取类改动)。
+    # static/js/ 全部无运行时测试,此为最低护栏:抓语法/引用错(如 qd_render 抽取类改动)。
+    # 注意它只跑 node --check:能抓"写错了语法",抓不到"逻辑错了"。真正的端到端在 e2e 那个 job。
+    # (此处原写死"前端 4326 行",实测已是 4603 行且每次改动都在变 —— 不再记数字。)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
