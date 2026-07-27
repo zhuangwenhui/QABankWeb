@@ -1,15 +1,25 @@
 # 题库系统 模块开发契约
 
-本文档约束各功能模块的实现,与《题库系统技术文档.md》配套。**所有模块必须严格遵守本契约**,基础层(已完成)不得修改。
+本文档记录各功能模块的接口契约。
 
-## 0. 已完成的基础层(只读,不得修改)
+> **📌 覆盖范围(2026-07-27 V1 收尾时校订)**:§2 记录的是 **v1.0.0 时**的接口契约。
+> 此后新增的 `progress` / `review` / `lists` / `submissions` / `study` 五个模块**不在本文档内**,
+> 见 [CHANGELOG.md](CHANGELOG.md) 与各模块源码的 docstring。
+> 本文档描述现状、不下禁令 —— 早期版本写有"基础层不得修改",那句话已不成立(`app.py`/`config.py`/`models.py`
+> 从 v1.0.0 一路改到今天),据此拒绝改动是误读。
 
-- `app.py` — 应用工厂;页面路由 `/questions` `/error_book` `/feedback` `/overview` `/login` `/logout`;文件服务 `/uploads/<filename>`、`/generated/<filename>`;已注册四个蓝图:`api.questions.bp`、`api.error_book.bp`、`api.feedback.bp`、`api.overview.bp`
-- `config.py` — `Config` 类与枚举:`SUBJECTS`(7 门课程)、`DIFFICULTIES`、`PER_PAGE_OPTIONS = [10,20,50,100]`、`FEEDBACK_STATUSES`、`PDF_TEMPLATES = ['custom_exam_template', '试卷模板', 'error_book_template']`
-- `models.py` — `db`、`User`、`Question`(含 `tags_list` 属性与 `to_dict()`)、`ErrorBook`(含 `to_dict()`,内嵌 question)、`Feedback`(含 `to_dict()`)、`ViewLog`
+## 0. 公共基础层
+
+各模块共用的底座。改动会波及全站,改前请通读调用方。
+
+- `app.py` — 应用工厂;页面路由 `/` `/login` `/logout` `/change_password` `/captcha` `/questions` `/questions/<qid>` `/lists` `/lists/<lid>` `/review` `/error_book` `/feedback` `/overview`;探针 `/healthz` `/readyz`;文件服务 `/uploads/<filename>`、`/generated/<filename>`;**注册 9 个蓝图**:`questions`、`error_book`、`feedback`、`overview`、`progress`、`review`、`lists`、`submissions`、`study`(注册顺序见 `app.py` 的 `register_blueprint` 段,该顺序决定 URL 冲突的解析次序)
+- `config.py` — `Config` 类与枚举:`SUBJECTS`(7 门课程,**该行即唯一真源**)、`DIFFICULTIES`、`PER_PAGE_OPTIONS = [10,20,50,100]`、`FEEDBACK_STATUSES`、`PDF_TEMPLATES = ['custom_exam_template', '试卷模板', 'error_book_template']`
+- `models.py` — **14 张表**:`User`、`Question`(含 `tags_list` 属性与 `to_dict()`)、`ErrorBook`(含 `to_dict()`,内嵌 question)、`QuestionProgress`、`QuestionList`、`QuestionListItem`、`QuestionNote`、`QuestionBookmark`、`Feedback`(含 `to_dict()`)、`ViewLog`、`GeneratedFile`、`Tag`、`QuestionTag`、`AnswerSubmission`。标签早已规范化为 `Tag` + `QuestionTag` 关联表(`Question.tags` 的 JSON 字段是另一套"自由标签",两者并存、用途不同)
 - `auth.py` — `login_required`、`admin_required` 装饰器(API 路径下返回 JSON 401/403);CSRF 已由全局 before_request 校验,前端需在请求头带 `X-CSRFToken`(`apiFetch` 已自动处理)
-- `templates/base.html` — 固定顶部导航、flash 消息、MathJax 3(含 boldsymbol)、Bootstrap 5.1.3、FA6;子模板可用块:`{% block title %}`、`{% block head %}`、`{% block content %}`、`{% block scripts %}`
-- `static/js/utils.js` — `apiFetch(url, opts)`(自动 CSRF/JSON,失败抛 Error)、`buildQuery(params)`、`escapeHtml`、`debounce`、`typesetMath(el)`、`difficultyBadge(d)`、`tagBadges(tags)`、`formatDate(s)`
+- `api/_helpers.py` — 响应信封 `ok()` / `err()`、`escape_like()`、`apply_question_search()`、`prune_view_logs()`。**7 个蓝图都从这里导入**,新增共享逻辑放这里
+- `templates/base.html` — 固定顶部导航、flash 消息;**Bootstrap 5.1.3 与 Font Awesome 6.4.0 已自托管**在 `static/vendor/`(不再走 CDN);**MathJax 4.1.3**(tex-svg,仍走 jsdelivr CDN,开场自动排版已关闭 `typeset: false`);子模板可用块:`{% block title %}`、`{% block head %}`、`{% block content %}`、`{% block scripts %}`
+- `static/js/utils.js` — `getCsrfToken()`、`apiFetch(url, opts)`(自动 CSRF/JSON,失败抛 Error)、`buildQuery(params)`、`escapeHtml`、`debounce`、`typesetMath(el)`(有共享管线时一律委托 `QDRender`)、`difficultyClass(d)`、`difficultyBadge(d)`、`tagBadges(tags)`、`formatDate(s, withTime=false)`
+- `static/js/qd_render.js` — 富文本/数学渲染管线(`QDRender`)。凡把题目内容写进 DOM 的页面都必须经它,由 `templates/_render_pipeline.html` 统一 include。⚠️ 其中三段被 `tests/test_math_render_wiring.py` 按源码文本切片保护,改前先读该文件
 - `static/js/toast.js` — `showToast(message, type)`,type: success|danger|warning|info
 - `static/css/style.css` — 全部公共样式类(见 §4)
 
@@ -159,7 +169,7 @@ def generate_pdf(template_name, context, questions, output_basename) -> dict
 
 ## 4. 公共样式类(style.css 已提供,直接使用)
 
-`main-content` `content-area` `breadcrumb-container` `breadcrumb-custom` `breadcrumb-separator` `question-card` `question-card-view` `question-card-item` `question-table` `latex-code` `latex-content` `latex-preview` `difficulty-badge`(配 `difficulty-easy/medium/hard`,用 `difficultyBadge()` 生成) `batch-toolbar` `view-toggle` `view-toggle-btn` `selected` `flash-messages` `tag-badge` `bookmark-btn`(`bookmarked`) `context-menu`(`context-menu-item`) `stat-card`(`stat-value` `stat-label`) `image-preview-thumb` `question-detail-image`
+`main-content` `content-area` `breadcrumb-container` `breadcrumb-custom` `breadcrumb-separator` `question-card` `question-card-view` `question-card-item` `question-table` `latex-content` `latex-preview` `difficulty-badge`(配 `difficulty-easy/medium/hard`,用 `difficultyBadge()` 生成) `batch-toolbar` `view-toggle` `view-toggle-btn` `selected` `flash-messages` `tag-badge` `bookmark-btn`(`bookmarked`) `context-menu`(`context-menu-item`) `stat-card`(`stat-value` `stat-label`) `image-preview-thumb` `question-detail-image`
 
 页面级补充样式写在各自模板的 `{% block head %}` 内的小型 `<style>` 中(≤60 行),不修改公共 css。
 

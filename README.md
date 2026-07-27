@@ -1,6 +1,6 @@
 # 题库系统
 
-面向大学院入学考试(院試)备考的理工科双语题库系统。以 LaTeX 存储和渲染数学公式,支持错题本、间隔复习、知识点标签、采点结构化题解与手写作答判题。初始设计依据《题库系统技术文档.md》,后续增量功能见 [CHANGELOG.md](CHANGELOG.md)。
+面向大学院入学考试(院試)备考的理工科双语题库系统。以 LaTeX 存储和渲染数学公式,支持错题本、间隔复习、知识点标签、采点结构化题解与手写作答判题。现状以 [CHANGELOG.md](CHANGELOG.md) 为准,接口契约见 [SPEC.md](SPEC.md)。
 
 ## 功能
 
@@ -116,4 +116,4 @@ question-bank/
 - 生产部署前请通过环境变量 `SECRET_KEY` 设置强随机密钥
 - 上传文件按扩展名白名单校验并以 UUID 重命名;文件服务与模板名均做路径穿越防护
 - PDF 模板名走白名单,LaTeX 编译子进程带超时
-- 更全面的生产就绪度评估见 [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)(审计报告)
+- 更全面的生产就绪度评估见 [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)(**2026-07-06 的审计快照**,此后多条已落实,现状以 CHANGELOG 为准)

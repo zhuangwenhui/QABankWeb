@@ -1,5 +1,12 @@
 # 生产就绪度评估报告(Production Readiness Assessment)
 
+> **📌 档案件:本文是 2026-07-06 那一天的状态快照,不是现行依据。**
+> 保留它是因为快照的价值就在于"当时是什么样",据此可以对照后来做了什么。
+> 此后的变更全部记在 [CHANGELOG.md](CHANGELOG.md),现状一律以 CHANGELOG 与源码为准。
+> 截至 V1 收尾仍然成立的发现:B6(chapter 字段混用知识点章节与考试年份)、B7(source 无字典表)、
+> D7(无 Sentry/Prometheus)、E2/E4/E5(无前端构建与 lint)。其余多数已落实。
+> 本报告对应的设计规格与执行计划在 `docs/superpowers/`(内部材料,不进公开仓库)。
+
 > 被审计对象:题库系统(Flask + Flask-SQLAlchemy/SQLite + Jinja2 服务端渲染 + Bootstrap5/MathJax)
 > 审计范围:`app.py` / `config.py` / `models.py` / `auth.py` / `pdf_gen.py` / `ratelimit.py` / `captcha.py` / `seed.py` / `api/*` / `static/js/*` / `templates/*` / `latex_templates/*` 及 `SPEC.md`、`README.md`、技术文档
 > 报告日期:2026-07-06
