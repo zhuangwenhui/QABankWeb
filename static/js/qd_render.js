@@ -39,6 +39,12 @@
   var PH_HEAD = 'QDMATHPLACEHOLDER';
   var PH_TAIL = 'ENDQD';
 
+  // 🔒 受源码切片保护。tests/test_math_render_wiring.py 的 _slice() 以本函数的声明行为起点、
+  //    以函数末尾那行给 State 原型打 __cjkFriendly 标记的赋值为终点,截取这中间的**源码文本**,
+  //    断言 CJK 只放宽了"是否标点/空白"这一条、而没有被直接当成标点
+  //    (直接当标点会弄坏「**どの**5分割」这类本来正常的写法)。
+  //    改本函数的**名字**、内联掉它、或删掉末尾那行标记赋值,都会让切片失效 —— 测试会明确
+  //    报出"找不到某某标记"。函数名与那行赋值是接口的一部分,不只是实现细节。
   function makeCjkFriendly(mdInst) {
     var State = mdInst.inline && mdInst.inline.State;
     if (!State || !State.prototype.scanDelims || State.prototype.__cjkFriendly) return;
@@ -121,8 +127,22 @@
   function ph(i) { return 'QDMATHPLACEHOLDER' + i + 'ENDQD'; }
   function cph(i) { return 'QDCODEPLACEHOLDER' + i + 'ENDQD'; }
 
+  // 恒等函数,**故意保留**。MathJax v3 时代这里要把文本组内的 \_ 还原成 _,v4 已原生
+  // 正确渲染转义的 \_ \&,改写反而会弄坏(见模块顶部第 9 行)。留着空壳是因为它是
+  // protectMath 抓取每段公式时的唯一入口:哪天又遇上需要按引擎版本改写公式文本的情况,
+  // 改这一处即可,不必再去动 protectMath 的正则。
+  // 注意它的调用点在 protectMath 体内 —— 那 25 行被 tests/test_math_render_wiring.py 按
+  // 源码文本切片保护,内联掉这个函数会改动切片内容,故不作精简。
   function fixTextModeEscapes(tex) { return tex; }
 
+  // 🔒 受源码切片保护。tests/test_math_render_wiring.py 的 _slice() 以本函数的声明行为起点、
+  //    以下一个函数(restore…)的声明行为终点,截取这中间的**源码文本**做断言,共三条:
+  //      · 代码段的正则必须出现在数学正则**之前**(否则代码里的 $ 会跟公式配对)
+  //      · 定界符必须排除转义的 \$(至少两处后向否定)
+  //      · 行内公式正则必须排除换行
+  //    三条各自钉着一次线上事故:id=266 文字碎成一行一个字、q136/q344 整块 cases 不排版。
+  //    改本函数或下一个函数的**名字**、或把本函数内联掉,都会让切片失效 —— 测试会明确
+  //    报出"找不到某某标记",按提示回来这里看即可。名字是接口的一部分,不只是实现细节。
   function protectMath(src) {
     var store = [];
     function grab(m) { store.push(fixTextModeEscapes(m)); return ph(store.length - 1); }
@@ -252,13 +272,6 @@
    * 该次 Promise 未处理地 reject,整块公式停在源码态 —— 这正是 2026-07-26 题面区空白的机制。
    * 官方对动态内容的要求就是 typesetClear 之后再 typeset,我们此前从未调过。
    */
-  function clearNode(node) {
-    var MJ = window.MathJax;
-    try {
-      if (MJ && MJ.typesetClear) MJ.typesetClear([node]);
-    } catch (e) { /* 清理失败不该阻断渲染 */ }
-  }
-
   /**
    * 排版:短时间内的多次请求合并成**一次整页排版**(typesetClear() + typesetPromise())。
    *
@@ -442,20 +455,14 @@
   }
 
   window.QDRender = {
-    LABELS: LABELS,
-    PURIFY_CFG: PURIFY_CFG,
     renderMarkdown: renderMarkdown,
     renderInto: renderInto,
     renderPreviewInto: renderPreviewInto,
     splitRestatement: splitRestatement,
     previewSource: previewSource,
-    questionText: questionText,
     isNoticeOnly: isNoticeOnly,
     renderMd: renderMd,
     typeset: typeset,
-    mathReady: mathReady,
-    enhanceSteps: enhanceSteps,
-    STRUCT_SECTIONS: STRUCT_SECTIONS,
     renderStructuredInto: renderStructuredInto
   };
 })();

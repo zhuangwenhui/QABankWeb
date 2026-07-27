@@ -110,3 +110,40 @@ function formatDate(s, withTime = false) {
   if (!s) return '';
   return withTime ? s : s.split(' ')[0];
 }
+
+/** 两位补零 */
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * Date → 'YYYY-MM-DD',按**本地时区**。
+ *
+ * 不能图省事写 d.toISOString().slice(0, 10):那个是 UTC,JST 上午 9 点前会算成前一天,
+ * PDF 的默认考试日期就会莫名其妙少一天。
+ */
+function formatLocalDate(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * 分页页码序列(带省略号),如 [1, '...', 4, 5, 6, '...', 20]。
+ * 首尾页恒显示,当前页两侧各留 2 页,断档处插一个 '...'。
+ *
+ * 题库列表与错题本此前各写了一份(pageNumbers / pageWindow),实现思路不同但输出等价 ——
+ * total 1..80 × current 全组合共 3240 组穷举比对过,结果数组完全一致,故合并为这一份。
+ * 注意这里只算**页码序列**;两页的分页条外观是刻意不同的(题库用 «» 实体且单页仍渲染
+ * 分页条,错题本用 fa-angle 图标且 pages<=1 直接不渲染),那部分留在各自文件里。
+ */
+function pageNumbers(current, total) {
+  const wanted = new Set([1, total, current - 2, current - 1, current, current + 1, current + 2]);
+  const nums = Array.from(wanted).filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  nums.forEach((n) => {
+    if (n - prev > 1) out.push('...');
+    out.push(n);
+    prev = n;
+  });
+  return out;
+}

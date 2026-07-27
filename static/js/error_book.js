@@ -3,8 +3,11 @@
  *
  * 功能:列表筛选/分页、批量移出、备注内联编辑、快速预览 Modal、
  *       顶部统计(总数 + 按科目分布)、PDF 试卷生成配置 Modal。
- * 依赖:utils.js(apiFetch/buildQuery/escapeHtml/debounce/typesetMath/
- *       difficultyBadge/tagBadges/formatDate)与 toast.js(showToast)。
+ * 依赖:utils.js(apiFetch/buildQuery/escapeHtml/debounce/typesetMath/difficultyBadge/
+ *       tagBadges/formatDate/formatLocalDate/pageNumbers)与 toast.js(showToast)。
+ *
+ * 注意本页的分页条外观与题库列表**刻意不同**(这里用 fa-angle 图标、pages<=1 时不渲染;
+ * 题库那边用 «» 实体、单页仍渲染)。共用的只有 utils.pageNumbers 那段页码序列计算。
  */
 (function () {
   'use strict';
@@ -564,7 +567,7 @@
     };
 
     addItem('<i class="fa-solid fa-angle-left"></i>', state.page - 1, { disabled: state.page <= 1 });
-    pageWindow(state.page, state.pages).forEach((p) => {
+    pageNumbers(state.page, state.pages).forEach((p) => {
       if (p === '...') addItem('', 0, { ellipsis: true });
       else addItem(String(p), p, { active: p === state.page });
     });
@@ -572,18 +575,6 @@
   }
 
   /** 生成带省略号的页码序列,如 [1, '...', 4, 5, 6, '...', 20] */
-  function pageWindow(current, total) {
-    const pages = [];
-    for (let p = 1; p <= total; p++) {
-      if (p === 1 || p === total || Math.abs(p - current) <= 2) {
-        pages.push(p);
-      } else if (pages[pages.length - 1] !== '...') {
-        pages.push('...');
-      }
-    }
-    return pages;
-  }
-
   // ================================================================ PDF 生成
 
   /** 绑定 PDF 配置 Modal 事件 */
@@ -596,9 +587,7 @@
   function openPdfModal() {
     // 默认考试日期为今天(用本地日期,避免 toISOString 的 UTC 偏移导致 JST 上午显示前一天)
     if (!els.pdfExamDate.value) {
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      els.pdfExamDate.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      els.pdfExamDate.value = formatLocalDate(new Date());
     }
     // 勾选范围计数;无勾选时禁用该选项
     const count = state.selected.size;

@@ -20,6 +20,27 @@ def _read(p):
     return (ROOT / p).read_text(encoding='utf-8')
 
 
+def _slice(src, start, end, where):
+    """按源码文本切出 [start, end) 之间那段,供下面几条做文本级断言。
+
+    为什么按源码文本切、而不是执行代码:这些断言盯的是**正则怎么写的**(代码段有没有在
+    数学之前挡开、定界符有没有排除转义的 \\$),而 pytest 环境里没有 JS 运行时。
+
+    为什么不直接用 str.index:找不到时它抛的是 `ValueError: substring not found`,
+    一坨 traceback 里看不出「是 qd_render.js 里的函数被改名了」。这里换成显式断言,
+    让改名的人第一眼就知道该去哪儿看。切片保护的说明写在 qd_render.js 对应函数上方。
+    """
+    i = src.find(start)
+    assert i != -1, (
+        f'{where}:在 static/js/qd_render.js 里找不到 `{start}`。'
+        f'这段被本测试按源码文本切片保护,改名或内联前请先读本文件的 _slice 说明。')
+    j = src.find(end, i)
+    assert j != -1, (
+        f'{where}:找到了 `{start}` 但其后没有 `{end}`,切片边界失效。'
+        f'同上,这两个标记是接口的一部分,不只是实现细节。')
+    return src[i:j]
+
+
 def test_startup_wait_is_bounded():
     """可以礼让 MathJax 启动,但不能无限等 —— startup.promise 常被未完成操作占住而不 settle,
     无上限地等它就等于全站没有数学。"""
@@ -54,8 +75,7 @@ def test_code_spans_are_shielded_before_math_extraction():
     (2026-07-26 id=266「以 `)$` 收」即此)。
     """
     src = _read('static/js/qd_render.js')
-    protect = src[src.index('function protectMath'):]
-    protect = protect[:protect.index('function restoreMath')]
+    protect = _slice(src, 'function protectMath', 'function restoreMath', 'protectMath')
     code_at = protect.find('```[\\s\\S]*?```')
     math_at = protect.find('\\$\\$([\\s\\S]+?)')
     assert code_at != -1, 'protectMath 没有挡开代码段'
@@ -71,8 +91,7 @@ def test_escaped_dollar_cannot_open_math():
     (2026-07-26 id=266 即此)。
     """
     src = _read('static/js/qd_render.js')
-    protect = src[src.index('function protectMath'):]
-    protect = protect[:protect.index('function restoreMath')]
+    protect = _slice(src, 'function protectMath', 'function restoreMath', 'protectMath')
     assert protect.count('(?<!\\\\)') >= 2, 'protectMath 的定界符没有排除转义的 \\$'
 
 
@@ -82,8 +101,7 @@ def test_inline_math_regex_forbids_newline():
     这条约束反过来要求**内容侧**不能把块级公式写成跨行的行内公式,由下一条测试盯住。
     """
     src = _read('static/js/qd_render.js')
-    protect = src[src.index('function protectMath'):]
-    protect = protect[:protect.index('function restoreMath')]
+    protect = _slice(src, 'function protectMath', 'function restoreMath', 'protectMath')
     assert '[^\\$\\\\\\n]' in protect, '行内公式正则没有排除换行'
 
 
@@ -117,8 +135,8 @@ def test_markdown_emphasis_is_cjk_aware():
     assert 'scanDelims' in src, '没有放宽 flanking 判定'
     assert 'CJK_FOR_FLANK' in src, '放宽规则里没有认 CJK'
     assert 'PH_HEAD' in src and 'PH_TAIL' in src, '数学占位符没有按标点处理'
-    patch = src[src.index('function makeCjkFriendly'):]
-    patch = patch[:patch.index('State.prototype.__cjkFriendly = true')]
+    patch = _slice(src, 'function makeCjkFriendly',
+                   'State.prototype.__cjkFriendly = true', 'makeCjkFriendly')
     assert 'cjk(last)' in patch and 'cjk(next)' in patch, \
         'CJK 只该放宽"是否标点/空白"这一条,不该直接当成标点'
     assert 'CJK_FOR_FLANK.test(ch)' in patch

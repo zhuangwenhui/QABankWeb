@@ -1,9 +1,11 @@
 /**
  * 题目管理页脚本(templates/questions.html)。
  *
- * 依赖:utils.js(apiFetch/buildQuery/escapeHtml/debounce/typesetMath/
- *       difficultyBadge/tagBadges/formatDate)、toast.js(showToast)、
- *       Bootstrap 5、CodeMirror 5.65.2(stex 模式,CDN 加载失败时降级为纯文本)。
+ * 依赖:utils.js(apiFetch/buildQuery/escapeHtml/debounce/typesetMath/difficultyBadge/
+ *       tagBadges/formatDate/formatLocalDate/pad2/pageNumbers)、toast.js(showToast)、
+ *       Bootstrap 5、CodeMirror 5.65.2(stex 模式)。
+ *       Bootstrap 与 CodeMirror 自 v1.7.0 起**自托管**在 static/vendor/(不再走 CDN);
+ *       CodeMirror 缺失时编辑器降级为纯 textarea,不影响其余功能。
  *
  * 分区目录:
  *   1. 常量与页面状态
@@ -224,14 +226,13 @@
       panel.classList.toggle('is-collapsed', collapsed);
       if (toggle) toggle.setAttribute('aria-expanded', String(!collapsed));
     };
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(PP_LS_COLLAPSED) === '1'; } catch (e) { /* 无痕模式忽略 */ }
+    const collapsed = lsGet(PP_LS_COLLAPSED) === '1';   // lsGet 已含无痕模式的静默降级
     applyCollapsed(collapsed);
     if (toggle) {
       toggle.addEventListener('click', () => {
         const next = !panel.classList.contains('is-collapsed');
         applyCollapsed(next);
-        try { localStorage.setItem(PP_LS_COLLAPSED, next ? '1' : '0'); } catch (e) { /* 忽略 */ }
+        lsSet(PP_LS_COLLAPSED, next ? '1' : '0');
       });
     }
 
@@ -873,19 +874,6 @@
   }
 
   /** 计算分页页码序列(含省略号) */
-  function pageNumbers(current, total) {
-    const wanted = new Set([1, total, current - 2, current - 1, current, current + 1, current + 2]);
-    const nums = Array.from(wanted).filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
-    const out = [];
-    let prev = 0;
-    nums.forEach((n) => {
-      if (n - prev > 1) out.push('...');
-      out.push(n);
-      prev = n;
-    });
-    return out;
-  }
-
   /** 渲染分页组件与结果统计 */
   function renderPagination() {
     const totalPages = Math.max(state.pages, 1);
@@ -1676,8 +1664,7 @@
   function formatTimestamp(ts) {
     const d = new Date(ts);
     if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${formatLocalDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   }
 
   /* ---- localStorage 安全封装(隐私模式等场景下静默降级) ---- */
