@@ -37,20 +37,26 @@ audit_images.py     报告问题  →  recrop_images.py --apply      重裁图�
 > `audit_latex.py` 是全仓唯一没被任何测试或文档提及的脚本,但**别按"零引用即删"处理** ——
 > 它是上线前唯一能发现"MathJax 认不出的环境 → 页面上一个红色报错框"的检查。
 
-> ⚠️ **`audit_render.py` 不会登录**(2026-07-27 V1 收尾时发现)。它直接 `Page.navigate` 到各页,
-> 而所有内容页都带 `@login_required` —— 未登录时浏览器被 302 到 `/login`,它扫的其实是登录页,
-> 然后照样打印「7/7 页干净」。**这个"通过"是假的。**
+> **`audit_render.py` 必须带会话跑**,否则它扫的是登录页。内容页都带 `@login_required`,
+> 未登录时浏览器被 302 到 `/login`,而登录页天然没有裸 markdown 也没有公式 ——
+> 于是它会一路打印「N/N 页干净」。这个"通过"是假的,2026-07-27 就这么骗过一次。
 >
-> 要拿到真结果,得先让无头浏览器带上会话。目前的办法是签发一个 session cookie 再注入 CDP:
+> 现在脚本会**拒绝无会话运行**,并在开扫前校验登录态,没登上直接以非零码退出。用法:
 >
 > ```bash
-> # 1) 用固定密钥起本地服务(默认开发配置每次重启随机生成密钥,签出的 cookie 对不上)
+> # 1) 用固定密钥起本地服务(默认开发配置每次重启随机生成密钥,签出的 cookie 会对不上)
 > SECRET_KEY=<固定值> APP_ENV=development PORT=8098 python app.py
-> # 2) 用同一密钥签 {'user_id': <管理员id>} 并 Network.setCookie 注入,再跑巡检
+> # 2) 同一密钥跑巡检,--sign-session 会自己签一个管理员会话
+> SECRET_KEY=<同一值> python scripts/audit_render.py --base http://127.0.0.1:8098 --sign-session
+> # 深色模式另跑一遍:白字白底只在深色下现形
+> SECRET_KEY=<同一值> python scripts/audit_render.py --base http://127.0.0.1:8098 --sign-session --scheme dark
 > ```
 >
-> 判断有没有真登录:看服务日志里有没有 `"path": "/questions", "status": 200`。
-> 全是 `/login 200` 就说明这轮白跑了。
+> 巡检远端实例(含生产)时本机签不出有效 cookie,改用 `--session-cookie '<已登录会话的 cookie 值>'`。
+>
+> 另注:`net::ERR_ABORTED` 已单独归类、不计入判定 —— 那是客户端主动取消(切视图、翻页、
+> 导航走人时在途的 fetch),服务端对这些请求实际都回了 200。此前把它算作失败,
+> 题目管理页恒定报 ✗,久而久之没人再看这个巡检。
 
 ## 修复类(与上面配对,默认试算,`--apply` 才写库)
 

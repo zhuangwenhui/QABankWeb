@@ -5,8 +5,21 @@
   · 残留未排版的 $…$      —— 说明该处没排版数学
   · 控制台报错 / 失败请求
 
+⚠️ 巡检的每个页面都带 @login_required。**未登录时浏览器会被 302 到 /login,扫到的是登录页**,
+而登录页当然没有裸 markdown 也没有公式 —— 于是本脚本会一路打印「N/N 页干净」。
+这个"通过"是假的,2026-07-27 就这么骗过一次。现在开局强制校验登录态,没登上直接退出。
+
 用法(需要 Chrome + websocket-client):
-    python scripts/audit_render.py --base http://127.0.0.1:8098 --latency 400
+
+    # 本机实例:自动签一个管理员会话(要求 --base 指向的实例与本仓库同 SECRET_KEY、同库)
+    SECRET_KEY=<与被测实例相同> python scripts/audit_render.py \
+        --base http://127.0.0.1:8098 --sign-session
+
+    # 任意实例(含生产):自己拿一个已登录会话的 cookie 值传进来
+    python scripts/audit_render.py --base https://example.com --session-cookie '<session cookie 值>'
+
+注意本机实例默认配置每次重启都随机生成 SECRET_KEY,所以 --sign-session 必须显式用
+同一个 SECRET_KEY 起服务,否则签出来的 cookie 对不上,依然登不上(会被开局校验拦下)。
 
 设计要点:必须注入延迟。零延迟时内容会赶在 MathJax 开场自动排版之前落地而侥幸正常,
 线上故障就是这样躲过所有本地检查的。
@@ -20,10 +33,52 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 
 RAW_MD = re.compile(r'(?m)^\s*(?:#{2,4}\s|:::|\*\*\S)')
 RAW_MATH = re.compile(r'\$[^$\n]{2,120}\$')
+
+
+def sign_admin_session():
+    """用本仓库的应用配置签一个管理员会话 cookie 值。
+
+    只在 --base 指向的实例与本仓库**同 SECRET_KEY、同库**时有效 —— 否则签名对不上,
+    或者签出来的 user_id 在对面库里不存在。给远端实例巡检请改用 --session-cookie。
+    """
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import config
+    from app import create_app
+    from models import User
+    from flask.sessions import SecureCookieSessionInterface
+
+    app = create_app(config.get_config())
+    with app.app_context():
+        user = (User.query.filter_by(role='admin', is_active=True).order_by(User.id).first()
+                or User.query.order_by(User.id).first())
+        if user is None:
+            raise SystemExit('✗ 库里一个用户都没有,签不出会话 —— 先跑 seed.py 或建个账号')
+        serializer = SecureCookieSessionInterface().get_signing_serializer(app)
+        # csrf_token 只是占位:巡检全程只发 GET,不会触发 CSRF 校验
+        return serializer.dumps({'user_id': user.id, 'csrf_token': 'x' * 32}), user.username
+
+
+def assert_logged_in(br, base, wait):
+    """开局校验:确认带着 cookie 真能进内容页,而不是被 302 到登录页。
+
+    没有这道校验,未登录时整轮巡检扫的都是登录页,却会打印「N/N 页干净」——
+    一个永远报绿、永远发现不了问题的巡检,比没有巡检更危险。
+    """
+    br.goto(base + "/questions", min(wait, 6))
+    path = br.ev("location.pathname") or ""
+    if path.rstrip('/') != "/questions":
+        raise SystemExit(
+            f"✗ 未登录:访问 /questions 被跳到 {path!r},巡检到的将是登录页而非内容页。\n"
+            "  用 --sign-session(本机同 SECRET_KEY 同库)或 --session-cookie <值> 提供会话。\n"
+            "  判据:被测实例的日志里应出现 \"path\": \"/questions\", \"status\": 200;\n"
+            "        若全是 /login 200,就说明会话没生效。")
+    print(f"· 登录态校验通过({path})")
 
 
 def free_port():
@@ -64,6 +119,7 @@ class Browser:
         self.mid = 0
         self.console = []
         self.failed = []
+        self.aborted = []   # 客户端取消的请求,单独记、不计入判定(见 _pump)
         self.sent = {}
         self.send("Runtime.enable")
         self.send("Page.enable")
@@ -85,8 +141,18 @@ class Browser:
             self.sent[p["requestId"]] = p["request"]["url"]
         elif m == "Network.loadingFailed":
             url = self.sent.get(p["requestId"], "?")
-            if not url.startswith("data:"):
-                self.failed.append(f"{p.get('errorText')} {url[:90]}")
+            err = p.get("errorText") or ""
+            if url.startswith("data:"):
+                return
+            if err == "net::ERR_ABORTED":
+                # ERR_ABORTED 按定义是**客户端主动取消**,不是服务端失败:页面切视图、
+                # 用户翻页、或本脚本导航走人时,在途的 fetch 都会记这一条。实测服务端对
+                # 这些请求全部回了 200,内容也正常渲染。
+                # 曾经把它算进失败,于是题目管理页恒定报 ✗ —— 一个永远报错的巡检和一个
+                # 永远报绿的巡检一样没用,人会学会无视它。故单独记录、不计入判定。
+                self.aborted.append(f"{err} {url[:90]}")
+            else:
+                self.failed.append(f"{err} {url[:90]}")
 
     def send(self, method, params=None):
         self.mid += 1
@@ -115,6 +181,7 @@ class Browser:
     def goto(self, url, wait=14):
         self.console.clear()
         self.failed.clear()
+        self.aborted.clear()
         self.send("Page.navigate", {"url": url})
         self.wait(wait)
 
@@ -174,6 +241,7 @@ def scan(br, label, out):
     out.append({
         "页面": label, "裸markdown": raw_md, "裸公式": raw_math, "已排版": mjx,
         "低对比": low_contrast, "控制台": list(br.console), "失败请求": list(br.failed),
+        "已取消": list(br.aborted),   # 仅供参考,不影响 ok
         "ok": not bad,
     })
     mark = "✓" if not bad else "✗"
@@ -184,6 +252,8 @@ def scan(br, label, out):
         print(f"       控制台 {c}")
     for f in br.failed[:4]:
         print(f"       失败请求 {f}")
+    if br.aborted:
+        print(f"       (已取消 {len(br.aborted)} 个请求 —— 客户端主动取消,不计入判定)")
 
 
 def main():
@@ -194,7 +264,17 @@ def main():
     ap.add_argument("--wait", type=float, default=14)
     ap.add_argument("--scheme", choices=["light", "dark"], default="light",
                     help="模拟的配色方案;深色模式下最容易出现白字白底")
+    ap.add_argument("--session-cookie", default="",
+                    help="已登录会话的 cookie 值(适用于任意实例,含生产)")
+    ap.add_argument("--sign-session", action="store_true",
+                    help="用本仓库配置现签一个管理员会话(仅当被测实例与本仓库同 SECRET_KEY、同库)")
     args = ap.parse_args()
+
+    if not args.session_cookie and not args.sign_session:
+        raise SystemExit(
+            "✗ 必须提供会话:巡检的页面都带 @login_required,没有会话只会扫到登录页,\n"
+            "  而登录页天然「干净」—— 那样的通过是假的。\n"
+            "  本机实例用 --sign-session,其他实例用 --session-cookie <值>。")
 
     if not shutil.which("google-chrome"):
         print("· 跳过:未找到 Chrome")
@@ -206,12 +286,23 @@ def main():
         return 0
 
     base = args.base.rstrip("/")
+    cookie, who = args.session_cookie, "(外部传入)"
+    if args.sign_session:
+        cookie, who = sign_admin_session()
+
     br = Browser(args.latency)
     br.send("Emulation.setEmulatedMedia",
             {"features": [{"name": "prefers-color-scheme", "value": args.scheme}]})
     out = []
     try:
         print(f"=== 全站渲染巡检 base={base} 延迟={args.latency:.0f}ms 配色={args.scheme} ===")
+        # cookie 的 domain 取 base 的主机名:CDP 的 setCookie 按 domain 匹配,写错了不报错、
+        # 只是这个 cookie 永远不会被带上,表现就是"登录态校验没过"。
+        host = urllib.parse.urlparse(base).hostname or "127.0.0.1"
+        br.send("Network.setCookie",
+                {"name": "session", "value": cookie, "domain": host, "path": "/"})
+        print(f"· 会话身份:{who}")
+        assert_logged_in(br, base, args.wait)
 
         br.goto(f"{base}/questions", args.wait)
         scan(br, "题目管理(表格视图)", out)
