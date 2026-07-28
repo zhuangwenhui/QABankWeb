@@ -238,3 +238,44 @@ def test_pipeline_include_is_single_source():
         src = _read(f'templates/{name}.html')
         assert 'vendor/js/markdown-it.min.js' not in src, \
             f'{name}.html 又自己内联了管线脚本,应统一走 include'
+
+
+# ============================================================ 预览截断不得剖开公式
+# 2026-07-28 线上事故:列表预览按字符数硬切到 240,把 $$…$$ 剖成两半,落单的定界符
+# MathJax 认不出,于是整段 LaTeX 源码显示在题目管理页上。358 道题里命中 33 道。
+# 巡检当时报「裸公式=0」——它的判据 /\$[^$\n]{2,120}\$/ 只认**配对且单行**的公式,
+# 对"落单的 $$"结构性失明,而那恰恰是截断能造成的唯一形态。
+
+def test_preview_clip_avoids_math():
+    """renderPreviewInto 必须走 clipOutsideMath,不能再自己按字符数硬切。"""
+    src = _read('static/js/qd_render.js')
+    body = _slice(src, 'function renderPreviewInto', 'function renderInto',
+                  'renderPreviewInto')
+    assert 'clipOutsideMath' in body, \
+        'renderPreviewInto 必须用 clipOutsideMath 求截断点,否则会把 $$…$$ 剖开'
+    assert "lastIndexOf('\\n')" not in body, \
+        '截断点的选取应留在 clipOutsideMath 里,别在这儿再切一次'
+
+
+def test_math_spans_uses_same_delimiters_as_protect():
+    """mathSpans 的定界符正则必须与 protectMath 逐字一致。
+
+    这是本次修复的**要害不变量**:clipOutsideMath 靠 mathSpans 判断"哪里是公式内部",
+    两边一旦对定界符的看法分叉,算出来的"安全截断点"就是假的 —— 切口又会落进公式里,
+    而且这次不会有任何测试变红。改 protectMath 的定界符时,这条会强制你同步改 mathSpans。
+    """
+    src = _read('static/js/qd_render.js')
+    spans = _slice(src, 'function mathSpans', 'function clipOutsideMath', 'mathSpans')
+    protect = _slice(src, 'function protectMath', 'function restoreMath', 'protectMath')
+
+    display = r'/(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g'
+    inline = r'/(?<!\\)\$((?:\\.|[^\$\\\n])+?)\$/g'
+    for name, pattern in (('display', display), ('inline', inline)):
+        assert pattern in protect, f'protectMath 的 {name} 定界符变了,请同步本测试与 mathSpans'
+        assert pattern in spans, \
+            f'mathSpans 的 {name} 定界符与 protectMath 不一致,截断点会重新落进公式里'
+
+    # 代码段必须先挡掉:代码里的 $ 不是数学,两处都得这么干
+    code = r'/```[\s\S]*?```|`[^`\n]*`/g'
+    assert code in protect and code in spans, \
+        'mathSpans 必须与 protectMath 一样先挡开代码段,否则会把代码里的 $ 当公式'

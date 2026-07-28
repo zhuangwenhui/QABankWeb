@@ -37,7 +37,22 @@ import urllib.parse
 import urllib.request
 
 RAW_MD = re.compile(r'(?m)^\s*(?:#{2,4}\s|:::|\*\*\S)')
-RAW_MATH = re.compile(r'\$[^$\n]{2,120}\$')
+
+# 裸公式判据。原先只有下面第二行那条「配对且单行的 $…$」,于是对**落单的定界符**
+# 结构性失明 —— 而落单恰恰是最常见的形态:预览截断把 $$…$$ 剖成两半时,留在页面上的
+# 就是一个孤零零的 $$ 加一大段源码。2026-07-28 线上 33 道题这样露着,巡检报「裸公式=0」。
+#
+# 所以除了成对的 $…$,还得认:任何 $$(渲染完的页面上不该有)、\begin{}/\end{},
+# 以及一批只可能来自 LaTeX 的宏。MathJax 排版成功后产出的是 SVG,这些字样不会留在
+# innerText 里;它们一旦出现,就说明那段没排上。
+RAW_MATH = re.compile(
+    r'\$\$'
+    r'|\$[^$\n]{2,120}\$'
+    r'|\\(?:begin|end)\{'
+    r'|\\(?:dfrac|tfrac|frac|partial|displaystyle|mathrm|mathbb|mathcal'
+    r'|left|right|sum|prod|int|sqrt|leq|geq|neq|approx|cdot|times|infty'
+    r'|alpha|beta|gamma|delta|lambda|sigma|theta|varphi|epsilon)\b'
+)
 
 
 def sign_admin_session():

@@ -433,19 +433,78 @@
   }
 
   /**
+   * 求出所有数学区间 [起, 止),下标与原串对齐。
+   *
+   * 判定顺序与定界符规则必须和 protectMath 一致,否则算出来的"安全点"是假的:
+   * 先挡代码段(代码里的 $ 不是数学),再 display,最后 inline。挡掉的部分用等长
+   * 填充字符替换而不是删除 —— 下标一旦错位,后面按下标切就切在别处了。
+   */
+  function mathSpans(src) {
+    function blank(m) { return new Array(m.length + 1).join(' '); }
+    var masked = src.replace(/```[\s\S]*?```|`[^`\n]*`/g, blank);
+    var spans = [];
+    function collect(re) {
+      var m;
+      re.lastIndex = 0;
+      while ((m = re.exec(masked)) !== null) {
+        spans.push([m.index, m.index + m[0].length]);
+        // 找过的整段填掉,免得 inline 再从 display 内部找出"公式中的公式"
+        masked = masked.slice(0, m.index) + blank(m[0]) + masked.slice(m.index + m[0].length);
+      }
+    }
+    collect(/(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g);
+    collect(/(?<!\\)\$((?:\\.|[^\$\\\n])+?)\$/g);
+    spans.sort(function (a, b) { return a[0] - b[0]; });
+    return spans;
+  }
+
+  /**
+   * 找一个**不落在公式内部**的截断点。
+   *
+   * 直接按字符数硬切会把 $$…$$ 剖成两半,落单的定界符 MathJax 认不出,于是整段
+   * LaTeX 源码原样显示在列表上。2026-07-28 线上 358 道题里有 33 道正是这样,
+   * 其中 #348 的 cases 环境在题目管理页上露了七行源码。
+   *
+   * 落在公式里时二选一:公式前的正文已经够长就切在公式**之前**;否则把整块公式
+   * 带上 —— 预览里显示一个完整公式,总好过显示半截源码。但公式过长(超出预算数倍)
+   * 时仍切在前面,不然截断省渲染量的初衷就没了。
+   */
+  function clipOutsideMath(text, limit) {
+    var spans = mathSpans(text);
+    var cut = limit;
+    var i;
+    for (i = 0; i < spans.length; i++) {
+      if (cut > spans[i][0] && cut < spans[i][1]) {
+        cut = (spans[i][0] >= limit * 0.5 || spans[i][1] > limit * 4)
+          ? spans[i][0] : spans[i][1];
+        break;
+      }
+    }
+    // 再退到段落边界让断口好看些,但不能退进公式里(否则又切开了)
+    var nl = text.lastIndexOf('\n', cut);
+    if (nl > limit * 0.5) {
+      for (i = 0; i < spans.length; i++) {
+        if (nl > spans[i][0] && nl < spans[i][1]) return text.slice(0, cut);
+      }
+      cut = nl;
+    }
+    return text.slice(0, cut);
+  }
+
+  /**
    * 列表/卡片里的预览格:先截断再渲染。
    *
    * 预览在视觉上被 CSS 裁到几行,但整篇题面照样会被 markdown 渲染并交给 MathJax ——
    * 一页 20 题实测排了 1820 个公式,大部分根本看不见,列表因此要等十几秒才排完。
    * 按字符数截到段落边界,渲染量降一个量级,可见部分完全不变。
+   *
+   * 截断点必须避开公式内部,理由见 clipOutsideMath。
    */
   function renderPreviewInto(node, raw, track, maxChars) {
     var limit = maxChars || 240;
     var text = String(raw || '');
     if (text.length > limit) {
-      var cut = text.slice(0, limit);
-      var nl = cut.lastIndexOf('\n');
-      text = (nl > limit * 0.5 ? cut.slice(0, nl) : cut) + '\n\n…';
+      text = clipOutsideMath(text, limit) + '\n\n…';
     }
     node.classList.add('qd-preview');
     renderInto(node, text, track);
