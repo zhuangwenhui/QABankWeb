@@ -179,6 +179,13 @@ class Browser:
         self.ws.settimeout(120)
 
     def goto(self, url, wait=14):
+        # 先跳 about:blank 停一拍,再清零,最后才导航到目标页。
+        # 直接"清零→导航"会串页:上一页被导航挤掉时,它在途的 fetch 记 ERR_ABORTED,
+        # 其 catch 分支还会打一条 console 告警,而这两件事都发生在清零**之后** ——
+        # 于是上一页的动静被算到下一页头上。2026-07-28 题目管理页那次
+        # 「加载定位筛选字典失败」正是这么来的:告警其实属于登录态校验那次导航。
+        self.send("Page.navigate", {"url": "about:blank"})
+        self.wait(1.0)
         self.console.clear()
         self.failed.clear()
         self.aborted.clear()
@@ -254,6 +261,11 @@ def scan(br, label, out):
         print(f"       失败请求 {f}")
     if br.aborted:
         print(f"       (已取消 {len(br.aborted)} 个请求 —— 客户端主动取消,不计入判定)")
+    # 扫完即清零。同一页里连着扫两次(如表格视图→卡片视图,中间不导航)时,
+    # 若不清,第一次采到的告警会被第二次原样再报一遍 —— 一个事件报成两页出错。
+    br.console.clear()
+    br.failed.clear()
+    br.aborted.clear()
 
 
 def main():
@@ -332,6 +344,7 @@ def main():
                         "已排版": mjx, "低对比": [], "控制台": [], "失败请求": [],
                         "ok": not bad})
 
+        list_href = ""
         for path, label in [(f"/questions/{args.qid}", "题目详情页"),
                             ("/error_book", "错题本"),
                             ("/overview", "总览"),
@@ -340,13 +353,20 @@ def main():
                             ("/feedback", "意见反馈")]:
             br.goto(base + path, args.wait)
             scan(br, label, out)
+            if path == "/lists":
+                # 必须在**还停在题单广场时**取这个链接。原先它写在整个循环之后,
+                # 那时浏览器早已导航到 /feedback,选择器自然永远落空 ——
+                # 于是「题单详情」这一页从上线起就没被扫过,而本地题单一直是 0 个,
+                # 没人觉得少了一页。
+                list_href = br.ev(
+                    """(function(){var a=document.querySelector('a[href^="/lists/"]');
+                        return a?a.getAttribute('href'):'';})()""") or ""
 
-        # 题单详情(取广场第一个)
-        href = br.ev("""(function(){var a=document.querySelector('a[href^="/lists/"]');
-                        return a?a.getAttribute('href'):'';})()""")
-        if href:
-            br.goto(base + href, args.wait)
-            scan(br, f"题单详情 {href}", out)
+        if list_href:
+            br.goto(base + list_href, args.wait)
+            scan(br, f"题单详情 {list_href}", out)
+        else:
+            print("  ⚠ 题单广场没有可进入的题单,跳过题单详情页(库里有题单时这不该发生)")
     finally:
         br.close()
 
