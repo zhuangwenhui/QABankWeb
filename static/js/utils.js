@@ -138,6 +138,29 @@ function formatLocalDate(d) {
  * 注意这里只算**页码序列**;两页的分页条外观是刻意不同的(题库用 «» 实体且单页仍渲染
  * 分页条,错题本用 fa-angle 图标且 pages<=1 直接不渲染),那部分留在各自文件里。
  */
+/**
+ * 按预设顺序排列对象的键;预设里没有的追加在后面(保持它们原本的相对顺序)。
+ *
+ * 存在的理由是后端**给不了**这个顺序:Flask 的 `app.json.sort_keys` 默认为 true,
+ * 序列化时把 key 按码点重排,handler 里精心排好的顺序到不了前端。
+ * 所以凡是「学科分布」这类要按课程顺序显示的字典,一律在前端定序。
+ *
+ * 2026-07-28 之前只有题目管理页这么做,错题本页直接 Object.entries ——
+ * 同一份学科分布在两个页面是两种排法(算法在一边排第一、在另一边排倒数第二)。
+ */
+function orderedKeys(dataObj, presetOrder) {
+  const data = dataObj || {};
+  const keys = [];
+  // 用 hasOwnProperty 而不是 `in`:后者连原型链上的 toString/constructor 也算命中,
+  // 预设里一旦出现这类名字就会凭空多出键来。实际预设是课程表、碰不到,但没理由留着。
+  const has = (k) => Object.prototype.hasOwnProperty.call(data, k);
+  (presetOrder || []).forEach((k) => {
+    if (has(k) && keys.indexOf(k) === -1) keys.push(k);
+  });
+  Object.keys(data).forEach((k) => { if (keys.indexOf(k) === -1) keys.push(k); });
+  return keys;
+}
+
 function pageNumbers(current, total) {
   const wanted = new Set([1, total, current - 2, current - 1, current, current + 1, current + 2]);
   const nums = Array.from(wanted).filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);

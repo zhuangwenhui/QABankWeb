@@ -12,6 +12,10 @@
 (function () {
   'use strict';
 
+  /** 模板注入的页面配置(见 error_book.html 的 window.PAGE_CONFIG)。
+   *  subjects 是课程表顺序,学科分布靠它定序 —— 接口给不了顺序,理由见 renderSubjectStats。 */
+  const CFG = window.PAGE_CONFIG || { subjects: [] };
+
   /** 页面状态 */
   const state = {
     filters: { subject: '', chapter: '', difficulty: '', source: '', search: '' },
@@ -70,9 +74,17 @@
     }
   }
 
-  /** 渲染科目分布徽章(点击可按该科目筛选) */
+  /**
+   * 渲染科目分布徽章(点击可按该科目筛选)。
+   *
+   * 顺序按课程表定,不按接口返回的顺序 —— Flask 的 json.sort_keys 默认为 true,
+   * 会把 by_subject 的 key 按码点重排,后端 stats() 里那段按 config.SUBJECTS 排序的
+   * 代码到不了这里。此前本页直接 Object.entries,于是同一份分布在题目管理页是
+   * 「算法→向量解析→…」、在本页是「向量解析→…→算法」。
+   */
   function renderSubjectStats(bySubject) {
-    const items = Object.entries(bySubject);
+    const data = bySubject || {};
+    const items = orderedKeys(data, CFG.subjects).map((k) => [k, data[k]]);
     if (!items.length) {
       els.statBySubject.innerHTML = '<span class="text-muted small">暂无错题</span>';
       return;

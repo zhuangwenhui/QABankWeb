@@ -228,12 +228,12 @@ def test_stats_subject_order_is_not_the_configured_one(app, client, login):
     没有任何可观测效果 —— Flask 的 `app.json.sort_keys` 默认为 True,序列化时会把 key
     按码点重排,handler 精心排好的顺序被原样丢掉。
 
-    后果是错题本页(`error_book.js:renderSubjectStats` 直接 `Object.entries`)按码点顺序
-    显示学科,而题目管理页(`questions.js:ppGroupHtml` 显式传 `CFG.subjects`)按课程顺序
-    显示 —— 同一份学科分布,两个页面两种排法。
+    2026-07-28 之前,后果是错题本页按码点顺序、题目管理页按课程顺序显示同一份分布。
+    现已统一到前端定序(`utils.js:orderedKeys`,两页共用,行为测试在
+    `tests/js/utils.orderedKeys.test.js`)—— 也就是说**顺序由前端负责,接口不承诺**。
 
-    这条测试**不是**在认可现状,而是防止有人只改 handler 就以为修好了:真要修,
-    要么在前端传定序(照 ppGroupHtml 的做法),要么把 by_subject 改成数组。
+    这条测试因此保留:它防的是有人看到 handler 里那段排序代码、以为接口保证了顺序,
+    于是把前端的定序删掉。真要让接口承诺顺序,得把 by_subject 改成数组。
     """
     with app.app_context():
         ids = _seed(('算法', '微积分'))

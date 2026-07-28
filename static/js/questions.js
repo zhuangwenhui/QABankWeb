@@ -140,17 +140,11 @@
   }
 
   /** 按预设顺序排列分组键,预设外的键(如后端新增学科)追加在后 */
-  function ppOrderedKeys(dataObj, presetOrder) {
-    const keys = [];
-    (presetOrder || []).forEach((k) => { if (k in dataObj) keys.push(k); });
-    Object.keys(dataObj).forEach((k) => { if (!keys.includes(k)) keys.push(k); });
-    return keys;
-  }
-
   /** 一组分组进度条(已掌握/总)HTML */
   function ppGroupHtml(title, dataObj, presetOrder) {
     dataObj = dataObj || {};
-    const rows = ppOrderedKeys(dataObj, presetOrder).map((k) => {
+    // 定序逻辑与错题本页共用 utils.js 的 orderedKeys —— 各写一份就是两页两种排法的由来
+    const rows = orderedKeys(dataObj, presetOrder).map((k) => {
       const v = dataObj[k] || {};
       const total = v.total || 0;
       const mastered = v.mastered || 0;

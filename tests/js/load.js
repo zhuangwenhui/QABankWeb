@@ -59,4 +59,23 @@ function loadBrowserScript(file, exportName) {
   return api;
 }
 
-module.exports = { loadBrowserScript, ROOT };
+/**
+ * 加载 utils.js 这类**不走 window 导出**的脚本:它用顶层函数声明,函数直接落在全局上。
+ * 返回沙箱本身,调用方按名字取。
+ * @param {string} file 相对 static/js/ 的文件名
+ * @param {string[]} names 期望存在的函数名;缺任何一个就报错(改名要立刻发现)
+ */
+function loadGlobalScript(file, names) {
+  const src = fs.readFileSync(path.join(ROOT, 'static', 'js', file), 'utf8');
+  const sandbox = makeSandbox();
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox, { filename: file });
+  for (const n of names) {
+    if (typeof sandbox[n] !== 'function') {
+      throw new Error(`${file} 里没有全局函数 ${n}(改名或改成了局部?)`);
+    }
+  }
+  return sandbox;
+}
+
+module.exports = { loadBrowserScript, loadGlobalScript, ROOT };
