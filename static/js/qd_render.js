@@ -432,16 +432,29 @@
       .replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*[)）]/g, '').trim();
   }
 
+  /** 代码段区间 [起, 止)。单列是因为切点同样不能落进去 —— 会留下半截反引号和裸 $。 */
+  function codeSpans(src) {
+    var spans = [];
+    var re = /```[\s\S]*?```|`[^`\n]*`/g;
+    var m;
+    while ((m = re.exec(src)) !== null) spans.push([m.index, m.index + m[0].length]);
+    return spans;
+  }
+
   /**
    * 求出所有数学区间 [起, 止),下标与原串对齐。
    *
    * 判定顺序与定界符规则必须和 protectMath 一致,否则算出来的"安全点"是假的:
    * 先挡代码段(代码里的 $ 不是数学),再 display,最后 inline。挡掉的部分用等长
-   * 填充字符替换而不是删除 —— 下标一旦错位,后面按下标切就切在别处了。
+   * 填充替换而不是删除 —— 下标一旦错位,后面按下标切就切在别处了。填充用 \u0000
+   * 而不是空格:空格会和真正的空白混在一起,可能在区间边界上改变正则的匹配结果。
    */
   function mathSpans(src) {
-    function blank(m) { return new Array(m.length + 1).join(' '); }
-    var masked = src.replace(/```[\s\S]*?```|`[^`\n]*`/g, blank);
+    function blank(n) { return new Array(n + 1).join('\u0000'); }
+    var masked = src;
+    codeSpans(src).forEach(function (sp) {
+      masked = masked.slice(0, sp[0]) + blank(sp[1] - sp[0]) + masked.slice(sp[1]);
+    });
     var spans = [];
     function collect(re) {
       var m;
@@ -449,7 +462,8 @@
       while ((m = re.exec(masked)) !== null) {
         spans.push([m.index, m.index + m[0].length]);
         // 找过的整段填掉,免得 inline 再从 display 内部找出"公式中的公式"
-        masked = masked.slice(0, m.index) + blank(m[0]) + masked.slice(m.index + m[0].length);
+        masked = masked.slice(0, m.index) + blank(m[0].length) +
+                 masked.slice(m.index + m[0].length);
       }
     }
     collect(/(?<!\\)\$\$([\s\S]+?)(?<!\\)\$\$/g);
@@ -458,36 +472,41 @@
     return spans;
   }
 
+  /** 一律不可从中间切开的区间:代码段 + 公式。 */
+  function protectedSpans(src) {
+    return codeSpans(src).concat(mathSpans(src))
+      .sort(function (a, b) { return a[0] - b[0]; });
+  }
+
   /**
-   * 找一个**不落在公式内部**的截断点。
+   * 找一个**不落在公式或代码段内部**的截断点。
    *
    * 直接按字符数硬切会把 $$…$$ 剖成两半,落单的定界符 MathJax 认不出,于是整段
    * LaTeX 源码原样显示在列表上。2026-07-28 线上 358 道题里有 33 道正是这样,
-   * 其中 #348 的 cases 环境在题目管理页上露了七行源码。
+   * 其中 #348 的 cases 环境在题目管理页上露了七行源码。代码段同理,切开会留下
+   * 半截反引号,而且里面的 $ 一旦失去代码段保护就可能被当成公式定界符。
    *
-   * 落在公式里时二选一:公式前的正文已经够长就切在公式**之前**;否则把整块公式
-   * 带上 —— 预览里显示一个完整公式,总好过显示半截源码。但公式过长(超出预算数倍)
-   * 时仍切在前面,不然截断省渲染量的初衷就没了。
+   * 落在区间里时二选一:区间前的正文已经够长就切在它**之前**;否则整块带上 ——
+   * 预览里显示一个完整公式,总好过显示半截源码。但区间过长(超出预算四倍)时
+   * 仍切在前面,不然截断省渲染量的初衷就没了。
    */
   function clipOutsideMath(text, limit) {
-    var spans = mathSpans(text);
+    var spans = protectedSpans(text);
     var cut = limit;
     var i;
-    for (i = 0; i < spans.length; i++) {
-      if (cut > spans[i][0] && cut < spans[i][1]) {
-        cut = (spans[i][0] >= limit * 0.5 || spans[i][1] > limit * 4)
-          ? spans[i][0] : spans[i][1];
-        break;
+    function inside(pos) {
+      for (var k = 0; k < spans.length; k++) {
+        if (pos > spans[k][0] && pos < spans[k][1]) return spans[k];
       }
+      return null;
     }
-    // 再退到段落边界让断口好看些,但不能退进公式里(否则又切开了)
+    var hit = inside(cut);
+    if (hit) {
+      cut = (hit[0] >= limit * 0.5 || hit[1] > limit * 4) ? hit[0] : hit[1];
+    }
+    // 再退到段落边界让断口好看些,但不能退进受保护的区间里(否则又切开了)
     var nl = text.lastIndexOf('\n', cut);
-    if (nl > limit * 0.5) {
-      for (i = 0; i < spans.length; i++) {
-        if (nl > spans[i][0] && nl < spans[i][1]) return text.slice(0, cut);
-      }
-      cut = nl;
-    }
+    if (nl > limit * 0.5 && !inside(nl)) cut = nl;
     return text.slice(0, cut);
   }
 
@@ -574,6 +593,12 @@
     isNoticeOnly: isNoticeOnly,
     renderMd: renderMd,
     typeset: typeset,
-    renderStructuredInto: renderStructuredInto
+    renderStructuredInto: renderStructuredInto,
+    // 下面两个页面代码不调用,是**导出给 tests/js/ 做行为测试**的。
+    // 它们是纯函数,单测能直接钉住"切点会不会落进公式里"这类逻辑 ——
+    // 而这正是 2026-07-28 那次线上裸 LaTeX 的成因,源码文本断言挡不住。
+    // 清理零消费导出时请连同 tests/js/qd_render.preview.test.js 一起看,别只看 static/js/。
+    mathSpans: mathSpans,
+    clipOutsideMath: clipOutsideMath
   };
 })();

@@ -275,7 +275,11 @@ def test_math_spans_uses_same_delimiters_as_protect():
         assert pattern in spans, \
             f'mathSpans 的 {name} 定界符与 protectMath 不一致,截断点会重新落进公式里'
 
-    # 代码段必须先挡掉:代码里的 $ 不是数学,两处都得这么干
+    # 代码段必须先挡掉:代码里的 $ 不是数学。protectMath 自己写了这条正则,
+    # mathSpans 则委托给 codeSpans —— 两边认的东西必须还是同一个。
     code = r'/```[\s\S]*?```|`[^`\n]*`/g'
-    assert code in protect and code in spans, \
-        'mathSpans 必须与 protectMath 一样先挡开代码段,否则会把代码里的 $ 当公式'
+    assert code in protect, 'protectMath 的代码段正则变了,请同步 codeSpans 与本测试'
+    code_fn = _slice(src, 'function codeSpans', 'function mathSpans', 'codeSpans')
+    assert code in code_fn, 'codeSpans 的代码段正则与 protectMath 不一致'
+    assert 'codeSpans(' in spans, \
+        'mathSpans 必须先用 codeSpans 挡开代码段,否则会把代码里的 $ 当公式'

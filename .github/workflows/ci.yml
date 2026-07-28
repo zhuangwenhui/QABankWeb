@@ -26,9 +26,15 @@ jobs:
           pip-audit -r requirements.txt
 
   jssyntax:
-    # static/js/ 全部无运行时测试,此为最低护栏:抓语法/引用错(如 qd_render 抽取类改动)。
-    # 注意它只跑 node --check:能抓"写错了语法",抓不到"逻辑错了"。真正的端到端在 e2e 那个 job。
-    # (此处原写死"前端 4326 行",实测已是 4603 行且每次改动都在变 —— 不再记数字。)
+    # 两层:node --check 抓语法/引用错;node --test 抓**逻辑错**。
+    #
+    # 加第二层是因为 2026-07-28 那次线上事故:列表预览的截断把 $$…$$ 剖成两半,
+    # 33 道题在题目管理页露出 LaTeX 源码。那是个 20 行纯函数里的逻辑错误 ——
+    # node --check 过、pytest 过(它只能做源码文本断言)、渲染巡检也报绿,
+    # 最后是用户在生产上用肉眼发现的。现在 tests/js/ 里有它的行为测试:
+    # 把代码退回修复前,那一层立刻报 4 条失败(含 #348 的真实题面)。
+    #
+    # 仍然不覆盖需要真实 DOM/MathJax 的部分,那是 mathrender 那个 job 的活。
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +48,8 @@ jobs:
             echo "check $f"
             node --check "$f"
           done
+      - name: JS 行为测试(node --test)
+        run: node --test tests/js/
 
   mathrender:
     # 2026-07-25 线上事故:题解数学全部退化成 LaTeX 源码,而全部本地检查与 pytest 都通过 ——
