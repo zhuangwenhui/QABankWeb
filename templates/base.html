@@ -47,7 +47,38 @@
         inlineMath: [['$', '$'], ['\\(', '\\)']],
         displayMath: [['$$', '$$'], ['\\[', '\\]']],
         packages: { '[+]': ['boldsymbol'] },
-        processEscapes: true
+        processEscapes: true,
+
+        // 题库里用到、但 MathJax 默认包里没有的宏。
+        // 不认的宏 MathJax 不会报错,而是把**宏名原样印在页面上** —— 2026-07-28 排查时
+        // 线上有 7 道题这样露着(#266 那处本该是个 $ 符号,页面上却是「\mathdollar」六个字母)。
+        // 在这里补定义,而不是去改那几道题的数据:数据改法只能治已发现的,配置改法连
+        // 以后新入库的题一起治。
+        //
+        // 刻意不用 loader 去拉 [tex]/extpfeil、[tex]/textmacros 这些官方包 ——
+        // 上面那段注释已经讲过为什么不让全站数学依赖第三方 CDN 的额外 fetch。
+        // 这里的替代定义在视觉上够用:xRightarrow/xleftrightarrow 少了箭头随标签伸长
+        // 这一项,但标签位置与语义都对。
+        //
+        // ⚠️ 整块必须裹在下面那对 raw 标签里。原因:带参宏要写「左花括号 + 井号 + 参数号」
+        // 来引用参数,而「左花括号 + 井号」恰好是 Jinja 的注释开始标记,不隔离就会让
+        // base.html 整个解析失败(Missing end of comment tag),继承它的页面一起 500。
+        //
+        // 本段注释刻意只用文字描述、不写出这两组标记本身。加这几行宏时连踩三次:
+        // 先是宏定义里的标记没隔离;接着在注释里原样写出 raw 标签,Jinja 把注释里那个
+        // 当成了 raw 块的开始,真标签被当字面量吐进 JS、配置对象语法坏掉、全站数学失效;
+        // 再接着在注释里写出前一组标记,又炸一次。改动此处后**先跑 pytest 再看页面**:
+        // 模板一坏,181 条测试会立刻变红。
+        {% raw %}
+        macros: {
+          E: '\\mathbb{E}',                                   // 期望
+          mathdollar: '\\$',                                  // 文法题里作终端记号的 $
+          shuffle: '\\mathbin{\\unicode{x29E2}}',             // 交織(shuffle)积 ⧢
+          textbackslash: '\\backslash',                       // C 代码清单里的反斜杠
+          xRightarrow: ['\\overset{#1}{\\Longrightarrow}', 1],
+          xleftrightarrow: ['\\overset{#1}{\\longleftrightarrow}', 1]
+        }
+        {% endraw %}
       },
       options: {
         skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
