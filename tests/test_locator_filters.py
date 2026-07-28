@@ -112,3 +112,94 @@ def test_major_prefix_not_substring_collision(app, client, login):
     data = _list(client, school='北海道大学', major='情報理工')
     assert data['total'] == 2
     assert all(q['source'].startswith('北海道大学 情報理工 ') for q in data['questions'])
+
+
+# =================================================== /api/questions/filters
+# 章节/来源/标签下拉字典。与 facets 同族但更朴素:不解析 source 的院試结构,
+# 只做"去重 + 排序 + 可按课程收窄"。此前零测试覆盖。
+
+def _filters(client, **params):
+    from urllib.parse import urlencode
+    qs = ('?' + urlencode(params)) if params else ''
+    r = client.get('/api/questions/filters' + qs)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    return r.get_json()['data']
+
+
+def test_filters_dedups_and_sorts(app, client, login):
+    with app.app_context():
+        _seed()
+    login('student', 'StudentPass123456')
+    data = _filters(client)
+
+    # _seed 里 '2021' 出现两次、'2025' 出现两次,字典里各只应有一份
+    assert data['chapters'] == sorted(set(data['chapters']))
+    assert len(data['chapters']) == len(set(data['chapters']))
+    assert '2021' in data['chapters'] and '2025' in data['chapters']
+    assert data['sources'] == sorted(set(data['sources']))
+
+
+def test_filters_narrows_by_subject(app, client, login):
+    with app.app_context():
+        _seed()
+    login('student', 'StudentPass123456')
+
+    all_sources = set(_filters(client)['sources'])
+    fukuhen = _filters(client, subject='复变函数')
+    # 复变函数只有北大 2025 与京大 2025 两道
+    assert set(fukuhen['sources']) == {'北海道大学 情報理工 2025 复变 第1問',
+                                       '京都大学 情報学 2025 复变 第3問'}
+    assert set(fukuhen['sources']) < all_sources
+
+
+def test_filters_collects_tags_from_json_column(app, client, login):
+    """tags 取自 Question.tags 这一列(JSON 数组字符串),与 tags 表无关。"""
+    with app.app_context():
+        q = Question(subject='微积分', chapter='ch', difficulty='中等',
+                     source='src', question_latex='x')
+        q.tags_list = ['换元', '分部积分', '换元']       # 重复项应被去掉
+        db.session.add(q)
+        db.session.commit()
+    login('student', 'StudentPass123456')
+
+    assert _filters(client)['tags'] == ['分部积分', '换元']
+
+
+def test_filters_tolerates_broken_tags_json(app, client, login):
+    """标签列存了非法 JSON 或非数组时按空处理,不能让整个字典接口 500。
+
+    这是真实存在的形态:早期导入脚本往 tags 里写过裸字符串。
+    """
+    with app.app_context():
+        for raw in ('not json at all', '{"a": 1}', '', None):
+            db.session.add(Question(subject='微积分', chapter='ch', difficulty='中等',
+                                    source='src', question_latex='x', tags=raw))
+        good = Question(subject='微积分', chapter='ch', difficulty='中等',
+                        source='src', question_latex='x')
+        good.tags_list = ['正常标签']
+        db.session.add(good)
+        db.session.commit()
+    login('student', 'StudentPass123456')
+
+    assert _filters(client)['tags'] == ['正常标签']
+
+
+def test_filters_skips_blank_values(app, client, login):
+    """空章节/空来源/空白标签不进下拉框 —— 否则用户会看到一个选不中任何题的空选项。"""
+    with app.app_context():
+        q = Question(subject='微积分', chapter='', difficulty='中等',
+                     source='', question_latex='x')
+        q.tags_list = ['  ', '', '有效']
+        db.session.add(q)
+        db.session.commit()
+    login('student', 'StudentPass123456')
+
+    data = _filters(client)
+    assert data['chapters'] == [] and data['sources'] == []
+    assert data['tags'] == ['有效']
+
+
+def test_filters_requires_login(app, client):
+    r = client.get('/api/questions/filters')
+    assert r.status_code == 401
+    assert r.get_json()['code'] == 'UNAUTHORIZED'
