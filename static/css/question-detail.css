@@ -1,6 +1,6 @@
 /* ============================================================================
    LeetCode 式双语题解详情页样式
-   端口自 mockups/detail_preview.html(已锁定视觉规范),全部作用域限定在
+   端口自 docs/design/detail_preview.html(已锁定视觉规范),全部作用域限定在
    .qd-page 之下,避免污染 Bootstrap 与既有 .latex-content。
    ========================================================================== */
 
@@ -196,7 +196,7 @@
 
 /* 步骤:h3 渲染为步骤块。渲染器把"第N步/编号"前缀包成 .n 徽标(qd-h3-chip),
    无前缀的 h3 退化为左标尺(qd-h3-plain)。
-   (曾另有一套 .step/.eqn 手写块样式,给的是 mockups/detail_preview.html 里的手写 HTML 用的。
+   (曾另有一套 .step/.eqn 手写块样式,给的是 docs/design/detail_preview.html 里的手写 HTML 用的。
     正文一律经 qd_render.js 的 markdown-it 渲染、且 html:false,写死的 <div class="step"> 只会被
     转义成文字,永远激活不了这些规则 —— 故于 V1 收尾时删除。) */
 .qd-page .solbody h3{font-family:var(--font-ui); font-weight:600; font-size:13.5px; color:var(--ink);

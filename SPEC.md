@@ -216,6 +216,47 @@ def generate_pdf(template_name, context, questions, output_basename) -> dict
 - **属主隔离**:`_owned_or_404` 把「不存在」与「是别人的」合并成同一结果,一律 404 —— 分开回 404/403 等于告诉攻击者哪些 id 存在。
 - 判题引擎接口:`Grader.grade(*, question_text, reference_solution, rubric, image_paths) -> dict`,返回 `{total_score, max_score, breakdown, transcription, feedback, model}`;失败抛 `GradingError`。`rubric` 取自 `Question.solution_structured_dict`(采点四段),`reference_solution` 由中日双轨题解拼成。未配 `ANTHROPIC_API_KEY` 时 `get_grader` 返回 `StubGrader`(诚实占位,不发请求)。
 
+#### §2.10.1 已知缺口 —— V2 开工时必须逐条解决(2026-07-28 收尾审核查实)
+
+以下每条都对着代码与官方 API 文档核过,不是猜测。V2 的设计文档应逐条给出答案。
+
+**引擎(grading.py)**
+
+1. **模型升级陷阱**:现默认 `claude-opus-4-8`(现役有效)。官方当前 Opus 为
+   `claude-opus-5`(同价 $5/$25 每 MTok,定位为免迁移升级),**但它默认开启 thinking,
+   思考与回答共享 `max_tokens` 上限** —— 本引擎写死 `max_tokens: 2000` 且不传 `thinking`
+   字段,直接换模型名(哪怕只改 `ANTHROPIC_GRADER_MODEL` 环境变量)会随机截断 JSON,
+   批量报「模型输出非合法 JSON」。升级时必须同步:调大 `max_tokens`(建议 ≥8000)
+   或显式传 `thinking`,并处理下一条。
+2. **不检查 `stop_reason`**(grading.py:224-230):`max_tokens` 截断与安全分类器
+   `refusal`(Opus 5 起,HTTP 200 + 空内容)都会被误报成「解析失败/空内容」。
+   应先看 `stop_reason` 再解析,给出能区分根因的错误信息。
+3. **`max_tokens: 2000` 对任务偏紧**:要求转写多页手写 + 逐项判分 + 反馈,截断即整单作废。
+4. **无重试**:429/529/5xx 一次即 failed(官方 SDK 默认自动重试这些;stdlib urllib 的
+   免依赖取舍有注释论证、V1 可接受,V2 转异步队列时应补指数退避或改用 SDK)。
+5. **请求体上限**:上传限 20MB、4 张图,base64 膨胀 ×1.33 后 ≈27MB,贴近 Anthropic
+   单请求 32MB 硬上限;且高清大图按 token 计费很贵。V2 应服务端降采样(长边 ≤2576px
+   即模型的高清上限,再大无收益)或限单张体积。
+
+**并发与部署**
+
+6. 生产是 `gunicorn -w 1 -k gthread --threads 8`:一次同步判题占**一条线程**
+   (不是整站阻塞),但 **8 个并发判题就占满线程池、整站失去响应**。判题没有
+   PDF 那样的 `BoundedSemaphore` 保护。异步化之前,至少要加并发上限。
+
+**状态机与恢复**
+
+7. **`pending` 可能永久卡死**:先落库 pending 再评分,进程在评分中被杀(重启/部署)
+   即留下永远 pending 的行,且**没有任何重批入口** —— failed 同样只能删除重传,
+   作答图白白作废。V2 需要一个重新评分端点(设计权限:学生自助还是仅管理员),
+   兼作 pending 卡死的恢复通道。
+
+**费用与滥用**
+
+8. **零配额零限流**:登录限流(ratelimit.py)不覆盖判题提交。实测费用量级
+   **$0.07–0.16/次**(Opus 档,1–4 张图),恶意或失控脚本可无上限烧钱。
+   V2 必须回答:每用户频率上限、全站日/月配额、超额时的降级行为(排队还是拒绝)。
+
 ## 3. 页面契约
 
 三个页面模板都 `{% extends 'base.html' %}`,页首放面包屑:
