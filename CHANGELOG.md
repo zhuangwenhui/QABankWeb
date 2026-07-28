@@ -3,7 +3,36 @@
 语义化版本;每次生产部署打轻量 tag(`git tag -a vX.Y.Z`)。回滚见 `docs/ops/deploy.md` 的回滚一节。
 「当前生产跑哪版」= 最近一个已部署 tag(部署时 `git checkout vX.Y.Z`)。
 
-## [未发布] 裸 LaTeX 修复与 JS 行为测试层(2026-07-28)
+## [v1.17.2] V1 钉版:裸 LaTeX 全清、JS 行为测试层、契约补齐(2026-07-28)
+
+**V1 到此钉死** —— 此后 question-bank 只收 bug 修复,新功能全部进 V2(自动判题)。
+
+本版含应用代码改动(`static/js/`、`templates/base.html`),**需要重新部署**;另有 6 道题的
+内容修正需用 `scripts/sync_solution_columns.py` 同步、1 个空题单需从生产库删除(均已执行)。
+
+收尾三件(本节末尾三段)之外,主体是当天排查裸 LaTeX 的结果,见下面两节。
+
+### 收尾一:学科分布在两个页面排法不同
+
+同一份 `by_subject`,题目管理页按课程顺序、错题本页按码点顺序。根因是后端**给不了**顺序
+(`app.json.sort_keys` 默认 true)。把定序做成共用实现(`utils.js:orderedKeys`),两页共用;
+顺带修掉原实现用 `k in data` 会把原型链属性算作命中的缺陷(新加的 JS 测试自己发现的)。
+
+### 收尾二:SPEC §2 补齐,并加防漂移护栏
+
+`lists / study / progress / review / submissions` 共 22 条路由此前没有接口契约,
+其中 **submissions 是 V2 判题的落点**。新增 §2.6–§2.10 逐条对源码写。
+新增 `tests/test_spec_coverage.py` 双向比对 url_map 与 SPEC —— 它当场抓到我在覆盖度声明里
+的夸大:还有 7 条(overview 的用户管理四个、questions 的 facets/tag_facets/related)没记录,
+已一并补上。§2 现真正覆盖全部 9 个蓝图、55 条 `/api` 路由。
+
+### 收尾三:删除空的官方题单 #59「备注 专项」
+
+官方 + 公开,学生点进去什么都没有。「备注」曾是科目,那些题后来被重新归类,单就空在那儿。
+生成脚本按**实际有题的 subject** 分组,不会再造出它,所以删除是持久的。
+删前已备份生产库(`instance/backup_pre_droplist.db`),删后题单 59 个、空单 0 个、外键校验通过。
+
+## [已并入 v1.17.2] 裸 LaTeX 修复与 JS 行为测试层(2026-07-28)
 
 用户在题目管理页上看到 #348 露出七行 LaTeX 源码。查下来是两类问题,数据本身基本干净。
 
@@ -40,7 +69,7 @@ markdown-it 处理没处理标题。所以标题里能用数学、不能用反�
 新增 `tests/js/`(node 内置 `node:test`,零依赖),CI 的 jssyntax job 从
 `node --check` 扩成 `--check + --test`。把代码退回修复前,这一层立刻报 4 条失败。
 
-## [未发布] 开发库刷新、巡检串页修复、零覆盖端点补测(2026-07-28)
+## [已并入 v1.17.2] 开发库刷新、巡检串页修复、零覆盖端点补测(2026-07-28)
 
 只碰 `scripts/` `tests/` `docs/`,**不含任何应用代码改动**,生产无需重新部署。
 
