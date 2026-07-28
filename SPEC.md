@@ -2,9 +2,12 @@
 
 本文档记录各功能模块的接口契约。
 
-> **📌 覆盖范围(2026-07-27 V1 收尾时校订)**:§2 记录的是 **v1.0.0 时**的接口契约。
-> 此后新增的 `progress` / `review` / `lists` / `submissions` / `study` 五个模块**不在本文档内**,
-> 见 [CHANGELOG.md](CHANGELOG.md) 与各模块源码的 docstring。
+> **📌 覆盖范围(2026-07-28 V1 钉版时校订)**:§2 现已覆盖**全部 9 个蓝图、55 条 `/api` 路由**
+> —— questions / error_book / feedback / overview 四个自 v1.0.0 起就在,
+> lists / study / progress / review / submissions 五个是 2026-07-28 补写的(§2.6–§2.10)。
+> 每条路由都有测试触及(比对方式见 `tests/` 与 CHANGELOG 中「55 条 /api 路由无一遗漏」一节)。
+> **V2 自动判题直接建在 §2.10 之上,开工前先读那一节。**
+>
 > 本文档描述现状、不下禁令 —— 早期版本写有"基础层不得修改",那句话已不成立(`app.py`/`config.py`/`models.py`
 > 从 v1.0.0 一路改到今天),据此拒绝改动是误读。
 
@@ -63,6 +66,9 @@ bp = Blueprint('api_questions', __name__, url_prefix='/api')
 | `/api/questions/batch_update_tags` | POST | `{ids: [int], tags: [str], mode: 'replace'\|'add'}` | `{updated: n}` |
 | `/api/questions/batch_update_source` | POST | `{ids: [int], source: str}` | `{updated: n}` |
 | `/api/questions/filters` | GET | query: subject(可选,联动章节) | `{chapters: [str], sources: [str], tags: [str]}`(去重排序,供筛选下拉) |
+| `/api/questions/facets` | GET | — | 院試定位字典 `{schools: [{name, count, majors: [{name, count}]}], years: [str 倒序], subjectGroups: [{name, count}]}`;院校/専攻/年份从 `source` 解析,非院試格式的题不进这三级 |
+| `/api/questions/tag_facets` | GET | — | `{categories: [{name, tags: [{name, count}]}]}`;**只列至少被一道题引用的标签**(孤儿标签点了没结果,不进 facet) |
+| `/api/questions/<int:qid>/related` | GET | query: limit(默认 6,夹在 1–12) | `{questions: [{id, source, subject, difficulty, chapter, shared_tags, shared_count, has_solution}], basis: 'tags'\|'subject'\|'mixed'}`;按共享知识点标签数排序,不足则以同科目最新题兜底 |
 | `/api/source_exists` | GET | query: source, exclude_id(可选) | `{exists: bool}` |
 | `/api/log_view_question` | POST | `{question_id: int}` | message='ok'(写 ViewLog,user 取 g.user) |
 | `/api/upload_question_image` | POST | multipart 字段 `file`;仅允许 config 中扩展名(image/* 与 pdf) | `{filename, url: '/uploads/<filename>'}`(存储名用 `uuid4().hex + 扩展名`,保存到 `Config.UPLOAD_FOLDER`) |
@@ -116,6 +122,99 @@ def generate_pdf(template_name, context, questions, output_basename) -> dict
 | 路由 | 方法 | 响应 data |
 |---|---|---|
 | `/api/overview/stats` | GET | `{question_total, user_total, error_book_total, feedback_pending, by_subject: {课程: 题数}, by_difficulty: {难度: 题数}, views_last_14_days: [{date: 'MM-DD', count}...], top_viewed: [{id, subject, source, count}...前10], error_by_subject: {课程: 错题数(全体用户)}, recent_questions: [to_dict...最近5条]}` |
+| `/api/overview/users` | GET | `{users: [{id, username, role, is_active, must_change_password, created_at}]}`,按 id 升序不分页 |
+| `/api/overview/users` | POST | 请求 `{username(3–32 位字母/数字/下划线/连字符), role: 'student'\|'admin'}`;响应 `{user: 同上, initial_password: str}` |
+| `/api/overview/users/<int:uid>/reset_password` | POST | `{initial_password: str}` |
+| `/api/overview/users/<int:uid>/toggle_active` | POST | `{user: 同上}`;**禁止停用自己**(否则管理员会把自己踢下线,而启用又需要管理员权限,最后一个管理员这么干就把系统锁死了) |
+
+> ⚠️ **建号与重置密码的成功响应带明文初始密码**,因此这两处**必须**挂 `Cache-Control: no-store`,
+> 且实现里刻意保持裸 `jsonify` 而不走 `_ok()` —— `_ok()` 返回 `(Response, status)` 二元组,
+> 拿不到 Response 去设头,换过去不会报错,只会**静默丢掉这个头**,明文凭据从此可被缓存。
+> 明文只在本次响应返回一次、不落库、不重发;忘了就重置一个新的。新号强制 `must_change_password`。
+
+### 2.6 题单模块(api/lists.py,蓝图名 api_lists,url_prefix='/api/lists')
+
+全部 `login_required`。**可见性**:公开单(`is_public`)或自己拥有的单;私有单对他人按 **404** 处理(不是 403,避免泄露存在性)。**可改性** `_can_edit` = owner 或 admin;官方单由 admin 拥有,天然只有 admin 能动。
+
+进度语义与 §2.8 对齐:有 `QuestionProgress` 行即计入 `done`(含 mastered),`status=='mastered'` 另计入 `mastered`。
+
+| 路由 | 方法 | 请求 | 响应 data |
+|---|---|---|---|
+| `/api/lists` | GET | — | `{lists: [meta...]}`,官方置顶,其后按 created_at/id 倒序 |
+| `/api/lists` | POST | `{title(必填,≤128), description(≤2000), is_official?, is_public?(默认 true)}` | `meta`(item_count=0);**`is_official` 仅 admin 可置**,非管理员传了也会被降为 false |
+| `/api/lists/<int:lid>` | GET | — | `{list: meta, questions: [to_dict(with_solution=False)...按 position 升序], progress}` |
+| `/api/lists/<int:lid>/items` | POST | `{question_id}` | `{list_id, question_id, position}`;position=当前最大值+1(空单为 0);**重复加题幂等**,返回已有 position + message='题目已在题单中' |
+| `/api/lists/<int:lid>/items/<int:qid>` | DELETE | — | `{list_id, question_id}`;题不在单中回 404 |
+| `/api/lists/<int:lid>/reorder` | POST | `{question_ids: [int]}`(≤5000) | `{list_id}`;按给定顺序重排 position,**列表中未提到的既有题目顺延排到末尾**,重复 id 忽略,不在单中的 id 忽略 |
+
+`meta` = `{id, owner_id, title, description, is_official, is_public, item_count, progress: {total, done, mastered}, created_at}`。
+
+> 广场页的 item_count 与 progress 由 `list_lists` 一次性聚合后传进 `_list_meta`,不在其中逐单查询 —— 几十个题单会变成 N+1。
+
+### 2.7 个人学习工具(api/study.py,蓝图名 api_study,url_prefix='/api')
+
+全部 `login_required`,数据均限定 `user_id = g.user.id`。
+
+| 路由 | 方法 | 请求 | 响应 data |
+|---|---|---|---|
+| `/api/questions/<int:qid>/note` | GET | — | `{content: str}`;**没写过返回空串而不是 404**(前端直接填进输入框) |
+| `/api/questions/<int:qid>/note` | PUT | `{content: str}`(≤20000;**空串合法,表示清空**) | `{content}`,message='已保存';整体覆盖非追加 |
+| `/api/questions/<int:qid>/bookmark` | GET | — | `{bookmarked: bool}` |
+| `/api/questions/<int:qid>/bookmark` | POST | — | `{bookmarked: bool}`(切换后的值) |
+| `/api/bookmarks` | GET | — | `{question_ids: [int]}`,按收藏时间倒序 |
+
+> ⚠️ 收藏是 **toggle 不是 set**,因此**同一请求重发不幂等** —— 网络重试会把刚收藏的又取消掉。前端靠按钮禁用防重复点击。若 V2 要做离线重放或幂等重试,得先把它改成 `PUT {bookmarked: bool}`。
+
+写入端点(PUT note / POST bookmark)先校验题目存在,不存在回 404:不挡的话会插出指向空题的行,SQLite 的外键要 `PRAGMA foreign_keys=ON` 才拦得住。
+
+### 2.8 学习进度(api/progress.py,蓝图名 api_progress,url_prefix='/api/progress')
+
+全部 `login_required`,数据均限定当前用户。**状态轴**:`done` / `mastered`,**无行=未做**。
+
+| 路由 | 方法 | 请求 | 响应 data |
+|---|---|---|---|
+| `/api/progress/set` | POST | `{question_id, status: 'done'\|'mastered'\|'none'}` | `{question_id, status}`;**`none` 删行**(回到未做),此时 status 回 `null` |
+| `/api/progress/check_batch` | POST | `{question_ids: [int]}` | `{statuses: {"<qid>": status}}`;**键是字符串**(JSON 限制);空列表回 `{statuses: {}}` 而非 400 |
+| `/api/progress/summary` | GET | — | `{overall: {total, done, mastered}, by_difficulty: {难度: {total, done, mastered}}, by_subject: {课程: 同上}}` |
+| `/api/progress/calendar` | GET | query: days(默认 365,上限 366) | `{calendar: [{date: 'YYYY-MM-DD', count}...]}`,缺日补 0 |
+
+汇总口径:`total` 是**题库中该组的总题数**(不是用户做过的),`done` 是有进度行的数量,`mastered` 是其中 status=='mastered' 的数量。分组用 `setdefault` 补槽而非直接索引 —— 库里可能有已从 `config.SUBJECTS` 移除的历史分类值,直接索引会 KeyError 让整个统计 500。
+
+> `by_subject` / `by_difficulty` 的**键顺序不可依赖**:Flask `json.sort_keys` 默认为 true,会按码点重排。要按课程表显示就在前端用 `utils.js:orderedKeys` 定序(见 §3.1)。
+
+### 2.9 复习队列(api/review.py,蓝图名 api_review,url_prefix='/api/review')
+
+全部 `login_required`。**复习队列 = 当前用户的 error_book 成员 + SM-2 排期**,排期字段直接长在 `ErrorBook` 上(ease / interval_days / repetitions / due_at / last_reviewed_at),没有独立的排期表。
+
+| 路由 | 方法 | 请求 | 响应 data |
+|---|---|---|---|
+| `/api/review/due` | GET | query: limit(默认 20,上限 100) | `{entries: [entry...], count}`;到期判据=`due_at IS NULL`(未排期=立即到期)**或** `due_at <= now`;NULL 排最前 |
+| `/api/review/rate` | POST | `{question_id, rating: 'again'\|'hard'\|'good'\|'easy'}` | `{question_id, ease, interval_days, repetitions, due_at, last_reviewed_at}`;不在队列中回 404 |
+| `/api/review/stats` | GET | — | `{due_today, upcoming_7d, total_in_review}` |
+
+`entry` = `{error_book_id, question_id, notes, ease, interval_days, repetitions, due_at, last_reviewed_at, question: to_dict}`。题目已被删的条目在 `/due` 里被过滤掉。
+
+`sm2_schedule(rating, ease, interval_days, repetitions)` 是**纯函数**(不碰 db、不读时钟),因此可直接单测(`tests/test_review_api.py`)。它是 SM-2 的 **Anki 四按钮变体,不是原版论文**:常数取 Anki 默认档,ease 有 **3.0 上限**(原版无上限,不封顶会把连答 easy 的题推到几年后、等于永久踢出队列,对备考有害)。改常数前先读该函数的 docstring。
+
+### 2.10 作答提交与采点(api/submissions.py,蓝图名 api_submissions,url_prefix='/api')
+
+全部 `login_required`。**这是 V2 自动判题的落点,V2 开工前先读这一节。**
+
+| 路由 | 方法 | 请求 | 响应 data |
+|---|---|---|---|
+| `/api/questions/<int:qid>/submissions` | POST | multipart 字段 `images`(1–4 张;扩展名=全站上传白名单**减去 pdf**) | `{submission: to_dict}`,**HTTP 201**;评分成功 message='评分完成',失败='评分失败'(仍是 success=true) |
+| `/api/questions/<int:qid>/submissions` | GET | — | `{submissions: [to_dict...]}`,倒序 |
+| `/api/submissions/<int:sid>` | GET | — | `{submission: to_dict}` |
+| `/api/submissions/<int:sid>` | DELETE | — | message='已删除',连同已落盘的作答图一起清掉 |
+
+`to_dict` = `{id, question_id, status, image_paths, image_urls, total_score, max_score, rubric_breakdown, transcription, feedback, grader, model, error, created_at, graded_at}`。`image_urls` 由文件名**现拼**(`/uploads/<name>`)而不入库 —— 上传目录换了历史记录不用迁。
+
+流程与不变量:
+
+- **先落库再评分**:提交与图片先 `commit`,再调 `grading.get_grader(config).grade(...)`;评分失败只把 `status` 置 `failed` 并记 `error`,提交本身留档。
+- **评分是同步的**,占着请求线程。V2 若接入真实视觉模型、单次耗时上到几十秒,这里要改成异步任务 + 轮询,`status` 已经预留了 `pending`。
+- **属主隔离**:`_owned_or_404` 把「不存在」与「是别人的」合并成同一结果,一律 404 —— 分开回 404/403 等于告诉攻击者哪些 id 存在。
+- 判题引擎接口:`Grader.grade(*, question_text, reference_solution, rubric, image_paths) -> dict`,返回 `{total_score, max_score, breakdown, transcription, feedback, model}`;失败抛 `GradingError`。`rubric` 取自 `Question.solution_structured_dict`(采点四段),`reference_solution` 由中日双轨题解拼成。未配 `ANTHROPIC_API_KEY` 时 `get_grader` 返回 `StubGrader`(诚实占位,不发请求)。
 
 ## 3. 页面契约
 
